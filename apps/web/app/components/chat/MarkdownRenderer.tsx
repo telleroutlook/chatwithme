@@ -2,14 +2,10 @@ import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
 import DOMPurify from 'isomorphic-dompurify';
 import { Copy, Check, Download, Eye, Code, Sun, Moon } from 'lucide-react';
-import { useState, useMemo, memo } from 'react';
+import { useState, useMemo, memo, useEffect, useRef } from 'react';
 import { cn } from '~/lib/utils';
-
-// Import KaTeX CSS
-import 'katex/dist/katex.min.css';
 
 // ============================================================================
 // XSS PROTECTION CONFIGURATION
@@ -53,6 +49,55 @@ const extractText = (node: React.ReactNode): string => {
 };
 
 // ============================================================================
+// KATEX RENDERER (Client-side only)
+// ============================================================================
+
+interface KatexRendererProps {
+  math: string;
+  inline?: boolean;
+}
+
+const KatexRenderer = memo<KatexRendererProps>(({ math, inline = false }) => {
+  const containerRef = useRef<HTMLSpanElement>(null);
+  const [rendered, setRendered] = useState(false);
+
+  useEffect(() => {
+    if (!containerRef.current || rendered) return;
+
+    // Dynamic import of katex
+    import('katex').then((katex) => {
+      if (containerRef.current) {
+        try {
+          katex.render(math, containerRef.current, {
+            throwOnError: false,
+            displayMode: !inline,
+          });
+          setRendered(true);
+        } catch (e) {
+          console.error('KaTeX render error:', e);
+          if (containerRef.current) {
+            containerRef.current.textContent = math;
+          }
+        }
+      }
+    }).catch((e) => {
+      console.error('Failed to load KaTeX:', e);
+      if (containerRef.current) {
+        containerRef.current.textContent = math;
+      }
+    });
+  }, [math, inline, rendered]);
+
+  return (
+    <span
+      ref={containerRef}
+      className={cn(inline ? 'inline' : 'block my-2')}
+    />
+  );
+});
+KatexRenderer.displayName = 'KatexRenderer';
+
+// ============================================================================
 // MARKDOWN RENDERER COMPONENT
 // ============================================================================
 
@@ -68,7 +113,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
     <div className={cn('prose prose-invert max-w-none', className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeHighlight, rehypeKatex]}
+        rehypePlugins={[rehypeHighlight]}
         components={{
           pre: ({ children }) => <>{children}</>,
           code: ({ className, children, ...props }) => {
@@ -93,6 +138,19 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
                 {children}
               </code>
             );
+          },
+          // Handle math nodes from remark-math
+          span: ({ className, children, ...props }) => {
+            if (className === 'math math-inline') {
+              return <KatexRenderer math={extractText(children)} inline />;
+            }
+            return <span className={className} {...props}>{children}</span>;
+          },
+          div: ({ className, children, ...props }) => {
+            if (className === 'math math-display') {
+              return <KatexRenderer math={extractText(children)} />;
+            }
+            return <div className={className} {...props}>{children}</div>;
           },
         }}
       >
