@@ -1,0 +1,22 @@
+{
+  "version": "5",
+  "dialect": "sqlite",
+  "id": "0000",
+  "prevId": "00000000000000",
+  "tables": {
+    "users": {
+      "name": "users",
+      "columns": {
+        "id": { "name": "id", "type": "text", "primaryKey": true },
+        "email": { "name": "email", "type": "text", "primaryKey": false },
+        "username": { "name": "username", "type": "text", "primaryKey": false },
+        "password": { "name": "password", "type": "text", "primaryKey": false },
+        "avatar": { "name": "avatar", "type": "text", "primaryKey": false },
+        "email_verified_at": { "name": "email_verified_at", "type": "integer", "primaryKey": false },
+        "created_at": { "name": "created_at", "type": "integer", "primaryKey": false },
+        "updated_at": { "name": "updated_at", "type": "integer", "primaryKey": false }
+      }
+    }
+  },
+  "enums": {}
+}

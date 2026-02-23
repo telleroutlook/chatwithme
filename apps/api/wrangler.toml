@@ -1,0 +1,34 @@
+name = "chatwithme-api"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "production"
+OPENROUTER_BASE_URL = "https://www.kegui.net/v1"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "token_db"
+database_id = "ba1ebf73-d24b-45b6-882f-45f25c0fc692"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "chatwithme-files"
+
+[ai]
+binding = "AI"
+
+# Production overrides (uncomment and configure for production)
+# [env.production]
+# name = "chatwithme-api"
+# vars = { ENVIRONMENT = "production" }
+
+# [[env.production.d1_databases]]
+# binding = "DB"
+# database_name = "chatwithme-db"
+# database_id = "your-production-database-id"
+
+# [[env.production.r2_buckets]]
+# binding = "BUCKET"
+# bucket_name = "chatwithme-files"

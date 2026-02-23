@@ -1,0 +1,7 @@
+name = "chatwithme-web"
+compatibility_date = "2024-01-01"
+pages_build_output_dir = "./build/client"
+
+# Production settings
+# [env.production]
+# name = "chatwithme-web"
