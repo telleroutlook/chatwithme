@@ -5,7 +5,7 @@ import { createUser, getUserByEmail, getUserByUsername } from '../dao/users';
 import { createRefreshToken, deleteRefreshTokensByUserId, getRefreshTokenByToken, deleteRefreshToken } from '../dao/refresh-tokens';
 import { hashPassword, verifyPassword, generateId } from '../utils/crypto';
 import { signAccessToken, signRefreshToken, verifyToken } from '../utils/jwt';
-import type { SignUpRequest, SignInRequest, AuthResponse, UserSafe } from '@chatwithme/shared';
+import type { SignUpRequest, SignInRequest, AuthResponse, UserSafe } from '../types';
 
 const auth = new Hono<{ Bindings: Env }>();
 
@@ -90,7 +90,8 @@ auth.post('/signup', async (c) => {
     return c.json({ success: true, data: response });
   } catch (error) {
     console.error('Signup error:', error);
-    return c.json({ success: false, error: 'Internal server error' }, 500);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ success: false, error: errorMessage }, 500);
   }
 });
 
@@ -158,7 +159,8 @@ auth.post('/signin', async (c) => {
     return c.json({ success: true, data: response });
   } catch (error) {
     console.error('Signin error:', error);
-    return c.json({ success: false, error: 'Internal server error' }, 500);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ success: false, error: errorMessage }, 500);
   }
 });
 
@@ -207,7 +209,8 @@ auth.post('/refresh', async (c) => {
     });
   } catch (error) {
     console.error('Refresh token error:', error);
-    return c.json({ success: false, error: 'Internal server error' }, 500);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ success: false, error: errorMessage }, 500);
   }
 });
 
@@ -225,7 +228,8 @@ auth.post('/signout', async (c) => {
     return c.json({ success: true, data: { message: 'Signed out successfully' } });
   } catch (error) {
     console.error('Signout error:', error);
-    return c.json({ success: false, error: 'Internal server error' }, 500);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ success: false, error: errorMessage }, 500);
   }
 });
 

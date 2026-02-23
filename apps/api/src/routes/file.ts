@@ -3,7 +3,7 @@ import type { Env } from '../store-context';
 import { createDb } from '../db';
 import { authMiddleware, getAuthInfo } from '../middleware/auth';
 import { generateId } from '../utils/crypto';
-import type { UploadResponse, MessageFile } from '@chatwithme/shared';
+import type { MessageFile, UploadResponse } from '../types';
 
 const file = new Hono<{ Bindings: Env }>();
 

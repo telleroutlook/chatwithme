@@ -11,7 +11,8 @@ import {
 } from '../dao/conversations';
 import { createMessage, getRecentMessages } from '../dao/messages';
 import { generateId } from '../utils/crypto';
-import type { SendMessageRequest, Conversation, Message } from '@chatwithme/shared';
+import type { SendMessageRequest } from '../types';
+import type { Conversation, Message } from '../models';
 import OpenAI from 'openai';
 
 const chat = new Hono<{ Bindings: Env }>();
