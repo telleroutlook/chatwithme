@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
-import { Menu, LogOut, X } from 'lucide-react';
+import { Menu, LogOut, X, Download } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '~/stores/auth';
 import { useChatStore } from '~/stores/chat';
@@ -10,6 +10,7 @@ import { ConversationList } from '~/components/chat/ConversationList';
 import { ChatBubble } from '~/components/chat/ChatBubble';
 import { MessageInput } from '~/components/chat/MessageInput';
 import { ScrollArea } from '~/components/ui/scroll-area';
+import { exportChatToHtml } from '~/lib/chatExport';
 import type { Message, MessageFile } from '@chatwithme/shared';
 
 export default function Home() {
@@ -183,6 +184,79 @@ export default function Home() {
     navigate('/signin');
   };
 
+  const handleExportChat = () => {
+    if (!activeConversationId || currentMessages.length === 0) return;
+    const title =
+      conversations.find((c) => c.id === activeConversationId)?.title || 'Chat';
+    exportChatToHtml(currentMessages, title);
+  };
+
+  const handleRegenerate = useCallback(async () => {
+    if (!activeConversationId || currentMessages.length < 2) return;
+
+    // Find the last user message
+    const lastUserMessageIndex = [...currentMessages]
+      .reverse()
+      .findIndex((m) => m.role === 'user');
+    if (lastUserMessageIndex === -1) return;
+
+    const lastUserMessage =
+      currentMessages[currentMessages.length - 1 - lastUserMessageIndex];
+
+    // Remove the last assistant message
+    const lastAssistantMessage = currentMessages[currentMessages.length - 1];
+    if (lastAssistantMessage.role !== 'assistant') return;
+
+    // Remove last assistant message from store
+    setMessages(
+      activeConversationId,
+      currentMessages.slice(0, -1)
+    );
+
+    // Re-send the last user message
+    setStreaming(true);
+    clearStreamingMessage();
+    streamingContentRef.current = '';
+
+    try {
+      await api.stream(
+        '/chat/stream',
+        {
+          conversationId: activeConversationId,
+          message: lastUserMessage.message,
+          files: lastUserMessage.files || undefined,
+        },
+        (content) => {
+          streamingContentRef.current += content;
+          appendToStreamingMessage(content);
+        },
+        () => {
+          const assistantMessage: Message = {
+            id: crypto.randomUUID(),
+            userId: user?.id || '',
+            conversationId: activeConversationId,
+            role: 'assistant',
+            message: streamingContentRef.current,
+            files: null,
+            generatedImageUrls: null,
+            searchResults: null,
+            createdAt: new Date(),
+          };
+          addMessage(activeConversationId, assistantMessage);
+          clearStreamingMessage();
+          setStreaming(false);
+        },
+        (error) => {
+          console.error('Regenerate stream error:', error);
+          setStreaming(false);
+        }
+      );
+    } catch (error) {
+      console.error('Regenerate error:', error);
+      setStreaming(false);
+    }
+  }, [activeConversationId, currentMessages, user?.id]);
+
   if (!isAuthenticated) {
     return null;
   }
@@ -244,6 +318,15 @@ export default function Home() {
             <span className="text-sm text-muted-foreground hidden sm:block">
               {user?.email}
             </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleExportChat}
+              disabled={currentMessages.length === 0}
+              title="Export chat"
+            >
+              <Download className="h-5 w-5" />
+            </Button>
             <Button variant="ghost" size="icon" onClick={handleLogout}>
               <LogOut className="h-5 w-5" />
             </Button>
@@ -262,8 +345,13 @@ export default function Home() {
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {currentMessages.map((msg) => (
-                <ChatBubble key={msg.id} message={msg} />
+              {currentMessages.map((msg, index) => (
+                <ChatBubble
+                  key={msg.id}
+                  message={msg}
+                  isLast={index === currentMessages.length - 1 && !isStreaming}
+                  onRegenerate={handleRegenerate}
+                />
               ))}
               {isStreaming && streamingMessage && (
                 <ChatBubble
