@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { Menu, LogOut, X } from 'lucide-react';
 import { useState } from 'react';
@@ -15,6 +15,7 @@ import type { Message, MessageFile } from '@chatwithme/shared';
 export default function Home() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const streamingContentRef = useRef('');
 
   const { user, tokens, isAuthenticated, logout } = useAuthStore();
   const {
@@ -130,6 +131,7 @@ export default function Home() {
       // Start streaming
       setStreaming(true);
       clearStreamingMessage();
+      streamingContentRef.current = '';
 
       try {
         await api.stream(
@@ -140,16 +142,17 @@ export default function Home() {
             files,
           },
           (content) => {
+            streamingContentRef.current += content;
             appendToStreamingMessage(content);
           },
           () => {
-            // Save the complete message
+            // Save the complete message using ref value
             const assistantMessage: Message = {
               id: crypto.randomUUID(),
               userId: user?.id || '',
               conversationId: activeConversationId,
               role: 'assistant',
-              message: streamingMessage,
+              message: streamingContentRef.current,
               files: null,
               generatedImageUrls: null,
               searchResults: null,
@@ -169,7 +172,7 @@ export default function Home() {
         setStreaming(false);
       }
     },
-    [activeConversationId, user?.id, streamingMessage]
+    [activeConversationId, user?.id]
   );
 
   const handleLogout = async () => {
