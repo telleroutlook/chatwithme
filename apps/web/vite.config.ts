@@ -11,6 +11,18 @@ export default defineConfig({
     },
   },
   ssr: {
-    noExternal: ['lucide-react'],
+    noExternal: ['lucide-react', 'katex'],
+  },
+  optimizeDeps: {
+    include: ['katex'],
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          katex: ['katex'],
+        },
+      },
+    },
   },
 });
