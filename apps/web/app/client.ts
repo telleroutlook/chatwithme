@@ -1,6 +1,8 @@
 import { useAuthStore } from './stores/auth';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8787';
+// Use empty string for relative URLs (same origin) in production
+// Falls back to localhost:8787 for local development
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 interface RequestOptions extends RequestInit {
   withAuth?: boolean;

@@ -1,7 +1,14 @@
-name = "chatwithme-api"
+name = "chatwithme"
 main = "src/index.ts"
-compatibility_date = "2024-01-01"
+compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
+
+# Static assets configuration (serves frontend)
+[assets]
+directory = "../web/build/client"
+binding = "ASSETS"
+html_handling = "auto-trailing-slash"
+not_found_handling = "single-page-application"
 
 [vars]
 ENVIRONMENT = "production"
@@ -18,17 +25,3 @@ bucket_name = "chatwithme-files"
 
 [ai]
 binding = "AI"
-
-# Production overrides (uncomment and configure for production)
-# [env.production]
-# name = "chatwithme-api"
-# vars = { ENVIRONMENT = "production" }
-
-# [[env.production.d1_databases]]
-# binding = "DB"
-# database_name = "chatwithme-db"
-# database_id = "your-production-database-id"
-
-# [[env.production.r2_buckets]]
-# binding = "BUCKET"
-# bucket_name = "chatwithme-files"
