@@ -120,7 +120,7 @@ chat.delete('/conversations/:id', async (c) => {
 chat.post('/stream', async (c) => {
   const { userId } = getAuthInfo(c);
   const body = await c.req.json<SendMessageRequest>();
-  const { conversationId, message, files, model = 'gpt-5.3-codex' } = body;
+  const { conversationId, message, files, model = 'gpt-4.1-mini' } = body;
   const db = createDb(c.env.DB);
 
   // Verify conversation exists and belongs to user
