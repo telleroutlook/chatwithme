@@ -119,6 +119,92 @@ const KatexRenderer = memo<KatexRendererProps>(({ math, inline = false }) => {
 KatexRenderer.displayName = 'KatexRenderer';
 
 // ============================================================================
+// MERMAID RENDERER (Client-side only)
+// ============================================================================
+
+interface MermaidRendererProps {
+  chart: string;
+}
+
+const MermaidRenderer = memo<MermaidRendererProps>(({ chart }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const renderChart = async () => {
+      if (!containerRef.current) return;
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const mermaidModule = await import('mermaid');
+        const mermaid = mermaidModule.default;
+
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: 'strict',
+          theme: 'dark',
+        });
+
+        const renderId = `mermaid-${Math.random().toString(36).slice(2, 10)}`;
+        const { svg } = await mermaid.render(renderId, chart);
+
+        if (mounted && containerRef.current) {
+          containerRef.current.innerHTML = svg;
+        }
+      } catch (e) {
+        if (mounted) {
+          const message = e instanceof Error ? e.message : 'Failed to render Mermaid diagram';
+          setError(message);
+        }
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void renderChart();
+
+    return () => {
+      mounted = false;
+    };
+  }, [chart]);
+
+  if (error) {
+    return (
+      <div className="my-4 rounded-lg border border-border bg-background">
+        <div className="px-3 py-2 border-b border-border text-xs text-destructive">
+          Mermaid render failed: {error}
+        </div>
+        <pre className="!bg-background !p-4 overflow-x-auto rounded-b-lg">
+          <code className="language-mermaid">{chart}</code>
+        </pre>
+      </div>
+    );
+  }
+
+  return (
+    <div className="my-4 rounded-lg border border-border bg-background overflow-hidden">
+      <div className="px-3 py-2 border-b border-border text-xs text-muted-foreground font-mono">
+        mermaid
+      </div>
+      <div className="p-4 overflow-x-auto">
+        <div ref={containerRef} className="mermaid-diagram min-h-[120px]" />
+        {isLoading && (
+          <div className="text-sm text-muted-foreground">Rendering diagram...</div>
+        )}
+      </div>
+    </div>
+  );
+});
+MermaidRenderer.displayName = 'MermaidRenderer';
+
+// ============================================================================
 // MARKDOWN RENDERER COMPONENT
 // ============================================================================
 
@@ -140,6 +226,11 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
             const language = match ? match[1] : '';
             const rawText = extractText(children).replace(/\n$/, '');
             const isBlock = match || rawText.includes('\n');
+            const isMermaid = language.toLowerCase() === 'mermaid';
+
+            if (isBlock && isMermaid) {
+              return <MermaidRenderer chart={rawText} />;
+            }
 
             if (isBlock) {
               return (
