@@ -127,6 +127,25 @@ describe('ApiClient.stream', () => {
     expect(onError).toHaveBeenCalledWith('Bad request');
   });
 
+  it('extracts readable text from html error response', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('<html><body><h1>Internal Server Error</h1></body></html>', {
+        status: 500,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      })
+    );
+
+    const onMessage = vi.fn();
+    const onDone = vi.fn();
+    const onError = vi.fn();
+
+    await api.stream('/chat/stream', { message: 'hello' }, onMessage, onDone, onError);
+
+    expect(onMessage).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith('Internal Server Error');
+  });
+
   it('refreshes token and retries stream when first request returns 401', async () => {
     useAuthStore.getState().setAuth(user, {
       accessToken: 'expired-access-token',

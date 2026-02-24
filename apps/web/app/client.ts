@@ -21,6 +21,36 @@ export function getApiErrorMessage(error: ApiResponse['error']): string {
   return error.message || 'Request failed';
 }
 
+function extractReadableTextFromHtml(input: string): string {
+  return input
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function getStreamErrorMessage(response: Response): Promise<string> {
+  const contentType = response.headers.get('content-type') || '';
+
+  if (contentType.includes('application/json')) {
+    const errorData = (await response.json()) as ApiResponse;
+    return getApiErrorMessage(errorData.error);
+  }
+
+  const text = (await response.text()).trim();
+  if (!text) {
+    return response.statusText || `HTTP ${response.status}`;
+  }
+
+  if (contentType.includes('text/html')) {
+    const cleaned = extractReadableTextFromHtml(text);
+    return cleaned || response.statusText || `HTTP ${response.status}`;
+  }
+
+  return text.length > 300 ? `${text.slice(0, 300)}...` : text;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -158,13 +188,7 @@ class ApiClient {
     }
 
     if (!response.ok) {
-      const contentType = response.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const errorData = (await response.json()) as ApiResponse;
-        onError(getApiErrorMessage(errorData.error));
-      } else {
-        onError(`HTTP ${response.status}`);
-      }
+      onError(await getStreamErrorMessage(response));
       return;
     }
 

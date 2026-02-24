@@ -25,5 +25,6 @@ describe('suggestions parser and finalizer', () => {
   it('falls back when payload is invalid', () => {
     const result = __test__parseAndFinalizeSuggestions('not-json');
     expect(result).toHaveLength(3);
+    expect(result.some((item) => item.includes('AI') || item.includes('workflow') || item.includes('risk'))).toBe(true);
   });
 });

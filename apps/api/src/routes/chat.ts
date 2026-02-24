@@ -211,12 +211,18 @@ chat.post('/stream', zValidator('json', streamRequestSchema, validationErrorHook
   });
   const suggestionModel = c.env.OPENROUTER_SUGGESTION_MODEL || model;
 
-  const stream = await openai.chat.completions.create({
-    model,
-    messages: openAiMessages as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
-    stream: true,
-    reasoning_effort: THINKING_EFFORT_BY_MODE[thinkMode],
-  });
+  let stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
+  try {
+    stream = await openai.chat.completions.create({
+      model,
+      messages: openAiMessages as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+      stream: true,
+      reasoning_effort: THINKING_EFFORT_BY_MODE[thinkMode],
+    });
+  } catch (error) {
+    console.error('OpenAI stream init error:', error);
+    return errorResponse(c, 500, ERROR_CODES.STREAM_FAILED, 'Model request failed. Please retry.');
+  }
 
   await updateConversation(db, conversationId, { updatedAt: now });
 
@@ -248,11 +254,16 @@ chat.post('/stream', zValidator('json', streamRequestSchema, validationErrorHook
           createdAt: new Date(),
         });
 
-        const suggestions = await generateFollowUpSuggestions({
-          openai,
-          model: suggestionModel,
-          answerText: fullResponse,
-        });
+        let suggestions: string[] = [];
+        try {
+          suggestions = await generateFollowUpSuggestions({
+            openai,
+            model: suggestionModel,
+            answerText: fullResponse,
+          });
+        } catch (error) {
+          console.warn('Suggestions generation failed, continuing without suggestions.', error);
+        }
 
         if (!conversation.title) {
           const title = message.slice(0, 50) + (message.length > 50 ? '...' : '');

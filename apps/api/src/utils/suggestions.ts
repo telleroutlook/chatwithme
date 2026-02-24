@@ -17,6 +17,56 @@ function normalizeSuggestion(value: string): string {
   return value.replace(/\s+/g, ' ').trim().slice(0, MAX_SUGGESTION_LENGTH);
 }
 
+function extractContextKeywords(context: string): string[] {
+  const normalized = context.replace(/\s+/g, ' ').trim();
+  if (!normalized) return [];
+
+  const matches =
+    normalized.match(/[\u4e00-\u9fff]{2,10}|[A-Za-z][A-Za-z0-9_-]{2,}/g) ?? [];
+  const stopwords = new Set([
+    '这个',
+    '那个',
+    '以及',
+    '然后',
+    '可以',
+    '需要',
+    '通过',
+    '如果',
+    '因为',
+    '所以',
+    'assistant',
+    'response',
+  ]);
+  const unique: string[] = [];
+  const seen = new Set<string>();
+
+  for (const raw of matches) {
+    const candidate = raw.trim();
+    if (!candidate) continue;
+    const key = candidate.toLowerCase();
+    if (stopwords.has(candidate) || stopwords.has(key)) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(candidate);
+    if (unique.length >= 3) break;
+  }
+
+  return unique;
+}
+
+function buildContextualFallbackSuggestions(context: string): string[] {
+  const keywords = extractContextKeywords(context);
+  const target = keywords[0] || context.slice(0, 18).trim() || '这个问题';
+  const second = keywords[1] || target;
+  const third = keywords[2] || target;
+
+  return [
+    `关于「${target}」，你能分步骤展开说明吗？`,
+    `如果要把「${second}」真正落地，第一步最该做什么？`,
+    `在「${third}」这部分最容易踩的坑和取舍是什么？`,
+  ].map(normalizeSuggestion);
+}
+
 function parseJsonSuggestions(raw: string): string[] {
   const cleaned = raw.trim();
   if (!cleaned) return [];
@@ -79,10 +129,18 @@ function dedupeSuggestions(items: string[]): string[] {
   return unique;
 }
 
-function finalizeSuggestions(items: string[]): string[] {
+function finalizeSuggestions(items: string[], context: string): string[] {
   const unique = dedupeSuggestions(items);
   if (unique.length >= 3) {
     return unique.slice(0, 3);
+  }
+
+  for (const fallback of buildContextualFallbackSuggestions(context)) {
+    if (unique.length >= 3) break;
+    const next = normalizeSuggestion(fallback);
+    if (!unique.some((item) => item.toLowerCase() === next.toLowerCase())) {
+      unique.push(next);
+    }
   }
 
   for (const fallback of FALLBACK_SUGGESTIONS) {
@@ -131,13 +189,13 @@ ${context}`;
     });
 
     const raw = completion.choices[0]?.message?.content || '';
-    return finalizeSuggestions(parseJsonSuggestions(raw));
+    return finalizeSuggestions(parseJsonSuggestions(raw), context);
   } catch (error) {
     console.warn('Suggestion generation failed, using fallback suggestions.', error);
-    return FALLBACK_SUGGESTIONS.slice(0, 3);
+    return finalizeSuggestions([], context);
   }
 }
 
 export function __test__parseAndFinalizeSuggestions(raw: string): string[] {
-  return finalizeSuggestions(parseJsonSuggestions(raw));
+  return finalizeSuggestions(parseJsonSuggestions(raw), '测试上下文：AI agent workflow and deployment risk');
 }
