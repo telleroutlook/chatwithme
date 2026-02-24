@@ -16,6 +16,8 @@ OPENROUTER_BASE_URL = "https://open.bigmodel.cn/api/coding/paas/v4"
 OPENROUTER_CHAT_MODEL = "GLM-4.7"
 OPENROUTER_FALLBACK_MODEL = "GLM-4.7-Flash"
 
+# MCP 服务配置通过 wrangler secret 设置 BIGMODEL_API_KEY
+
 [[d1_databases]]
 binding = "DB"
 database_name = "token_db"

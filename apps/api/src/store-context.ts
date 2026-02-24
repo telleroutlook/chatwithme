@@ -12,6 +12,9 @@ export interface Env {
   OPENROUTER_SUGGESTION_MODEL?: string;
   OPENROUTER_FALLBACK_MODEL?: string;
   JWT_SECRET: string;
+  BIGMODEL_API_KEY?: string;  // MCP service authentication (can reuse OPENROUTER_API_KEY)
+  MCP_WEB_SEARCH_URL?: string;  // Optional, default: https://open.bigmodel.cn/api/mcp/web_search_prime/mcp
+  MCP_WEB_READER_URL?: string;  // Optional, default: https://open.bigmodel.cn/api/mcp/web_reader/mcp
 }
 
 export interface AuthInfo {

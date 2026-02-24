@@ -17,6 +17,8 @@ import { ERROR_CODES } from '../constants/error-codes';
 import { errorResponse, validationErrorHook } from '../utils/response';
 import { generateFollowUpSuggestions, parseAndFinalizeSuggestions } from '../utils/suggestions';
 import OpenAI from 'openai';
+import { MCPManager } from '../mcp/manager';
+import type { ToolCall } from '../mcp/parser';
 
 const chat = new Hono<AppBindings>();
 
@@ -33,7 +35,7 @@ const updateConversationSchema = z
     message: 'At least one field is required',
   });
 
-const streamRequestSchema = z.object({
+const chatRequestSchema = z.object({
   conversationId: z.string().min(1),
   message: z.string().trim().min(1),
   files: z
@@ -47,7 +49,6 @@ const streamRequestSchema = z.object({
     )
     .optional(),
   model: z.string().min(1).optional(),
-  responseFormat: z.enum(['text', 'json_object']).optional(),
 });
 const MODEL_CALL_TIMEOUT_MS = 90000;
 const MODEL_HEALTH_CACHE_TTL_MS = 60_000;
@@ -292,58 +293,16 @@ function summarizeCompletionPayload(completion: unknown): Record<string, unknown
   };
 }
 
-function parseStreamChunkText(chunk: unknown): string {
-  const payload = chunk as Record<string, unknown>;
-  const choice0 = (payload.choices as Array<Record<string, unknown>> | undefined)?.[0];
-  const delta0 = choice0?.delta as Record<string, unknown> | undefined;
-
-  const candidates: unknown[] = [
-    delta0?.content,
-    choice0?.message,
-    choice0?.text,
-    payload.output_text,
-    payload.output,
-  ];
-
-  for (const candidate of candidates) {
-    const text = extractTextFromUnknown(candidate).trim();
-    if (text) return text;
-  }
-
-  return '';
-}
-
-function buildStreamingChatCompletionParams(params: {
-  model: string;
-  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
-  responseFormat?: ResponseFormat;
-  maxTokens?: number;
-}): OpenAI.Chat.ChatCompletionCreateParamsStreaming {
-  const { model, messages, responseFormat = 'text', maxTokens } = params;
-  const payload: Record<string, unknown> = {
-    model,
-    messages,
-    stream: true,
-    thinking: {
-      type: 'disabled',
-    },
-  };
-  if (typeof maxTokens === 'number') payload.max_tokens = maxTokens;
-
-  if (responseFormat === 'json_object') {
-    payload.response_format = { type: 'json_object' };
-  }
-
-  return payload as unknown as OpenAI.Chat.ChatCompletionCreateParamsStreaming;
-}
 
 function buildNonStreamingChatCompletionParams(params: {
   model: string;
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
   responseFormat?: ResponseFormat;
   maxTokens?: number;
+  tools?: OpenAI.Chat.ChatCompletionTool[];
+  tool_choice?: 'auto' | 'required';
 }): OpenAI.Chat.ChatCompletionCreateParamsNonStreaming {
-  const { model, messages, responseFormat = 'text', maxTokens } = params;
+  const { model, messages, responseFormat = 'text', maxTokens, tools, tool_choice } = params;
   const payload: Record<string, unknown> = {
     model,
     messages,
@@ -356,6 +315,13 @@ function buildNonStreamingChatCompletionParams(params: {
 
   if (responseFormat === 'json_object') {
     payload.response_format = { type: 'json_object' };
+  }
+
+  if (tools) {
+    payload.tools = tools;
+    if (tool_choice) {
+      payload.tool_choice = tool_choice;
+    }
   }
 
   return payload as unknown as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming;
@@ -520,579 +486,28 @@ chat.delete('/conversations/:id', zValidator('param', conversationIdParamSchema,
   return c.json({ success: true, data: { message: 'Conversation deleted' } });
 });
 
-chat.post('/stream', zValidator('json', streamRequestSchema, validationErrorHook), async (c) => {
-  const traceId = generateId();
-  const requestStartedAt = Date.now();
-  c.header('X-Trace-Id', traceId);
 
-  const { userId } = getAuthInfo(c);
-  const {
-    conversationId,
-    message,
-    files,
-    model: requestedModel,
-    responseFormat = 'text',
-  } = c.req.valid('json');
-  const model = requestedModel || c.env.OPENROUTER_CHAT_MODEL || 'gpt-5.3-codex';
-  if (responseFormat === 'json_object') {
-    return errorResponse(
-      c,
-      400,
-      ERROR_CODES.VALIDATION_ERROR,
-      'json_object responseFormat is only supported on non-stream endpoints'
-    );
-  }
-  const db = createDb(c.env.DB);
+/**
+ * Parse tool calls from model response
+ */
+function parseToolCalls(completion: OpenAI.Chat.Completions.ChatCompletion): ToolCall[] {
+  const toolCalls = completion.choices[0]?.message?.tool_calls;
 
-  const conversation = await getConversationById(db, conversationId);
-  if (!conversation) {
-    return errorResponse(c, 404, ERROR_CODES.CONVERSATION_NOT_FOUND, 'Conversation not found');
+  if (!toolCalls || toolCalls.length === 0) {
+    return [];
   }
 
-  if (conversation.userId !== userId) {
-    return errorResponse(c, 403, ERROR_CODES.FORBIDDEN, 'Unauthorized');
-  }
-
-  const now = new Date();
-
-  await createMessage(db, {
-    id: generateId(),
-    userId,
-    conversationId,
-    role: 'user',
-    message,
-    files: files || null,
-    generatedImageUrls: null,
-    searchResults: null,
-    createdAt: now,
-  });
-
-  const history = await getRecentMessages(db, conversationId, 20);
-  const openAiMessages: Array<{ role: string; content: string | Array<unknown> }> = [];
-
-  for (const msg of history) {
-    if (msg.role === 'user') {
-      if (msg.files && msg.files.length > 0) {
-        const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
-          { type: 'text', text: msg.message },
-        ];
-
-        for (const file of msg.files) {
-          if (file.mimeType.startsWith('image/')) {
-            content.push({ type: 'image_url', image_url: { url: file.url } });
-          }
-        }
-        openAiMessages.push({ role: 'user', content });
-      } else {
-        openAiMessages.push({ role: 'user', content: msg.message });
-      }
-    } else {
-      openAiMessages.push({ role: 'assistant', content: msg.message });
-    }
-  }
-
-  const openai = new OpenAI({
-    apiKey: c.env.OPENROUTER_API_KEY,
-    baseURL: c.env.OPENROUTER_BASE_URL,
-  });
-  const modelCandidates = Array.from(
-    new Set(
-      [
-        model,
-        c.env.OPENROUTER_FALLBACK_MODEL?.trim(),
-        c.env.OPENROUTER_SUGGESTION_MODEL?.trim(),
-      ].filter((value): value is string => Boolean(value))
-    )
-  );
-
-  const modelHealthEntries = await Promise.all(
-    modelCandidates.map(async (candidate, index) => ({
-      model: candidate,
-      index,
-      probe: await probeModelHealth(openai, candidate, traceId),
-    }))
-  );
-  modelHealthEntries.sort((a, b) => {
-    if (a.probe.ok !== b.probe.ok) {
-      return a.probe.ok ? -1 : 1;
-    }
-    if (a.probe.latencyMs !== b.probe.latencyMs) {
-      return a.probe.latencyMs - b.probe.latencyMs;
-    }
-    return a.index - b.index;
-  });
-  const prioritizedModelCandidates = modelHealthEntries.map((entry) => entry.model);
-  console.info('chat_model_health_priority', {
-    traceId,
-    requestedModel: model,
-    order: modelHealthEntries.map((entry) => ({
-      model: entry.model,
-      ok: entry.probe.ok,
-      latencyMs: entry.probe.latencyMs,
-      error: entry.probe.error,
-    })),
-  });
-
-  let activeModel = prioritizedModelCandidates[0] || model;
-  const modelInitTimeoutMs = 30_000;
-  const transientRetryAttempts = 2;
-
-  const isRetryableNetworkError = (error: unknown): boolean => {
-    const { message } = toModelErrorDetail(error);
-    const text = message.toLowerCase();
-    return (
-      text.includes('network connection lost') ||
-      text.includes('fetch failed') ||
-      text.includes('connection') ||
-      text.includes('socket') ||
-      text.includes('econnreset') ||
-      text.includes('etimedout') ||
-      text.includes('timeout')
-    );
-  };
-
-  const sleep = async (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-  const runWithTransientRetry = async <T>(label: string, task: () => Promise<T>): Promise<T> => {
-    let lastError: unknown;
-    for (let attempt = 1; attempt <= transientRetryAttempts; attempt++) {
-      try {
-        return await task();
-      } catch (error) {
-        lastError = error;
-        if (!isRetryableNetworkError(error) || attempt === transientRetryAttempts) {
-          throw error;
-        }
-        console.warn('chat_stream_transient_retry', {
-          traceId,
-          label,
-          attempt,
-          error: toModelErrorDetail(error),
-        });
-        await sleep(250 * attempt);
-      }
-    }
-
-    throw lastError ?? new Error('Unknown transient retry failure');
-  };
-
-  const createStreamWith = async (modelName: string) => {
-    return runWithTransientRetry(`stream:${modelName}`, async () => {
-      const streamPromise = openai.chat.completions.create(
-        buildStreamingChatCompletionParams({
-          model: modelName,
-          messages: openAiMessages as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
-          responseFormat,
-        })
-      );
-
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        const timer = setTimeout(() => {
-          clearTimeout(timer);
-          reject(new Error(`MODEL_INIT_TIMEOUT_${modelInitTimeoutMs}ms`));
-        }, modelInitTimeoutMs);
-      });
-
-      return Promise.race([streamPromise, timeoutPromise]);
-    });
-  };
-
-  const createNonStreamWith = async (modelName: string) => {
-    return runWithTransientRetry(`nonstream:${modelName}`, async () => {
-      const completionPromise = openai.chat.completions.create(
-        buildNonStreamingChatCompletionParams({
-          model: modelName,
-          messages: openAiMessages as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
-          responseFormat,
-        })
-      );
-
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        const timer = setTimeout(() => {
-          clearTimeout(timer);
-          reject(new Error(`MODEL_NON_STREAM_TIMEOUT_${modelInitTimeoutMs}ms`));
-        }, modelInitTimeoutMs);
-      });
-
-      return Promise.race([completionPromise, timeoutPromise]);
-    });
-  };
-
-  let stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
-  const attemptPlan: Array<{ model: string }> = [];
-  attemptPlan.push({ model: activeModel });
-  for (const candidateModel of prioritizedModelCandidates.slice(1)) {
-    attemptPlan.push({ model: candidateModel });
-  }
-
-  const attemptLogs: Array<{
-    model: string;
-    durationMs: number;
-    ok: boolean;
-    error?: ModelErrorDetail;
-  }> = [];
-
-  let initialized = false;
-  for (const attempt of attemptPlan) {
-    const attemptStartedAt = Date.now();
-    try {
-      stream = await createStreamWith(attempt.model);
-      const durationMs = Date.now() - attemptStartedAt;
-      attemptLogs.push({ model: attempt.model, durationMs, ok: true });
-      activeModel = attempt.model;
-      initialized = true;
-      break;
-    } catch (error) {
-      const durationMs = Date.now() - attemptStartedAt;
-      attemptLogs.push({
-        model: attempt.model,
-        durationMs,
-        ok: false,
-        error: toModelErrorDetail(error),
-      });
-    }
-  }
-
-  if (!initialized) {
-    console.error('chat_stream_init_failed', {
-      traceId,
-      userId,
-      conversationId,
-      requestedModel: model,
-      candidates: prioritizedModelCandidates,
-      attempts: attemptLogs,
-      elapsedMs: Date.now() - requestStartedAt,
-    });
-    let recoveredText = '';
-    let recoveredModel = activeModel;
-    for (const candidateModel of prioritizedModelCandidates) {
-      try {
-        const completion = await createNonStreamWith(candidateModel);
-        const parsed = parseCompletionText(completion);
-        if (parsed.trim()) {
-          recoveredText = parsed;
-          recoveredModel = candidateModel;
-          break;
-        }
-      } catch (recoverError) {
-        console.warn('chat_stream_init_recovery_attempt_failed', {
-          traceId,
-          model: candidateModel,
-          error: toModelErrorDetail(recoverError),
-        });
-      }
-    }
-
-    if (!recoveredText.trim()) {
-      return errorResponse(c, 500, ERROR_CODES.STREAM_FAILED, `Model request failed. traceId=${traceId}`);
-    }
-
-    await createMessage(db, {
-      id: generateId(),
-      userId,
-      conversationId,
-      role: 'assistant',
-      message: recoveredText,
-      files: null,
-      generatedImageUrls: null,
-      searchResults: null,
-      createdAt: new Date(),
-    });
-
-    let suggestions: string[] = [];
-    const recoveredSuggestionModel = c.env.OPENROUTER_SUGGESTION_MODEL || recoveredModel;
-    try {
-      suggestions = await generateFollowUpSuggestions({
-        openai,
-        model: recoveredSuggestionModel,
-        answerText: recoveredText,
-      });
-    } catch (error) {
-      console.warn('chat_stream_init_recovery_suggestions_failed', {
-        traceId,
-        error: toModelErrorDetail(error),
-      });
-    }
-
-    if (!conversation.title) {
-      const title = message.slice(0, 50) + (message.length > 50 ? '...' : '');
-      await updateConversation(db, conversationId, { title });
-    }
-
-    const encoder = new TextEncoder();
-    const readable = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ type: 'message', message: recoveredText })}\n\n`)
-        );
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ type: 'suggestions', suggestions })}\n\n`)
-        );
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`));
-        controller.close();
-      },
-    });
-
-    return new Response(readable, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-      },
-    });
-  }
-
-  console.info('chat_stream_init_ok', {
-    traceId,
-    userId,
-    conversationId,
-    requestedModel: model,
-    activeModel,
-    attempts: attemptLogs,
-    elapsedMs: Date.now() - requestStartedAt,
-  });
-
-  const suggestionModel = c.env.OPENROUTER_SUGGESTION_MODEL || activeModel;
-
-  await updateConversation(db, conversationId, { updatedAt: now });
-
-  const encoder = new TextEncoder();
-  let fullResponse = '';
-  let firstChunkLatencyMs: number | null = null;
-  let assistantMessageSaved = false;
-
-  const readable = new ReadableStream({
-    async start(controller) {
-      try {
-        for await (const chunk of stream) {
-          const content = parseStreamChunkText(chunk);
-          if (content) {
-            if (firstChunkLatencyMs === null) {
-              firstChunkLatencyMs = Date.now() - requestStartedAt;
-            }
-            fullResponse += content;
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ type: 'message', message: content })}\n\n`)
-            );
-          }
-        }
-
-        if (!fullResponse.trim()) {
-          console.warn('chat_stream_empty_after_complete', {
-            traceId,
-            userId,
-            conversationId,
-            activeModel,
-            elapsedMs: Date.now() - requestStartedAt,
-          });
-
-          let recoveredText = '';
-          for (const candidateModel of prioritizedModelCandidates) {
-            try {
-              const completion = await createNonStreamWith(candidateModel);
-              recoveredText = parseCompletionText(completion);
-
-              if (recoveredText.trim()) {
-                activeModel = candidateModel;
-                break;
-              }
-            } catch (recoverError) {
-              console.warn('chat_stream_empty_recovery_attempt_failed', {
-                traceId,
-                model: candidateModel,
-                error: toModelErrorDetail(recoverError),
-              });
-            }
-          }
-
-          if (recoveredText.trim()) {
-            fullResponse = recoveredText;
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ type: 'message', message: recoveredText })}\n\n`)
-            );
-          } else {
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({
-                  type: 'error',
-                  error: `Stream produced empty content and recovery failed. traceId=${traceId}`,
-                  code: ERROR_CODES.STREAM_FAILED,
-                })}\n\n`
-              )
-            );
-            controller.close();
-            return;
-          }
-        }
-
-        await createMessage(db, {
-          id: generateId(),
-          userId,
-          conversationId,
-          role: 'assistant',
-          message: fullResponse,
-          files: null,
-          generatedImageUrls: null,
-          searchResults: null,
-          createdAt: new Date(),
-        });
-        assistantMessageSaved = true;
-
-        let suggestions: string[] = [];
-        try {
-          suggestions = await generateFollowUpSuggestions({
-            openai,
-            model: suggestionModel,
-            answerText: fullResponse,
-          });
-        } catch (error) {
-          console.warn('Suggestions generation failed, continuing without suggestions.', error);
-        }
-
-        if (!conversation.title) {
-          const title = message.slice(0, 50) + (message.length > 50 ? '...' : '');
-          await updateConversation(db, conversationId, { title });
-        }
-
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ type: 'suggestions', suggestions })}\n\n`)
-        );
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`));
-        controller.close();
-        console.info('chat_stream_done', {
-          traceId,
-          userId,
-          conversationId,
-          activeModel,
-          suggestionModel,
-          responseChars: fullResponse.length,
-          firstChunkLatencyMs,
-          elapsedMs: Date.now() - requestStartedAt,
-        });
-      } catch (error) {
-        const runtimeError = toModelErrorDetail(error);
-        console.error('chat_stream_runtime_error', {
-          traceId,
-          userId,
-          conversationId,
-          activeModel,
-          error: runtimeError,
-          responseChars: fullResponse.length,
-          firstChunkLatencyMs,
-          elapsedMs: Date.now() - requestStartedAt,
-        });
-
-        // If partial content already exists, finalize gracefully instead of surfacing an error.
-        if (fullResponse.trim().length > 0) {
-          if (!assistantMessageSaved) {
-            try {
-              await createMessage(db, {
-                id: generateId(),
-                userId,
-                conversationId,
-                role: 'assistant',
-                message: fullResponse,
-                files: null,
-                generatedImageUrls: null,
-                searchResults: null,
-                createdAt: new Date(),
-              });
-            } catch (persistError) {
-              console.error('chat_stream_partial_persist_failed', {
-                traceId,
-                userId,
-                conversationId,
-                error: toModelErrorDetail(persistError),
-              });
-            }
-          }
-
-          // Never fail user-visible response when we already have model output.
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: 'suggestions', suggestions: [] })}\n\n`)
-          );
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`));
-          controller.close();
-          return;
-        }
-
-        // Recovery path: fallback to a non-stream completion once.
-        try {
-          let recoveredText = '';
-          for (const candidateModel of prioritizedModelCandidates) {
-            try {
-              const completion = await createNonStreamWith(candidateModel);
-              recoveredText = parseCompletionText(completion);
-
-              if (recoveredText.trim()) {
-                activeModel = candidateModel;
-                break;
-              }
-            } catch (recoverError) {
-              console.warn('chat_stream_recovery_attempt_failed', {
-                traceId,
-                model: candidateModel,
-                error: toModelErrorDetail(recoverError),
-              });
-            }
-          }
-
-          if (recoveredText.trim()) {
-            await createMessage(db, {
-              id: generateId(),
-              userId,
-              conversationId,
-              role: 'assistant',
-              message: recoveredText,
-              files: null,
-              generatedImageUrls: null,
-              searchResults: null,
-              createdAt: new Date(),
-            });
-
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ type: 'message', message: recoveredText })}\n\n`)
-            );
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ type: 'suggestions', suggestions: [] })}\n\n`)
-            );
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`));
-            controller.close();
-            return;
-          }
-        } catch (recoveryFatalError) {
-          console.error('chat_stream_recovery_fatal_error', {
-            traceId,
-            userId,
-            conversationId,
-            error: toModelErrorDetail(recoveryFatalError),
-          });
-        }
-
-        controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({
-              type: 'error',
-              error: `Stream failed (${runtimeError.name}: ${runtimeError.message}). traceId=${traceId}`,
-              code: ERROR_CODES.STREAM_FAILED,
-            })}\n\n`
-          )
-        );
-        controller.close();
-      }
+  return toolCalls.map((call) => ({
+    id: call.id,
+    type: 'function',
+    function: {
+      name: call.function.name,
+      arguments: call.function.arguments,
     },
-  });
+  }));
+}
 
-  return new Response(readable, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-    },
-  });
-});
-
-chat.post('/respond', zValidator('json', streamRequestSchema, validationErrorHook), async (c) => {
+chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook), async (c) => {
   const traceId = generateId();
   c.header('X-Trace-Id', traceId);
 
@@ -1158,11 +573,22 @@ chat.post('/respond', zValidator('json', streamRequestSchema, validationErrorHoo
     new Set([model, c.env.OPENROUTER_FALLBACK_MODEL?.trim()].filter((v): v is string => Boolean(v)))
   );
 
+  // Initialize MCP Manager
+  const mcpManager = new MCPManager(c.env);
+  const mcpTools = mcpManager.isConfigured() ? mcpManager.getAvailableTools() : undefined;
+
   let activeModel = candidates[0] || model;
   let answerText = '';
   let bundledSuggestions: string[] = [];
   const attemptLogs: Array<{ model: string; error?: ModelErrorDetail }> = [];
 
+  // Build messages for LLM call
+  const llmMessages = buildStructuredReplyMessages(openAiMessages);
+  let enhancedMessages: Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content?: string; tool_call_id?: string; tool_calls?: OpenAI.Chat.ChatCompletionMessageToolCall[] }> = [...llmMessages];
+
+  // First LLM call: Check if tools are needed
+  // Note: When tools are present, we use 'text' format to allow function calling
+  // GLM-4.7 cannot simultaneously return both tool_calls and json_object format
   for (const candidate of candidates) {
     try {
       const completion = await withModelTimeout(
@@ -1170,20 +596,97 @@ chat.post('/respond', zValidator('json', streamRequestSchema, validationErrorHoo
           openai.chat.completions.create(
             buildNonStreamingChatCompletionParams({
               model: candidate,
-              messages: buildStructuredReplyMessages(openAiMessages),
-              responseFormat: 'json_object',
+              messages: enhancedMessages as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+              responseFormat: mcpTools ? 'text' : 'json_object',
+              tools: mcpTools,
+              tool_choice: mcpTools ? 'auto' : undefined,
             })
           ),
         MODEL_CALL_TIMEOUT_MS
       );
-      const text = parseCompletionText(completion);
-      const structured = parseStructuredReply(text);
-      if (structured) {
-        answerText = structured.message;
-        bundledSuggestions = structured.suggestions;
-        activeModel = candidate;
-        break;
+
+      // Check for tool calls
+      const toolCalls = parseToolCalls(completion);
+
+      if (toolCalls.length > 0 && mcpManager.isConfigured()) {
+        // Execute tools
+        const toolResult = await mcpManager.executeToolCalls(toolCalls);
+
+        // Add assistant message with tool calls
+        enhancedMessages.push({
+          role: 'assistant',
+          content: completion.choices[0]?.message?.content || undefined,
+          tool_calls: completion.choices[0]?.message?.tool_calls || undefined,
+        } as typeof enhancedMessages[number]);
+
+        // Add tool results
+        enhancedMessages.push({
+          role: 'tool',
+          tool_call_id: toolCalls[0].id,
+          content: toolResult.results,
+        });
+
+        // Second LLM call: Generate final response with tool results
+        // After tools are executed, we can use json_object format since no more tools will be called
+        const finalCompletion = await withModelTimeout(
+          () =>
+            openai.chat.completions.create(
+              buildNonStreamingChatCompletionParams({
+                model: candidate,
+                messages: enhancedMessages as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+                responseFormat: 'json_object',
+              })
+            ),
+          MODEL_CALL_TIMEOUT_MS
+        );
+
+        const text = parseCompletionText(finalCompletion);
+        const structured = parseStructuredReply(text);
+        if (structured) {
+          answerText = structured.message;
+          bundledSuggestions = structured.suggestions;
+          activeModel = candidate;
+          break;
+        }
+        // Fallback: if structured parsing fails, use the text directly
+        if (text) {
+          answerText = text;
+          // Generate simple suggestions for tool-based responses
+          bundledSuggestions = await generateFollowUpSuggestions({
+            openai,
+            model: candidate,
+            answerText: text,
+          });
+          activeModel = candidate;
+          break;
+        }
+      } else {
+        // No tools needed, use original completion
+        // When mcpTools were provided but no tools were called, the response is plain text
+        // When no mcpTools were provided, the response is structured JSON
+        const text = parseCompletionText(completion);
+        const structured = parseStructuredReply(text);
+        if (structured) {
+          // Structured reply (no tools were configured)
+          answerText = structured.message;
+          bundledSuggestions = structured.suggestions;
+          activeModel = candidate;
+          break;
+        }
+        // Fallback: if tools were configured but not called, use plain text
+        if (text && mcpTools) {
+          answerText = text;
+          // Generate simple suggestions for tool-based responses
+          bundledSuggestions = await generateFollowUpSuggestions({
+            openai,
+            model: candidate,
+            answerText: text,
+          });
+          activeModel = candidate;
+          break;
+        }
       }
+
       attemptLogs.push({
         model: candidate,
         error: {
@@ -1238,177 +741,6 @@ chat.post('/respond', zValidator('json', streamRequestSchema, validationErrorHoo
   });
 });
 
-chat.post('/respond/stream', zValidator('json', streamRequestSchema, validationErrorHook), async (c) => {
-  const traceId = generateId();
-  c.header('X-Trace-Id', traceId);
-  const encoder = new TextEncoder();
-
-  const emit = (
-    controller: ReadableStreamDefaultController<Uint8Array>,
-    payload: Record<string, unknown>
-  ) => {
-    controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
-  };
-
-  const { userId } = getAuthInfo(c);
-  const {
-    conversationId,
-    message,
-    files,
-    model: requestedModel,
-  } = c.req.valid('json');
-  const model = requestedModel || c.env.OPENROUTER_CHAT_MODEL || 'gpt-5.3-codex';
-  const db = createDb(c.env.DB);
-
-  const conversation = await getConversationById(db, conversationId);
-  if (!conversation) {
-    return errorResponse(c, 404, ERROR_CODES.CONVERSATION_NOT_FOUND, 'Conversation not found');
-  }
-
-  if (conversation.userId !== userId) {
-    return errorResponse(c, 403, ERROR_CODES.FORBIDDEN, 'Unauthorized');
-  }
-
-  const readable = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      try {
-        emit(controller, { type: 'stage', stage: 'context', label: '正在准备上下文', traceId });
-
-        const now = new Date();
-        await createMessage(db, {
-          id: generateId(),
-          userId,
-          conversationId,
-          role: 'user',
-          message,
-          files: files || null,
-          generatedImageUrls: null,
-          searchResults: null,
-          createdAt: now,
-        });
-
-        const history = await getRecentMessages(db, conversationId, 20);
-        const openAiMessages: Array<{ role: string; content: string | Array<unknown> }> = [];
-        for (const msg of history) {
-          if (msg.role === 'user') {
-            if (msg.files && msg.files.length > 0) {
-              const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
-                { type: 'text', text: msg.message },
-              ];
-              for (const file of msg.files) {
-                if (file.mimeType.startsWith('image/')) {
-                  content.push({ type: 'image_url', image_url: { url: file.url } });
-                }
-              }
-              openAiMessages.push({ role: 'user', content });
-            } else {
-              openAiMessages.push({ role: 'user', content: msg.message });
-            }
-          } else {
-            openAiMessages.push({ role: 'assistant', content: msg.message });
-          }
-        }
-
-        const openai = new OpenAI({
-          apiKey: c.env.OPENROUTER_API_KEY,
-          baseURL: c.env.OPENROUTER_BASE_URL,
-        });
-        const candidates = Array.from(
-          new Set([model, c.env.OPENROUTER_FALLBACK_MODEL?.trim()].filter((v): v is string => Boolean(v)))
-        );
-        emit(controller, { type: 'stage', stage: 'model', label: '正在调用模型服务', traceId });
-
-        let activeModel = candidates[0] || model;
-        let answerText = '';
-        let bundledSuggestions: string[] = [];
-        for (const candidate of candidates) {
-          try {
-            const completion = await withModelTimeout(
-              () =>
-                openai.chat.completions.create(
-                  buildNonStreamingChatCompletionParams({
-                    model: candidate,
-                    messages: buildStructuredReplyMessages(openAiMessages),
-                    responseFormat: 'json_object',
-                  })
-                ),
-              MODEL_CALL_TIMEOUT_MS
-            );
-            const text = parseCompletionText(completion);
-            const structured = parseStructuredReply(text);
-            if (structured) {
-              answerText = structured.message;
-              bundledSuggestions = structured.suggestions;
-              activeModel = candidate;
-              break;
-            }
-            console.warn('chat_respond_stream_empty_completion', {
-              traceId,
-              model: candidate,
-              completion: summarizeCompletionPayload(completion),
-            });
-          } catch {
-            // continue trying other candidates
-          }
-          if (answerText.trim()) break;
-        }
-
-        if (!answerText.trim()) {
-          emit(controller, {
-            type: 'error',
-            code: ERROR_CODES.STREAM_FAILED,
-            error: `Model request failed. traceId=${traceId}`,
-            traceId,
-          });
-          controller.close();
-          return;
-        }
-
-        emit(controller, { type: 'stage', stage: 'postprocess', label: '正在整理最终答案', traceId });
-
-        await createMessage(db, {
-          id: generateId(),
-          userId,
-          conversationId,
-          role: 'assistant',
-          message: answerText,
-          files: null,
-          generatedImageUrls: null,
-          searchResults: null,
-          createdAt: new Date(),
-        });
-
-        await updateConversation(db, conversationId, { updatedAt: now });
-        if (!conversation.title) {
-          const title = message.slice(0, 50) + (message.length > 50 ? '...' : '');
-          await updateConversation(db, conversationId, { title });
-        }
-
-        emit(controller, { type: 'message', message: answerText, traceId });
-        emit(controller, { type: 'suggestions', suggestions: bundledSuggestions, traceId });
-        emit(controller, { type: 'done', traceId });
-        controller.close();
-      } catch (error) {
-        const messageText = error instanceof Error ? error.message : String(error);
-        emit(controller, {
-          type: 'error',
-          code: ERROR_CODES.STREAM_FAILED,
-          error: `Respond stream failed: ${messageText}. traceId=${traceId}`,
-          traceId,
-        });
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(readable, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-    },
-  });
-});
 
 chat.get(
   '/conversations/:id/messages',
