@@ -18,7 +18,7 @@ import { errorResponse, validationErrorHook } from '../utils/response';
 import { generateFollowUpSuggestions, parseAndFinalizeSuggestions } from '../utils/suggestions';
 import OpenAI from 'openai';
 import { MCPManager } from '../mcp/manager';
-import type { ToolCall } from '../mcp/parser';
+import { parseToolCalls, type ToolCall } from '../mcp/parser';
 
 const chat = new Hono<AppBindings>();
 
@@ -486,26 +486,6 @@ chat.delete('/conversations/:id', zValidator('param', conversationIdParamSchema,
   return c.json({ success: true, data: { message: 'Conversation deleted' } });
 });
 
-
-/**
- * Parse tool calls from model response
- */
-function parseToolCalls(completion: OpenAI.Chat.Completions.ChatCompletion): ToolCall[] {
-  const toolCalls = completion.choices[0]?.message?.tool_calls;
-
-  if (!toolCalls || toolCalls.length === 0) {
-    return [];
-  }
-
-  return toolCalls.map((call) => ({
-    id: call.id,
-    type: 'function',
-    function: {
-      name: call.function.name,
-      arguments: call.function.arguments,
-    },
-  }));
-}
 
 chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook), async (c) => {
   const traceId = generateId();

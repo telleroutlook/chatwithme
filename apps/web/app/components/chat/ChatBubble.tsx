@@ -8,14 +8,13 @@ import { MarkdownRenderer } from './MarkdownRenderer';
 interface ChatBubbleProps {
   message: Message | { role: 'user' | 'assistant'; message: string };
   messageId?: string;
-  isStreaming?: boolean;
   isLast?: boolean;
   onRegenerate?: () => void;
   onQuickReply?: (question: string) => void;
 }
 
 export const ChatBubble = memo<ChatBubbleProps>(
-  ({ message, messageId, isStreaming, isLast, onRegenerate, onQuickReply }) => {
+  ({ message, messageId, isLast, onRegenerate, onQuickReply }) => {
     const isUser = message.role === 'user';
     const suggestions = 'suggestions' in message ? message.suggestions : undefined;
 
@@ -51,11 +50,7 @@ export const ChatBubble = memo<ChatBubbleProps>(
             <MarkdownRenderer content={message.message} />
           )}
 
-          {isStreaming && (
-            <span className="inline-block w-2 h-4 bg-foreground/50 animate-pulse ml-1" />
-          )}
-
-          {!isUser && !isStreaming && suggestions && suggestions.length > 0 && onQuickReply && (
+          {!isUser && suggestions && suggestions.length > 0 && onQuickReply && (
             <div className="mt-3 flex flex-wrap gap-2">
               {suggestions.map((suggestion, index) => (
                 <button
@@ -69,8 +64,7 @@ export const ChatBubble = memo<ChatBubbleProps>(
             </div>
           )}
 
-          {!isStreaming && (
-            <div className="mt-3 flex items-center gap-1">
+          <div className="mt-3 flex items-center gap-1">
               <CopyMessageButton text={message.message} isUser={isUser} />
               {!isUser && isLast && onRegenerate && (
                 <button
@@ -82,7 +76,6 @@ export const ChatBubble = memo<ChatBubbleProps>(
                 </button>
               )}
             </div>
-          )}
         </div>
       </div>
     );

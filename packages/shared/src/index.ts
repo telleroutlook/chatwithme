@@ -80,17 +80,6 @@ export interface SendMessageRequest {
   message: string;
   files?: MessageFile[];
   model?: string;
-  responseFormat?: 'text' | 'json_object';
-}
-
-export interface StreamMessageEvent {
-  type: 'message' | 'done' | 'error' | 'suggestions' | 'stage';
-  message?: string;
-  suggestions?: string[];
-  error?: string;
-  stage?: string;
-  label?: string;
-  traceId?: string;
 }
 
 // API Response types

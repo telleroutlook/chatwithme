@@ -17,18 +17,12 @@ import type { Message, MessageFile } from '@chatwithme/shared';
 
 const ACTIVE_CONVERSATION_STORAGE_KEY = 'chatwithme-active-conversation-id';
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'chatwithme-sidebar-collapsed';
-const PRE_RESPONSE_STEPS = ['正在准备上下文', '正在调用模型服务', '正在组织最终答案'];
 
 export default function Home() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [deletingConversationId, setDeletingConversationId] = useState<string | null>(null);
-  const [isWaitingFirstChunk, setIsWaitingFirstChunk] = useState(false);
-  const [preResponseStepIndex, setPreResponseStepIndex] = useState(0);
-  const [serverStageLabel, setServerStageLabel] = useState<string | null>(null);
-  const streamingContentRef = useRef('');
-  const streamingSuggestionsRef = useRef<string[]>([]);
   const messageScrollRef = useRef<HTMLDivElement>(null);
   const restoreScrollConversationIdRef = useRef<string | null>(null);
   const skipNextAutoScrollRef = useRef(false);
@@ -40,8 +34,6 @@ export default function Home() {
     activeConversationId,
     messages,
     isLoading,
-    isStreaming,
-    streamingMessage,
     setConversations,
     addConversation,
     updateConversation,
@@ -49,9 +41,7 @@ export default function Home() {
     setActiveConversation,
     setMessages,
     addMessage,
-    clearStreamingMessage,
     setLoading,
-    setStreaming,
   } = useChatStore();
   const currentMessages = activeConversationId ? messages[activeConversationId] || [] : [];
 
@@ -127,7 +117,7 @@ export default function Home() {
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [activeConversationId, currentMessages.length, isStreaming, streamingMessage]);
+  }, [activeConversationId, currentMessages.length]);
 
   useEffect(() => {
     if (!activeConversationId) return;
@@ -153,19 +143,6 @@ export default function Home() {
       document.body.style.overflow = '';
     };
   }, [sidebarOpen]);
-
-  useEffect(() => {
-    if (!isWaitingFirstChunk) {
-      setPreResponseStepIndex(0);
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      setPreResponseStepIndex((prev) => (prev + 1) % PRE_RESPONSE_STEPS.length);
-    }, 1500);
-
-    return () => window.clearInterval(timer);
-  }, [isWaitingFirstChunk]);
 
   const loadConversations = async () => {
     const response = await api.get<{ conversations: typeof conversations }>('/chat/conversations');
@@ -271,26 +248,18 @@ export default function Home() {
     const conversationId = await ensureConversation();
     if (!conversationId) return;
 
-      // Add user message immediately
-      const userMessage: Message = {
-        id: crypto.randomUUID(),
-        userId: user?.id || '',
-        conversationId,
-        role: 'user',
-        message,
-        files: files || [],
-        generatedImageUrls: [],
-        searchResults: [],
-        createdAt: new Date(),
-      };
-      addMessage(conversationId, userMessage);
-
-      setStreaming(true);
-      setIsWaitingFirstChunk(true);
-      clearStreamingMessage();
-      streamingContentRef.current = '';
-      streamingSuggestionsRef.current = [];
-      setServerStageLabel('正在准备上下文');
+    const userMessage: Message = {
+      id: crypto.randomUUID(),
+      userId: user?.id || '',
+      conversationId,
+      role: 'user',
+      message,
+      files: files || [],
+      generatedImageUrls: [],
+      searchResults: [],
+      createdAt: new Date(),
+    };
+    addMessage(conversationId, userMessage);
 
     try {
       const response = await api.post<{ message: string; suggestions: string[] }>(
@@ -303,12 +272,8 @@ export default function Home() {
       );
 
       if (!response.success || !response.data) {
-        throw new Error('非流式响应失败');
+        throw new Error('响应失败');
       }
-      setIsWaitingFirstChunk(false);
-      setServerStageLabel(null);
-      streamingContentRef.current = response.data.message ?? '';
-      streamingSuggestionsRef.current = response.data.suggestions ?? [];
 
       const assistantMessage: Message = {
         id: crypto.randomUUID(),
@@ -323,10 +288,6 @@ export default function Home() {
         createdAt: new Date(),
       };
       addMessage(conversationId, assistantMessage);
-      clearStreamingMessage();
-      setServerStageLabel(null);
-      setIsWaitingFirstChunk(false);
-      setStreaming(false);
     } catch (error) {
       console.error('Send message error:', error);
       const errorMessage: Message = {
@@ -341,10 +302,6 @@ export default function Home() {
         createdAt: new Date(),
       };
       addMessage(conversationId, errorMessage);
-      clearStreamingMessage();
-      setServerStageLabel(null);
-      setIsWaitingFirstChunk(false);
-      setStreaming(false);
     }
   };
 
@@ -386,69 +343,33 @@ export default function Home() {
       currentMessages.slice(0, -1)
     );
 
-    // Re-send the last user message with stage events
-    setStreaming(true);
-    setIsWaitingFirstChunk(true);
-    clearStreamingMessage();
-    streamingContentRef.current = '';
-    streamingSuggestionsRef.current = [];
-    setServerStageLabel('正在准备上下文');
-
     try {
-      await new Promise<void>((resolve, reject) => {
-        let settled = false;
-        const timeout = window.setTimeout(() => {
-          if (settled) return;
-          settled = true;
-          reject(new Error('流式响应超时'));
-        }, 120_000);
+      const response = await api.post<{ message: string; suggestions: string[] }>(
+        '/chat/respond',
+        {
+          conversationId: activeConversationId,
+          message: lastUserMessage.message,
+          files: lastUserMessage.files || undefined,
+        }
+      );
 
-        void (async () => {
-          const response = await api.post<{ message: string; suggestions: string[] }>(
-            '/chat/respond',
-            {
-              conversationId: activeConversationId,
-              message: lastUserMessage.message,
-              files: lastUserMessage.files || undefined,
-            }
-          );
-
-          if (!response.success || !response.data) {
-            throw new Error('非流式响应失败');
-          }
-          setIsWaitingFirstChunk(false);
-          setServerStageLabel(null);
-          streamingContentRef.current = response.data.message ?? '';
-          streamingSuggestionsRef.current = response.data.suggestions ?? [];
-          if (settled) return;
-          settled = true;
-          window.clearTimeout(timeout);
-          resolve();
-        })().catch((error: unknown) => {
-          if (settled) return;
-          settled = true;
-          window.clearTimeout(timeout);
-          reject(error instanceof Error ? error : new Error(String(error)));
-        });
-      });
+      if (!response.success || !response.data) {
+        throw new Error('响应失败');
+      }
 
       const assistantMessage: Message = {
         id: crypto.randomUUID(),
         userId: user?.id || '',
         conversationId: activeConversationId,
         role: 'assistant',
-        message: streamingContentRef.current,
+        message: response.data.message,
         files: [],
         generatedImageUrls: [],
         searchResults: [],
-        suggestions: streamingSuggestionsRef.current,
+        suggestions: response.data.suggestions ?? [],
         createdAt: new Date(),
       };
       addMessage(activeConversationId, assistantMessage);
-      clearStreamingMessage();
-      setServerStageLabel(null);
-      setIsWaitingFirstChunk(false);
-      setStreaming(false);
     } catch (error) {
       console.error('Regenerate error:', error);
       const errorMessage: Message = {
@@ -463,15 +384,11 @@ export default function Home() {
         createdAt: new Date(),
       };
       addMessage(activeConversationId, errorMessage);
-      clearStreamingMessage();
-      setServerStageLabel(null);
-      setIsWaitingFirstChunk(false);
-      setStreaming(false);
     }
   };
 
   const handleQuickReply = async (question: string) => {
-    if (!question.trim() || isStreaming || isLoading) return;
+    if (!question.trim() || isLoading) return;
     await handleSendMessage(question);
   };
 
@@ -576,7 +493,7 @@ export default function Home() {
 
         {/* Messages */}
         <ScrollArea ref={messageScrollRef} className="flex-1">
-          {currentMessages.length === 0 && !isStreaming ? (
+          {currentMessages.length === 0 ? (
             <div className="mx-auto flex h-full w-full max-w-3xl flex-col items-center justify-center px-6 text-muted-foreground">
               <h2 className="mb-2 text-center text-2xl font-semibold sm:text-3xl">Welcome to ChatWithMe</h2>
               <p className="max-w-md text-center text-sm sm:text-base">
@@ -591,32 +508,11 @@ export default function Home() {
                   key={msg.id}
                   message={msg}
                   messageId={msg.id}
-                  isLast={index === currentMessages.length - 1 && !isStreaming}
+                  isLast={index === currentMessages.length - 1}
                   onRegenerate={handleRegenerate}
                   onQuickReply={handleQuickReply}
                 />
               ))}
-              {isStreaming && streamingMessage && (
-                <ChatBubble
-                  message={{ role: 'assistant', message: streamingMessage }}
-                  isStreaming
-                />
-              )}
-              {isStreaming && !streamingMessage && isWaitingFirstChunk && (
-                <div className="flex gap-2 p-3 sm:gap-3 sm:p-4" role="status" aria-live="polite">
-                  <div className="h-8 w-8 shrink-0 rounded-full bg-muted sm:h-9 sm:w-9" />
-                  <div className="max-w-[88%] rounded-xl border border-border bg-card px-3.5 py-3 text-[15px] leading-relaxed sm:max-w-[82%] sm:px-4">
-                    <p className="text-foreground/90">
-                      {serverStageLabel ?? PRE_RESPONSE_STEPS[preResponseStepIndex]}
-                    </p>
-                    <div className="mt-2 flex items-center gap-1.5 text-muted-foreground">
-                      <span className="h-2 w-2 animate-bounce rounded-full bg-current [animation-delay:-0.2s]" />
-                      <span className="h-2 w-2 animate-bounce rounded-full bg-current [animation-delay:-0.1s]" />
-                      <span className="h-2 w-2 animate-bounce rounded-full bg-current" />
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </ScrollArea>
@@ -624,7 +520,7 @@ export default function Home() {
         {/* Input */}
         <MessageInput
           onSend={handleSendMessage}
-          disabled={isStreaming || isLoading}
+          disabled={isLoading}
           autoFocus
           placeholder={
             activeConversationId

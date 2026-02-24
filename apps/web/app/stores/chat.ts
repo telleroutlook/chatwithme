@@ -6,10 +6,7 @@ interface ChatState {
   activeConversationId: string | null;
   messages: Record<string, Message[]>;
   isLoading: boolean;
-  isStreaming: boolean;
-  streamingMessage: string;
 
-  // Actions
   setConversations: (conversations: Conversation[]) => void;
   addConversation: (conversation: Conversation) => void;
   updateConversation: (id: string, data: Partial<Conversation>) => void;
@@ -18,11 +15,8 @@ interface ChatState {
 
   setMessages: (conversationId: string, messages: Message[]) => void;
   addMessage: (conversationId: string, message: Message) => void;
-  appendToStreamingMessage: (content: string) => void;
-  clearStreamingMessage: () => void;
 
   setLoading: (loading: boolean) => void;
-  setStreaming: (streaming: boolean) => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -30,8 +24,6 @@ export const useChatStore = create<ChatState>((set) => ({
   activeConversationId: null,
   messages: {},
   isLoading: false,
-  isStreaming: false,
-  streamingMessage: '',
 
   setConversations: (conversations) => set({ conversations }),
 
@@ -78,13 +70,5 @@ export const useChatStore = create<ChatState>((set) => ({
       },
     })),
 
-  appendToStreamingMessage: (content) =>
-    set((state) => ({
-      streamingMessage: state.streamingMessage + content,
-    })),
-
-  clearStreamingMessage: () => set({ streamingMessage: '' }),
-
   setLoading: (loading) => set({ isLoading: loading }),
-  setStreaming: (streaming) => set({ isStreaming: streaming }),
 }));

@@ -1,12 +1,7 @@
 import { useAuthStore } from './stores/auth';
-import type { ApiResponse, StreamMessageEvent } from '@chatwithme/shared';
+import type { ApiResponse } from '@chatwithme/shared';
 
-// Use empty string for relative URLs (same origin) in production
-// Falls back to localhost:8787 for local development
 const API_BASE = import.meta.env.VITE_API_URL || '';
-const STREAM_MESSAGE_SPLIT_THRESHOLD = 160;
-const STREAM_MESSAGE_CHUNK_SIZE = 48;
-const STREAM_MESSAGE_CHUNK_DELAY_MS = 16;
 
 interface RequestOptions extends RequestInit {
   withAuth?: boolean;
@@ -22,53 +17,6 @@ export function getApiErrorMessage(error: ApiResponse['error']): string {
   }
 
   return error.message || 'Request failed';
-}
-
-function extractReadableTextFromHtml(input: string): string {
-  return input
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-async function getStreamErrorMessage(response: Response): Promise<string> {
-  const contentType = response.headers.get('content-type') || '';
-
-  if (contentType.includes('application/json')) {
-    const errorData = (await response.json()) as ApiResponse;
-    return getApiErrorMessage(errorData.error);
-  }
-
-  const text = (await response.text()).trim();
-  if (!text) {
-    return response.statusText || `HTTP ${response.status}`;
-  }
-
-  if (contentType.includes('text/html')) {
-    const cleaned = extractReadableTextFromHtml(text);
-    return cleaned || response.statusText || `HTTP ${response.status}`;
-  }
-
-  return text.length > 300 ? `${text.slice(0, 300)}...` : text;
-}
-
-async function emitMessageWithProgressiveChunks(
-  content: string,
-  onMessage: (content: string) => void
-): Promise<void> {
-  if (content.length <= STREAM_MESSAGE_SPLIT_THRESHOLD) {
-    onMessage(content);
-    return;
-  }
-
-  for (let i = 0; i < content.length; i += STREAM_MESSAGE_CHUNK_SIZE) {
-    onMessage(content.slice(i, i + STREAM_MESSAGE_CHUNK_SIZE));
-    await new Promise<void>((resolve) => {
-      window.setTimeout(resolve, STREAM_MESSAGE_CHUNK_DELAY_MS);
-    });
-  }
 }
 
 class ApiClient {
@@ -147,19 +95,6 @@ class ApiClient {
     return false;
   }
 
-  private async streamWithAuth(endpoint: string, body: unknown): Promise<Response> {
-    const tokens = useAuthStore.getState().tokens;
-
-    return fetch(`${this.baseUrl}${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': tokens ? `Bearer ${tokens.accessToken}` : '',
-      },
-      body: JSON.stringify(body),
-    });
-  }
-
   async get<T>(endpoint: string, options?: RequestOptions) {
     return this.request<T>(endpoint, { ...options, method: 'GET' });
   }
@@ -182,98 +117,6 @@ class ApiClient {
 
   async delete<T>(endpoint: string, options?: RequestOptions) {
     return this.request<T>(endpoint, { ...options, method: 'DELETE' });
-  }
-
-  // Special method for streaming
-  async stream(
-    endpoint: string,
-    body: unknown,
-    onMessage: (content: string) => void,
-    onDone: () => void,
-    onError: (error: string) => void,
-    onSuggestions?: (suggestions: string[]) => void,
-    onStage?: (stage: string, label?: string) => void
-  ): Promise<void> {
-    let response = await this.streamWithAuth(endpoint, body);
-
-    if (response.status === 401) {
-      const tokens = useAuthStore.getState().tokens;
-      if (tokens?.refreshToken) {
-        const refreshed = await this.refreshToken(tokens.refreshToken);
-        if (refreshed) {
-          response = await this.streamWithAuth(endpoint, body);
-        } else {
-          useAuthStore.getState().logout();
-        }
-      }
-    }
-
-    if (!response.ok) {
-      onError(await getStreamErrorMessage(response));
-      return;
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) {
-      onError('No response body');
-      return;
-    }
-
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const event = JSON.parse(line.slice(6)) as StreamMessageEvent;
-              if (event.type === 'message') {
-                await emitMessageWithProgressiveChunks(event.message ?? '', onMessage);
-              } else if (event.type === 'stage') {
-                onStage?.(event.stage ?? '', event.label);
-              } else if (event.type === 'suggestions') {
-                onSuggestions?.(event.suggestions ?? []);
-              } else if (event.type === 'done') {
-                onDone();
-              } else if (event.type === 'error') {
-                onError(event.error ?? 'Stream failed');
-              }
-            } catch {
-              // Ignore parse errors
-            }
-          }
-        }
-      }
-
-      if (buffer.startsWith('data: ')) {
-        try {
-          const event = JSON.parse(buffer.slice(6)) as StreamMessageEvent;
-          if (event.type === 'message') {
-            await emitMessageWithProgressiveChunks(event.message ?? '', onMessage);
-          } else if (event.type === 'stage') {
-            onStage?.(event.stage ?? '', event.label);
-          } else if (event.type === 'suggestions') {
-            onSuggestions?.(event.suggestions ?? []);
-          } else if (event.type === 'done') {
-            onDone();
-          } else if (event.type === 'error') {
-            onError(event.error ?? 'Stream failed');
-          }
-        } catch {
-          // Ignore trailing parse errors
-        }
-      }
-    } finally {
-      reader.releaseLock();
-    }
   }
 }
 
