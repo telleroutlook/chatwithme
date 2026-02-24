@@ -6,9 +6,11 @@ interface AuthState {
   user: UserSafe | null;
   tokens: AuthTokens | null;
   isAuthenticated: boolean;
+  hasHydrated: boolean;
   setAuth: (user: UserSafe, tokens: AuthTokens) => void;
   updateTokens: (accessToken: string, expiresIn: number) => void;
   logout: () => void;
+  setHasHydrated: (hydrated: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -17,6 +19,7 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       tokens: null,
       isAuthenticated: false,
+      hasHydrated: false,
       setAuth: (user, tokens) =>
         set({
           user,
@@ -35,9 +38,14 @@ export const useAuthStore = create<AuthState>()(
           tokens: null,
           isAuthenticated: false,
         }),
+      setHasHydrated: (hydrated) => set({ hasHydrated: hydrated }),
     }),
     {
       name: 'chatwithme-auth',
+      skipHydration: true,
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );

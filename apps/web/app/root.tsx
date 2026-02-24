@@ -1,6 +1,8 @@
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router';
 import type { LinksFunction } from 'react-router';
+import { useEffect } from 'react';
 import './styles/globals.css';
+import { useAuthStore } from './stores/auth';
 
 export const links: LinksFunction = () => [
   { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
@@ -34,6 +36,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  useEffect(() => {
+    void useAuthStore.persist.rehydrate();
+  }, []);
+
   return <Outlet />;
 }
 

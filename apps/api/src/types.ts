@@ -37,7 +37,10 @@ export interface SendMessageRequest {
   message: string;
   files?: MessageFile[];
   model?: string;
+  thinkMode?: ThinkMode;
 }
+
+export type ThinkMode = 'instant' | 'think' | 'deepthink';
 
 export interface MessageFile {
   url: string;

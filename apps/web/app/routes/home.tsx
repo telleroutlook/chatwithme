@@ -12,15 +12,22 @@ import { MessageInput } from '~/components/chat/MessageInput';
 import { ScrollArea } from '~/components/ui/scroll-area';
 import { exportChatToHtml } from '~/lib/chatExport';
 import { ensureConversationId } from '~/lib/chatFlow';
-import type { Message, MessageFile } from '@chatwithme/shared';
+import type { Message, MessageFile, ThinkMode } from '@chatwithme/shared';
+
+const THINK_MODE_STORAGE_KEY = 'chatwithme-think-mode';
+const THINK_MODE_VALUES: ThinkMode[] = ['instant', 'think', 'deepthink'];
 
 export default function Home() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [thinkMode, setThinkMode] = useState<ThinkMode>('think');
   const streamingContentRef = useRef('');
   const streamingSuggestionsRef = useRef<string[]>([]);
+  const messageScrollRef = useRef<HTMLDivElement>(null);
+  const restoreScrollConversationIdRef = useRef<string | null>(null);
+  const skipNextAutoScrollRef = useRef(false);
 
-  const { user, tokens, isAuthenticated, logout } = useAuthStore();
+  const { user, tokens, isAuthenticated, hasHydrated, logout } = useAuthStore();
   const {
     conversations,
     activeConversationId,
@@ -44,17 +51,18 @@ export default function Home() {
 
   // Redirect if not authenticated
   useEffect(() => {
+    if (!hasHydrated) return;
     if (!isAuthenticated) {
       navigate('/signin');
     }
-  }, [isAuthenticated, navigate]);
+  }, [hasHydrated, isAuthenticated, navigate]);
 
   // Load conversations on mount
   useEffect(() => {
-    if (isAuthenticated) {
+    if (hasHydrated && isAuthenticated) {
       loadConversations();
     }
-  }, [isAuthenticated]);
+  }, [hasHydrated, isAuthenticated]);
 
   // Load messages when active conversation changes
   useEffect(() => {
@@ -63,15 +71,87 @@ export default function Home() {
     }
   }, [activeConversationId]);
 
+  useEffect(() => {
+    if (!activeConversationId) return;
+    if (restoreScrollConversationIdRef.current !== activeConversationId) return;
+    if (currentMessages.length === 0) {
+      restoreScrollConversationIdRef.current = null;
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const viewport = messageScrollRef.current?.querySelector<HTMLElement>(
+        '[data-radix-scroll-area-viewport]'
+      );
+      if (viewport) {
+        const lastUserMessage = [...currentMessages].reverse().find((message) => message.role === 'user');
+        const targetMessage = lastUserMessage ?? currentMessages[0];
+        const targetElement = viewport.querySelector<HTMLElement>(
+          `[data-message-id="${targetMessage.id}"]`
+        );
+
+        if (targetElement) {
+          skipNextAutoScrollRef.current = true;
+          targetElement.scrollIntoView({ block: 'start' });
+        }
+      }
+    });
+
+    restoreScrollConversationIdRef.current = null;
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeConversationId, currentMessages]);
+
+  useEffect(() => {
+    if (skipNextAutoScrollRef.current) {
+      skipNextAutoScrollRef.current = false;
+      return;
+    }
+
+    if (!activeConversationId) return;
+    if (restoreScrollConversationIdRef.current === activeConversationId) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const viewport = messageScrollRef.current?.querySelector<HTMLElement>(
+        '[data-radix-scroll-area-viewport]'
+      );
+      if (viewport) {
+        viewport.scrollTop = viewport.scrollHeight;
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeConversationId, currentMessages.length, isStreaming, streamingMessage]);
+
+  useEffect(() => {
+    window.localStorage.setItem(THINK_MODE_STORAGE_KEY, thinkMode);
+  }, [thinkMode]);
+
+  useEffect(() => {
+    const savedMode = window.localStorage.getItem(THINK_MODE_STORAGE_KEY);
+    if (savedMode && THINK_MODE_VALUES.includes(savedMode as ThinkMode)) {
+      setThinkMode(savedMode as ThinkMode);
+    }
+  }, []);
+
   const loadConversations = async () => {
     const response = await api.get<{ conversations: typeof conversations }>('/chat/conversations');
     if (response.success && response.data) {
-      setConversations(response.data.conversations);
+      const loadedConversations = response.data.conversations;
+      setConversations(loadedConversations);
+
+      const hasCurrentActiveConversation = loadedConversations.some(
+        (conversation) => conversation.id === activeConversationId
+      );
+
+      if (!hasCurrentActiveConversation) {
+        setActiveConversation(loadedConversations[0]?.id ?? null);
+      }
     }
   };
 
   const loadMessages = async (conversationId: string) => {
     setLoading(true);
+    restoreScrollConversationIdRef.current = conversationId;
     const response = await api.get<{ messages: Message[] }>(
       `/chat/conversations/${conversationId}/messages`
     );
@@ -126,7 +206,11 @@ export default function Home() {
       onConversationCreated: addConversation,
     });
 
-  const handleSendMessage = async (message: string, files?: MessageFile[]) => {
+  const handleSendMessage = async (
+    message: string,
+    files?: MessageFile[],
+    selectedThinkMode: ThinkMode = thinkMode
+  ) => {
     const conversationId = await ensureConversation();
     if (!conversationId) return;
 
@@ -157,6 +241,7 @@ export default function Home() {
           conversationId,
           message,
           files,
+          thinkMode: selectedThinkMode,
         },
           (content) => {
             streamingContentRef.current += content;
@@ -182,6 +267,19 @@ export default function Home() {
           },
           (error) => {
             console.error('Stream error:', error);
+            clearStreamingMessage();
+            const errorMessage: Message = {
+              id: crypto.randomUUID(),
+              userId: user?.id || '',
+              conversationId,
+              role: 'assistant',
+              message: `抱歉，回复失败：${error}`,
+              files: [],
+              generatedImageUrls: [],
+              searchResults: [],
+              createdAt: new Date(),
+            };
+            addMessage(conversationId, errorMessage);
             setStreaming(false);
           },
           (suggestions) => {
@@ -244,6 +342,7 @@ export default function Home() {
           conversationId: activeConversationId,
           message: lastUserMessage.message,
           files: lastUserMessage.files || undefined,
+          thinkMode,
         },
         (content) => {
           streamingContentRef.current += content;
@@ -268,6 +367,19 @@ export default function Home() {
         },
         (error) => {
           console.error('Regenerate stream error:', error);
+          clearStreamingMessage();
+          const errorMessage: Message = {
+            id: crypto.randomUUID(),
+            userId: user?.id || '',
+            conversationId: activeConversationId,
+            role: 'assistant',
+            message: `抱歉，重新生成失败：${error}`,
+            files: [],
+            generatedImageUrls: [],
+            searchResults: [],
+            createdAt: new Date(),
+          };
+          addMessage(activeConversationId, errorMessage);
           setStreaming(false);
         },
         (suggestions) => {
@@ -285,7 +397,7 @@ export default function Home() {
     await handleSendMessage(question);
   };
 
-  if (!isAuthenticated) {
+  if (!hasHydrated || !isAuthenticated) {
     return null;
   }
 
@@ -360,7 +472,7 @@ export default function Home() {
         </header>
 
         {/* Messages */}
-        <ScrollArea className="flex-1">
+        <ScrollArea ref={messageScrollRef} className="flex-1">
           {currentMessages.length === 0 && !isStreaming ? (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8">
               <h2 className="text-2xl font-semibold mb-2">Welcome to ChatWithMe</h2>
@@ -375,6 +487,7 @@ export default function Home() {
                 <ChatBubble
                   key={msg.id}
                   message={msg}
+                  messageId={msg.id}
                   isLast={index === currentMessages.length - 1 && !isStreaming}
                   onRegenerate={handleRegenerate}
                   onQuickReply={handleQuickReply}
@@ -394,6 +507,9 @@ export default function Home() {
         <MessageInput
           onSend={handleSendMessage}
           disabled={isStreaming || isLoading}
+          autoFocus
+          thinkMode={thinkMode}
+          onThinkModeChange={setThinkMode}
           placeholder={
             activeConversationId
               ? 'Type a message...'

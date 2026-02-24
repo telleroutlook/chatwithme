@@ -1,16 +1,13 @@
 import { cn } from '~/lib/utils';
 import { Avatar, AvatarFallback } from '~/components/ui/avatar';
 import { Bot, User, Copy, Check, RefreshCw } from 'lucide-react';
-import { useState, memo, lazy, Suspense } from 'react';
+import { useState, memo } from 'react';
 import type { Message } from '@chatwithme/shared';
-
-const MarkdownRenderer = lazy(async () => {
-  const mod = await import('./MarkdownRenderer');
-  return { default: mod.MarkdownRenderer };
-});
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 interface ChatBubbleProps {
   message: Message | { role: 'user' | 'assistant'; message: string };
+  messageId?: string;
   isStreaming?: boolean;
   isLast?: boolean;
   onRegenerate?: () => void;
@@ -18,12 +15,13 @@ interface ChatBubbleProps {
 }
 
 export const ChatBubble = memo<ChatBubbleProps>(
-  ({ message, isStreaming, isLast, onRegenerate, onQuickReply }) => {
+  ({ message, messageId, isStreaming, isLast, onRegenerate, onQuickReply }) => {
     const isUser = message.role === 'user';
     const suggestions = 'suggestions' in message ? message.suggestions : undefined;
 
     return (
       <div
+        data-message-id={messageId}
         className={cn(
           'flex gap-3 p-4',
           isUser ? 'flex-row-reverse' : 'flex-row'
@@ -50,9 +48,7 @@ export const ChatBubble = memo<ChatBubbleProps>(
           {isUser ? (
             <p className="whitespace-pre-wrap break-words">{message.message}</p>
           ) : (
-            <Suspense fallback={<p className="whitespace-pre-wrap break-words">{message.message}</p>}>
-              <MarkdownRenderer content={message.message} />
-            </Suspense>
+            <MarkdownRenderer content={message.message} />
           )}
 
           {isStreaming && (

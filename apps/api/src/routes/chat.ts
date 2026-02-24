@@ -17,6 +17,7 @@ import { ERROR_CODES } from '../constants/error-codes';
 import { errorResponse, validationErrorHook } from '../utils/response';
 import { generateFollowUpSuggestions } from '../utils/suggestions';
 import OpenAI from 'openai';
+import type { ThinkMode } from '@chatwithme/shared';
 
 const chat = new Hono<AppBindings>();
 
@@ -47,7 +48,14 @@ const streamRequestSchema = z.object({
     )
     .optional(),
   model: z.string().min(1).optional(),
+  thinkMode: z.enum(['instant', 'think', 'deepthink']).optional(),
 });
+
+const THINKING_EFFORT_BY_MODE: Record<ThinkMode, OpenAI.Chat.ChatCompletionReasoningEffort> = {
+  instant: 'low',
+  think: 'medium',
+  deepthink: 'high',
+};
 
 chat.use('/*', authMiddleware);
 
@@ -141,7 +149,13 @@ chat.delete('/conversations/:id', zValidator('param', conversationIdParamSchema,
 
 chat.post('/stream', zValidator('json', streamRequestSchema, validationErrorHook), async (c) => {
   const { userId } = getAuthInfo(c);
-  const { conversationId, message, files, model = 'gpt-5.3-codex' } = c.req.valid('json');
+  const {
+    conversationId,
+    message,
+    files,
+    model = 'gpt-5.3-codex',
+    thinkMode = 'think',
+  } = c.req.valid('json');
   const db = createDb(c.env.DB);
 
   const conversation = await getConversationById(db, conversationId);
@@ -201,6 +215,7 @@ chat.post('/stream', zValidator('json', streamRequestSchema, validationErrorHook
     model,
     messages: openAiMessages as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
     stream: true,
+    reasoning_effort: THINKING_EFFORT_BY_MODE[thinkMode],
   });
 
   await updateConversation(db, conversationId, { updatedAt: now });

@@ -97,6 +97,19 @@ class ApiClient {
     return false;
   }
 
+  private async streamWithAuth(endpoint: string, body: unknown): Promise<Response> {
+    const tokens = useAuthStore.getState().tokens;
+
+    return fetch(`${this.baseUrl}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: tokens ? `Bearer ${tokens.accessToken}` : '',
+      },
+      body: JSON.stringify(body),
+    });
+  }
+
   async get<T>(endpoint: string, options?: RequestOptions) {
     return this.request<T>(endpoint, { ...options, method: 'GET' });
   }
@@ -130,20 +143,28 @@ class ApiClient {
     onError: (error: string) => void,
     onSuggestions?: (suggestions: string[]) => void
   ): Promise<void> {
-    const tokens = useAuthStore.getState().tokens;
+    let response = await this.streamWithAuth(endpoint, body);
 
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: tokens ? `Bearer ${tokens.accessToken}` : '',
-      },
-      body: JSON.stringify(body),
-    });
+    if (response.status === 401) {
+      const tokens = useAuthStore.getState().tokens;
+      if (tokens?.refreshToken) {
+        const refreshed = await this.refreshToken(tokens.refreshToken);
+        if (refreshed) {
+          response = await this.streamWithAuth(endpoint, body);
+        } else {
+          useAuthStore.getState().logout();
+        }
+      }
+    }
 
     if (!response.ok) {
-      const errorData = (await response.json()) as ApiResponse;
-      onError(getApiErrorMessage(errorData.error));
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const errorData = (await response.json()) as ApiResponse;
+        onError(getApiErrorMessage(errorData.error));
+      } else {
+        onError(`HTTP ${response.status}`);
+      }
       return;
     }
 

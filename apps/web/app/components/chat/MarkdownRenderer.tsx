@@ -221,11 +221,13 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
         rehypePlugins={[rehypeHighlight]}
         components={{
           pre: ({ children }) => <>{children}</>,
-          code: ({ className, children, ...props }) => {
+          code: (props) => {
+            const { className, children, ...restProps } = props;
+            const inline = 'inline' in props && Boolean((props as { inline?: boolean }).inline);
             const match = /language-(\w+)/.exec(className || '');
             const language = match ? match[1] : '';
             const rawText = extractText(children).replace(/\n$/, '');
-            const isBlock = match || rawText.includes('\n');
+            const isBlock = !inline && (!!match || rawText.includes('\n'));
             const isMermaid = language.toLowerCase() === 'mermaid';
 
             if (isBlock && isMermaid) {
@@ -243,7 +245,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
             return (
               <code
                 className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono"
-                {...props}
+                {...restProps}
               >
                 {children}
               </code>

@@ -1,30 +1,48 @@
-import { useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { Send, Paperclip, X, Image as ImageIcon } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
-import type { MessageFile } from '@chatwithme/shared';
+import type { MessageFile, ThinkMode } from '@chatwithme/shared';
 
 interface MessageInputProps {
-  onSend: (message: string, files?: MessageFile[]) => void;
+  onSend: (message: string, files?: MessageFile[], thinkMode?: ThinkMode) => void;
   disabled?: boolean;
   placeholder?: string;
+  autoFocus?: boolean;
+  thinkMode: ThinkMode;
+  onThinkModeChange: (mode: ThinkMode) => void;
 }
 
-export function MessageInput({ onSend, disabled, placeholder = 'Type a message...' }: MessageInputProps) {
+export function MessageInput({
+  onSend,
+  disabled,
+  placeholder = 'Type a message...',
+  autoFocus = false,
+  thinkMode,
+  onThinkModeChange,
+}: MessageInputProps) {
   const [message, setMessage] = useState('');
   const [files, setFiles] = useState<MessageFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  useEffect(() => {
+    if (!autoFocus || disabled) return;
+    const frame = window.requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [autoFocus, disabled]);
+
   const handleSubmit = useCallback(() => {
     if (disabled) return;
     if (!message.trim() && files.length === 0) return;
 
-    onSend(message.trim(), files.length > 0 ? files : undefined);
+    onSend(message.trim(), files.length > 0 ? files : undefined, thinkMode);
     setMessage('');
     setFiles([]);
-  }, [message, files, disabled, onSend]);
+  }, [message, files, disabled, onSend, thinkMode]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -107,6 +125,23 @@ export function MessageInput({ onSend, disabled, placeholder = 'Type a message..
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
     >
+      <div className="mb-2 flex items-center justify-end gap-2">
+        <label htmlFor="think-mode" className="text-xs text-muted-foreground">
+          Think mode
+        </label>
+        <select
+          id="think-mode"
+          value={thinkMode}
+          onChange={(event) => onThinkModeChange(event.target.value as ThinkMode)}
+          disabled={disabled}
+          className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+        >
+          <option value="instant">instant</option>
+          <option value="think">think</option>
+          <option value="deepthink">deepthink</option>
+        </select>
+      </div>
+
       {/* File previews */}
       {files.length > 0 && (
         <div className="flex gap-2 mb-3 flex-wrap">
@@ -161,6 +196,7 @@ export function MessageInput({ onSend, disabled, placeholder = 'Type a message..
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             disabled={disabled}
+            autoFocus={autoFocus}
             rows={1}
             className={cn(
               'w-full resize-none rounded-lg border border-input bg-background px-4 py-3 pr-12',

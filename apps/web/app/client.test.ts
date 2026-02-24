@@ -126,4 +126,61 @@ describe('ApiClient.stream', () => {
     expect(onDone).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledWith('Bad request');
   });
+
+  it('refreshes token and retries stream when first request returns 401', async () => {
+    useAuthStore.getState().setAuth(user, {
+      accessToken: 'expired-access-token',
+      refreshToken: 'refresh-token',
+      expiresIn: 3600,
+    });
+
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"type":"message","message":"ok"}\n\n'));
+        controller.enqueue(encoder.encode('data: {"type":"done"}\n\n'));
+        controller.close();
+      },
+    });
+
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: { accessToken: 'new-access-token', expiresIn: 900 } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(stream, {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+      );
+
+    const onMessage = vi.fn();
+    const onDone = vi.fn();
+    const onError = vi.fn();
+
+    await api.stream('/chat/stream', { message: 'hello' }, onMessage, onDone, onError);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe('/chat/stream');
+    expect(fetchSpy.mock.calls[1]?.[0]).toBe('/auth/refresh');
+    expect(fetchSpy.mock.calls[2]?.[0]).toBe('/chat/stream');
+    expect(fetchSpy.mock.calls[2]?.[1]).toMatchObject({
+      headers: expect.objectContaining({
+        Authorization: 'Bearer new-access-token',
+      }),
+    });
+    expect(onMessage).toHaveBeenCalledWith('ok');
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+  });
 });
