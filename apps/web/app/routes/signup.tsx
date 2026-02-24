@@ -55,16 +55,17 @@ export default function SignUp() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Create Account</CardTitle>
-          <CardDescription>Sign up to start chatting with AI</CardDescription>
+    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-background px-4 py-8 sm:px-6">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(68,115,255,0.16),transparent_40%),radial-gradient(circle_at_85%_8%,rgba(102,157,255,0.14),transparent_35%)]" />
+      <Card className="relative w-full max-w-md border-border/90 bg-card/95">
+        <CardHeader className="space-y-2 pb-4 text-center">
+          <CardTitle className="text-2xl sm:text-[1.9rem]">Create Account</CardTitle>
+          <CardDescription className="text-sm sm:text-base">Sign up to start chatting with AI</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+              <div className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">
                 {error}
               </div>
             )}
@@ -129,13 +130,13 @@ export default function SignUp() {
               />
             </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="h-11 w-full rounded-xl text-sm font-semibold" disabled={loading}>
               {loading ? 'Creating Account...' : 'Sign Up'}
             </Button>
 
             <p className="text-center text-sm text-muted-foreground">
               Already have an account?{' '}
-              <Link to="/signin" className="text-primary hover:underline">
+              <Link to="/signin" className="font-semibold text-primary hover:underline">
                 Sign in
               </Link>
             </p>

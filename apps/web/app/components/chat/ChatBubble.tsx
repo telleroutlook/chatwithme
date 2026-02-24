@@ -23,11 +23,11 @@ export const ChatBubble = memo<ChatBubbleProps>(
       <div
         data-message-id={messageId}
         className={cn(
-          'flex gap-3 p-4',
+          'flex gap-2 p-3 sm:gap-3 sm:p-4',
           isUser ? 'flex-row-reverse' : 'flex-row'
         )}
       >
-        <Avatar className="h-8 w-8 shrink-0">
+        <Avatar className="h-8 w-8 shrink-0 sm:h-9 sm:w-9">
           <AvatarFallback
             className={cn(
               isUser ? 'bg-primary text-primary-foreground' : 'bg-muted'
@@ -39,7 +39,7 @@ export const ChatBubble = memo<ChatBubbleProps>(
 
         <div
           className={cn(
-            'flex-1 max-w-[80%] rounded-lg px-4 py-3',
+            'flex-1 max-w-[88%] rounded-xl px-3.5 py-3 text-[15px] leading-relaxed sm:max-w-[82%] sm:px-4',
             isUser
               ? 'bg-primary text-primary-foreground'
               : 'bg-card border border-border'
@@ -61,7 +61,7 @@ export const ChatBubble = memo<ChatBubbleProps>(
                 <button
                   key={`${suggestion}-${index}`}
                   onClick={() => onQuickReply(suggestion)}
-                  className="text-xs px-3 py-1.5 rounded-full border border-border bg-muted/40 text-foreground hover:bg-muted transition-colors"
+                  className="rounded-full border border-border bg-muted/40 px-3 py-2 text-xs text-foreground transition-colors hover:bg-muted"
                 >
                   {suggestion}
                 </button>
@@ -76,7 +76,7 @@ export const ChatBubble = memo<ChatBubbleProps>(
               {isLast && onRegenerate && (
                 <button
                   onClick={onRegenerate}
-                  className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+                  className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   title="Regenerate response"
                 >
                   <RefreshCw className="h-4 w-4" />
@@ -107,7 +107,7 @@ const CopyMessageButton = memo<CopyMessageButtonProps>(({ text }) => {
   return (
     <button
       onClick={handleCopy}
-      className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+      className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       title="Copy text"
     >
       {copied ? (

@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
-import { Menu, LogOut, X, Download } from 'lucide-react';
+import { Menu, LogOut, X, Download, Moon, Sun, Monitor } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '~/stores/auth';
 import { useChatStore } from '~/stores/chat';
+import { type ThemeMode, useThemeStore } from '~/stores/theme';
 import { api } from '~/client';
 import { Button } from '~/components/ui/button';
 import { ConversationList } from '~/components/chat/ConversationList';
@@ -29,6 +30,7 @@ export default function Home() {
   const skipNextAutoScrollRef = useRef(false);
 
   const { user, tokens, isAuthenticated, hasHydrated, logout } = useAuthStore();
+  const { mode: themeMode, setMode: setThemeMode } = useThemeStore();
   const {
     conversations,
     activeConversationId,
@@ -142,6 +144,15 @@ export default function Home() {
       setThinkMode(savedMode as ThinkMode);
     }
   }, []);
+
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    if (window.matchMedia('(min-width: 1024px)').matches) return;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [sidebarOpen]);
 
   const loadConversations = async () => {
     const response = await api.get<{ conversations: typeof conversations }>('/chat/conversations');
@@ -421,28 +432,38 @@ export default function Home() {
     await handleSendMessage(question);
   };
 
+  const cycleThemeMode = () => {
+    const order: ThemeMode[] = ['system', 'dark', 'light'];
+    const index = order.indexOf(themeMode);
+    const nextMode = order[(index + 1) % order.length];
+    setThemeMode(nextMode);
+  };
+
+  const themeIcon =
+    themeMode === 'light' ? <Sun className="h-4 w-4" /> : themeMode === 'dark' ? <Moon className="h-4 w-4" /> : <Monitor className="h-4 w-4" />;
+
   if (!hasHydrated || !isAuthenticated) {
     return null;
   }
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-dvh bg-background">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[1px] lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside
-        className={`fixed lg:relative z-50 lg:z-0 w-72 h-full bg-card border-r border-border transform transition-transform lg:transform-none ${
+        className={`fixed z-50 h-full w-[84vw] max-w-80 border-r border-border bg-card/95 backdrop-blur-xl transform transition-transform lg:relative lg:z-0 lg:w-72 lg:max-w-none lg:transform-none ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
-        <div className="flex items-center justify-between p-4 border-b border-border lg:hidden">
-          <h1 className="font-semibold text-lg">ChatWithMe</h1>
+        <div className="flex items-center justify-between border-b border-border px-4 py-3 lg:hidden">
+          <h1 className="text-base font-semibold">ChatWithMe</h1>
           <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)}>
             <X className="h-5 w-5" />
           </Button>
@@ -459,10 +480,10 @@ export default function Home() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col min-w-0">
+      <main className="flex min-w-0 flex-1 flex-col">
         {/* Header */}
-        <header className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <div className="flex items-center gap-3">
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-background/80 px-3 py-2.5 backdrop-blur-xl sm:px-4 sm:py-3">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <Button
               variant="ghost"
               size="icon"
@@ -471,15 +492,24 @@ export default function Home() {
             >
               <Menu className="h-5 w-5" />
             </Button>
-            <h1 className="font-semibold text-lg truncate">
+            <h1 className="truncate text-sm font-semibold sm:text-base">
               {conversations.find((c) => c.id === activeConversationId)?.title || 'New Chat'}
             </h1>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground hidden sm:block">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className="hidden text-sm text-muted-foreground md:block">
               {user?.email}
             </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={cycleThemeMode}
+              title={`Theme: ${themeMode}`}
+              aria-label={`Switch theme mode, current: ${themeMode}`}
+            >
+              {themeIcon}
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -498,15 +528,15 @@ export default function Home() {
         {/* Messages */}
         <ScrollArea ref={messageScrollRef} className="flex-1">
           {currentMessages.length === 0 && !isStreaming ? (
-            <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8">
-              <h2 className="text-2xl font-semibold mb-2">Welcome to ChatWithMe</h2>
-              <p className="text-center max-w-md">
+            <div className="mx-auto flex h-full w-full max-w-3xl flex-col items-center justify-center px-6 text-muted-foreground">
+              <h2 className="mb-2 text-center text-2xl font-semibold sm:text-3xl">Welcome to ChatWithMe</h2>
+              <p className="max-w-md text-center text-sm sm:text-base">
                 Start a conversation by typing a message below. You can ask questions, get help
                 with tasks, or just chat.
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-border">
+            <div className="mx-auto w-full max-w-4xl divide-y divide-border/80">
               {currentMessages.map((msg, index) => (
                 <ChatBubble
                   key={msg.id}

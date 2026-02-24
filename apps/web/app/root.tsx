@@ -3,28 +3,36 @@ import type { LinksFunction } from 'react-router';
 import { useEffect } from 'react';
 import './styles/globals.css';
 import { useAuthStore } from './stores/auth';
+import { useThemeStore } from './stores/theme';
 
-export const links: LinksFunction = () => [
-  { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-  {
-    rel: 'preconnect',
-    href: 'https://fonts.gstatic.com',
-    crossOrigin: 'anonymous',
-  },
-  {
-    rel: 'stylesheet',
-    href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
-  },
-];
+const themeBootScript = `
+(() => {
+  const key = 'chatwithme-theme';
+  let mode = 'system';
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(key) || '{}');
+    if (saved && (saved.state?.mode === 'light' || saved.state?.mode === 'dark' || saved.state?.mode === 'system')) {
+      mode = saved.state.mode;
+    }
+  } catch {}
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const resolved = mode === 'system' ? (prefersDark ? 'dark' : 'light') : mode;
+  document.documentElement.classList.toggle('dark', resolved === 'dark');
+  document.documentElement.dataset.theme = resolved;
+})();
+`;
+
+export const links: LinksFunction = () => [];
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
         <Links />
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
       <body className="min-h-screen bg-background font-sans antialiased">
         {children}
@@ -36,9 +44,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  const syncThemeWithSystem = useThemeStore((s) => s.syncWithSystem);
+
   useEffect(() => {
     void useAuthStore.persist.rehydrate();
+    void useThemeStore.persist.rehydrate();
   }, []);
+
+  useEffect(() => {
+    syncThemeWithSystem();
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleSystemThemeChange = () => syncThemeWithSystem();
+    media.addEventListener('change', handleSystemThemeChange);
+    return () => media.removeEventListener('change', handleSystemThemeChange);
+  }, [syncThemeWithSystem]);
 
   return <Outlet />;
 }

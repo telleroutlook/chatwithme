@@ -36,21 +36,21 @@ export function ConversationList({
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-border">
-        <Button onClick={onCreate} className="w-full" variant="outline">
+    <div className="flex h-full flex-col">
+      <div className="border-b border-border p-4">
+        <Button onClick={onCreate} className="h-11 w-full rounded-xl" variant="outline">
           <Plus className="h-4 w-4 mr-2" />
           New Chat
         </Button>
       </div>
 
       <ScrollArea className="flex-1">
-        <div className="p-2 space-y-1">
+        <div className="space-y-1 p-2">
           {conversations.map((conversation) => (
             <div
               key={conversation.id}
               className={cn(
-                'group flex items-center gap-2 rounded-lg px-3 py-2 cursor-pointer transition-colors',
+                'group flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2.5 transition-colors',
                 activeId === conversation.id
                   ? 'bg-primary/20 text-primary'
                   : 'hover:bg-muted'
@@ -72,11 +72,11 @@ export function ConversationList({
                 <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
               )}
 
-              <div className="relative opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="relative opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6"
+                  className="h-8 w-8 rounded-lg"
                   onClick={(e) => {
                     e.stopPropagation();
                     setMenuOpen(menuOpen === conversation.id ? null : conversation.id);

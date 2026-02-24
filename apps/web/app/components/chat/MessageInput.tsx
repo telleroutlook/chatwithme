@@ -118,7 +118,7 @@ export function MessageInput({
   return (
     <div
       className={cn(
-        'border-t border-border bg-card p-4 transition-colors',
+        'safe-area-bottom relative border-t border-border bg-card/95 px-3 pb-3 pt-2.5 transition-colors backdrop-blur-lg sm:px-4 sm:pb-4 sm:pt-3',
         isDragging && 'bg-primary/10'
       )}
       onDrop={handleDrop}
@@ -126,7 +126,7 @@ export function MessageInput({
       onDragLeave={handleDragLeave}
     >
       <div className="mb-2 flex items-center justify-end gap-2">
-        <label htmlFor="think-mode" className="text-xs text-muted-foreground">
+        <label htmlFor="think-mode" className="text-xs font-medium text-muted-foreground">
           Think mode
         </label>
         <select
@@ -134,7 +134,7 @@ export function MessageInput({
           value={thinkMode}
           onChange={(event) => onThinkModeChange(event.target.value as ThinkMode)}
           disabled={disabled}
-          className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+          className="h-9 rounded-lg border border-input bg-background px-2.5 text-xs font-medium"
         >
           <option value="instant">instant</option>
           <option value="think">think</option>
@@ -144,7 +144,7 @@ export function MessageInput({
 
       {/* File previews */}
       {files.length > 0 && (
-        <div className="flex gap-2 mb-3 flex-wrap">
+        <div className="mb-3 flex flex-wrap gap-2">
           {files.map((file, index) => (
             <div
               key={index}
@@ -158,7 +158,7 @@ export function MessageInput({
               <button
                 type="button"
                 onClick={() => removeFile(index)}
-                className="absolute top-1 right-1 p-1 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute right-1 top-1 rounded-full bg-destructive p-1 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -167,7 +167,7 @@ export function MessageInput({
         </div>
       )}
 
-      <div className="flex gap-2 items-end">
+      <div className="flex items-end gap-2">
         <input
           ref={fileInputRef}
           type="file"
@@ -181,6 +181,7 @@ export function MessageInput({
           type="button"
           variant="ghost"
           size="icon"
+          className="h-11 w-11 rounded-xl"
           onClick={() => fileInputRef.current?.click()}
           disabled={disabled}
           title="Attach image"
@@ -188,7 +189,7 @@ export function MessageInput({
           <Paperclip className="h-5 w-5" />
         </Button>
 
-        <div className="flex-1 relative">
+        <div className="relative flex-1">
           <textarea
             ref={textareaRef}
             value={message}
@@ -199,18 +200,19 @@ export function MessageInput({
             autoFocus={autoFocus}
             rows={1}
             className={cn(
-              'w-full resize-none rounded-lg border border-input bg-background px-4 py-3 pr-12',
+              'w-full resize-none rounded-xl border border-input bg-background px-4 py-3.5 text-[15px] pr-12',
               'focus:outline-none focus:ring-1 focus:ring-ring',
               'placeholder:text-muted-foreground',
               'max-h-32 overflow-y-auto'
             )}
-            style={{ minHeight: '48px' }}
+            style={{ minHeight: '52px' }}
           />
         </div>
 
         <Button
           type="button"
           size="icon"
+          className="h-11 w-11 rounded-xl"
           onClick={handleSubmit}
           disabled={disabled || (!message.trim() && files.length === 0)}
         >

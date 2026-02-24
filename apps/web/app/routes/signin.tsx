@@ -42,16 +42,17 @@ export default function SignIn() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Welcome Back</CardTitle>
-          <CardDescription>Sign in to your account to continue</CardDescription>
+    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-background px-4 py-8 sm:px-6">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_10%,rgba(71,125,255,0.18),transparent_42%),radial-gradient(circle_at_85%_85%,rgba(118,169,255,0.14),transparent_38%)]" />
+      <Card className="relative w-full max-w-md border-border/90 bg-card/95">
+        <CardHeader className="space-y-2 pb-4 text-center">
+          <CardTitle className="text-2xl sm:text-[1.9rem]">Welcome Back</CardTitle>
+          <CardDescription className="text-sm sm:text-base">Sign in to your account to continue</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+              <div className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">
                 {error}
               </div>
             )}
@@ -86,13 +87,13 @@ export default function SignIn() {
               />
             </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="h-11 w-full rounded-xl text-sm font-semibold" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In'}
             </Button>
 
             <p className="text-center text-sm text-muted-foreground">
               Don't have an account?{' '}
-              <Link to="/signup" className="text-primary hover:underline">
+              <Link to="/signup" className="font-semibold text-primary hover:underline">
                 Sign up
               </Link>
             </p>
