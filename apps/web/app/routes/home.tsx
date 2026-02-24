@@ -15,6 +15,7 @@ import { ensureConversationId } from '~/lib/chatFlow';
 import type { Message, MessageFile, ThinkMode } from '@chatwithme/shared';
 
 const THINK_MODE_STORAGE_KEY = 'chatwithme-think-mode';
+const ACTIVE_CONVERSATION_STORAGE_KEY = 'chatwithme-active-conversation-id';
 const THINK_MODE_VALUES: ThinkMode[] = ['instant', 'think', 'deepthink'];
 
 export default function Home() {
@@ -127,6 +128,15 @@ export default function Home() {
   }, [thinkMode]);
 
   useEffect(() => {
+    if (activeConversationId) {
+      window.localStorage.setItem(ACTIVE_CONVERSATION_STORAGE_KEY, activeConversationId);
+      return;
+    }
+
+    window.localStorage.removeItem(ACTIVE_CONVERSATION_STORAGE_KEY);
+  }, [activeConversationId]);
+
+  useEffect(() => {
     const savedMode = window.localStorage.getItem(THINK_MODE_STORAGE_KEY);
     if (savedMode && THINK_MODE_VALUES.includes(savedMode as ThinkMode)) {
       setThinkMode(savedMode as ThinkMode);
@@ -138,14 +148,27 @@ export default function Home() {
     if (response.success && response.data) {
       const loadedConversations = response.data.conversations;
       setConversations(loadedConversations);
+      const savedActiveConversationId = window.localStorage.getItem(
+        ACTIVE_CONVERSATION_STORAGE_KEY
+      );
 
       const hasCurrentActiveConversation = loadedConversations.some(
         (conversation) => conversation.id === activeConversationId
       );
+      const hasSavedActiveConversation = savedActiveConversationId
+        ? loadedConversations.some((conversation) => conversation.id === savedActiveConversationId)
+        : false;
 
-      if (!hasCurrentActiveConversation) {
-        setActiveConversation(loadedConversations[0]?.id ?? null);
+      if (hasCurrentActiveConversation) {
+        return;
       }
+
+      if (hasSavedActiveConversation) {
+        setActiveConversation(savedActiveConversationId);
+        return;
+      }
+
+      setActiveConversation(loadedConversations[0]?.id ?? null);
     }
   };
 
@@ -296,6 +319,7 @@ export default function Home() {
     if (tokens?.refreshToken) {
       await api.post('/auth/signout', { refreshToken: tokens.refreshToken }, { withAuth: false });
     }
+    window.localStorage.removeItem(ACTIVE_CONVERSATION_STORAGE_KEY);
     logout();
     navigate('/signin');
   };
