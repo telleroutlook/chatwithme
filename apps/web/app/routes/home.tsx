@@ -18,7 +18,7 @@ import type { Message, MessageFile, ThinkMode } from '@chatwithme/shared';
 const THINK_MODE_STORAGE_KEY = 'chatwithme-think-mode';
 const ACTIVE_CONVERSATION_STORAGE_KEY = 'chatwithme-active-conversation-id';
 const THINK_MODE_VALUES: ThinkMode[] = ['instant', 'think', 'deepthink'];
-const PRE_RESPONSE_STEPS = ['正在理解你的问题', '正在检索上下文', '正在组织回复'];
+const PRE_RESPONSE_STEPS = ['正在理解你的问题', '正在调用模型服务', '正在组织最终答案'];
 
 export default function Home() {
   const navigate = useNavigate();
@@ -26,6 +26,7 @@ export default function Home() {
   const [thinkMode, setThinkMode] = useState<ThinkMode>('think');
   const [isWaitingFirstChunk, setIsWaitingFirstChunk] = useState(false);
   const [preResponseStepIndex, setPreResponseStepIndex] = useState(0);
+  const [serverStageLabel, setServerStageLabel] = useState<string | null>(null);
   const streamingContentRef = useRef('');
   const streamingSuggestionsRef = useRef<string[]>([]);
   const messageScrollRef = useRef<HTMLDivElement>(null);
@@ -274,70 +275,92 @@ export default function Home() {
       };
       addMessage(conversationId, userMessage);
 
-      // Start streaming
+      // Start stage status (backend stage events)
       setStreaming(true);
       setIsWaitingFirstChunk(true);
       clearStreamingMessage();
       streamingContentRef.current = '';
       streamingSuggestionsRef.current = [];
+      setServerStageLabel('正在准备上下文');
 
     try {
-      await api.stream(
-        '/chat/stream',
-        {
-          conversationId,
-          message,
-          files,
-          thinkMode: selectedThinkMode,
-        },
+      await new Promise<void>((resolve, reject) => {
+        let settled = false;
+        const timeout = window.setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          reject(new Error('流式响应超时'));
+        }, 120_000);
+
+        void api.stream(
+          '/chat/respond/stream',
+          {
+            conversationId,
+            message,
+            files,
+            thinkMode: selectedThinkMode,
+          },
           (content) => {
+            if (!content) return;
             setIsWaitingFirstChunk(false);
+            setServerStageLabel(null);
             streamingContentRef.current += content;
             appendToStreamingMessage(content);
           },
           () => {
-            // Save the complete message using ref value
-            const assistantMessage: Message = {
-              id: crypto.randomUUID(),
-              userId: user?.id || '',
-              conversationId,
-              role: 'assistant',
-              message: streamingContentRef.current,
-              files: [],
-              generatedImageUrls: [],
-              searchResults: [],
-              suggestions: streamingSuggestionsRef.current,
-              createdAt: new Date(),
-            };
-            addMessage(conversationId, assistantMessage);
-            clearStreamingMessage();
-            setIsWaitingFirstChunk(false);
-            setStreaming(false);
+            if (settled) return;
+            settled = true;
+            window.clearTimeout(timeout);
+            resolve();
           },
           (error) => {
-            console.error('Stream error:', error);
-            clearStreamingMessage();
-            setIsWaitingFirstChunk(false);
-            const errorMessage: Message = {
-              id: crypto.randomUUID(),
-              userId: user?.id || '',
-              conversationId,
-              role: 'assistant',
-              message: `抱歉，回复失败：${error}`,
-              files: [],
-              generatedImageUrls: [],
-              searchResults: [],
-              createdAt: new Date(),
-            };
-            addMessage(conversationId, errorMessage);
-            setStreaming(false);
+            if (settled) return;
+            settled = true;
+            window.clearTimeout(timeout);
+            reject(new Error(error));
           },
           (suggestions) => {
             streamingSuggestionsRef.current = suggestions;
+          },
+          (_stage, label) => {
+            if (label) setServerStageLabel(label);
           }
-      );
+        );
+      });
+
+      const assistantMessage: Message = {
+        id: crypto.randomUUID(),
+        userId: user?.id || '',
+        conversationId,
+        role: 'assistant',
+        message: streamingContentRef.current,
+        files: [],
+        generatedImageUrls: [],
+        searchResults: [],
+        suggestions: streamingSuggestionsRef.current,
+        createdAt: new Date(),
+      };
+      addMessage(conversationId, assistantMessage);
+      clearStreamingMessage();
+      setServerStageLabel(null);
+      setIsWaitingFirstChunk(false);
+      setStreaming(false);
     } catch (error) {
       console.error('Send message error:', error);
+      const errorMessage: Message = {
+        id: crypto.randomUUID(),
+        userId: user?.id || '',
+        conversationId,
+        role: 'assistant',
+        message: '抱歉，回复失败：网络异常，请稍后重试。',
+        files: [],
+        generatedImageUrls: [],
+        searchResults: [],
+        createdAt: new Date(),
+      };
+      addMessage(conversationId, errorMessage);
+      clearStreamingMessage();
+      setServerStageLabel(null);
       setIsWaitingFirstChunk(false);
       setStreaming(false);
     }
@@ -381,69 +404,92 @@ export default function Home() {
       currentMessages.slice(0, -1)
     );
 
-    // Re-send the last user message
+    // Re-send the last user message with stage events
     setStreaming(true);
     setIsWaitingFirstChunk(true);
     clearStreamingMessage();
     streamingContentRef.current = '';
     streamingSuggestionsRef.current = [];
+    setServerStageLabel('正在准备上下文');
 
     try {
-      await api.stream(
-        '/chat/stream',
-        {
-          conversationId: activeConversationId,
-          message: lastUserMessage.message,
-          files: lastUserMessage.files || undefined,
-          thinkMode,
-        },
-        (content) => {
-          setIsWaitingFirstChunk(false);
-          streamingContentRef.current += content;
-          appendToStreamingMessage(content);
-        },
-        () => {
-          const assistantMessage: Message = {
-            id: crypto.randomUUID(),
-            userId: user?.id || '',
+      await new Promise<void>((resolve, reject) => {
+        let settled = false;
+        const timeout = window.setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          reject(new Error('流式响应超时'));
+        }, 120_000);
+
+        void api.stream(
+          '/chat/respond/stream',
+          {
             conversationId: activeConversationId,
-            role: 'assistant',
-            message: streamingContentRef.current,
-            files: [],
-            generatedImageUrls: [],
-            searchResults: [],
-            suggestions: streamingSuggestionsRef.current,
-            createdAt: new Date(),
-          };
-          addMessage(activeConversationId, assistantMessage);
-          clearStreamingMessage();
-          setIsWaitingFirstChunk(false);
-          setStreaming(false);
-        },
-        (error) => {
-          console.error('Regenerate stream error:', error);
-          clearStreamingMessage();
-          setIsWaitingFirstChunk(false);
-          const errorMessage: Message = {
-            id: crypto.randomUUID(),
-            userId: user?.id || '',
-            conversationId: activeConversationId,
-            role: 'assistant',
-            message: `抱歉，重新生成失败：${error}`,
-            files: [],
-            generatedImageUrls: [],
-            searchResults: [],
-            createdAt: new Date(),
-          };
-          addMessage(activeConversationId, errorMessage);
-          setStreaming(false);
-        },
-        (suggestions) => {
-          streamingSuggestionsRef.current = suggestions;
-        }
-      );
+            message: lastUserMessage.message,
+            files: lastUserMessage.files || undefined,
+            thinkMode,
+          },
+          (content) => {
+            if (!content) return;
+            setIsWaitingFirstChunk(false);
+            setServerStageLabel(null);
+            streamingContentRef.current += content;
+            appendToStreamingMessage(content);
+          },
+          () => {
+            if (settled) return;
+            settled = true;
+            window.clearTimeout(timeout);
+            resolve();
+          },
+          (error) => {
+            if (settled) return;
+            settled = true;
+            window.clearTimeout(timeout);
+            reject(new Error(error));
+          },
+          (suggestions) => {
+            streamingSuggestionsRef.current = suggestions;
+          },
+          (_stage, label) => {
+            if (label) setServerStageLabel(label);
+          }
+        );
+      });
+
+      const assistantMessage: Message = {
+        id: crypto.randomUUID(),
+        userId: user?.id || '',
+        conversationId: activeConversationId,
+        role: 'assistant',
+        message: streamingContentRef.current,
+        files: [],
+        generatedImageUrls: [],
+        searchResults: [],
+        suggestions: streamingSuggestionsRef.current,
+        createdAt: new Date(),
+      };
+      addMessage(activeConversationId, assistantMessage);
+      clearStreamingMessage();
+      setServerStageLabel(null);
+      setIsWaitingFirstChunk(false);
+      setStreaming(false);
     } catch (error) {
       console.error('Regenerate error:', error);
+      const errorMessage: Message = {
+        id: crypto.randomUUID(),
+        userId: user?.id || '',
+        conversationId: activeConversationId,
+        role: 'assistant',
+        message: '抱歉，重新生成失败：网络异常，请稍后重试。',
+        files: [],
+        generatedImageUrls: [],
+        searchResults: [],
+        createdAt: new Date(),
+      };
+      addMessage(activeConversationId, errorMessage);
+      clearStreamingMessage();
+      setServerStageLabel(null);
       setIsWaitingFirstChunk(false);
       setStreaming(false);
     }
@@ -579,7 +625,9 @@ export default function Home() {
                 <div className="flex gap-2 p-3 sm:gap-3 sm:p-4" role="status" aria-live="polite">
                   <div className="h-8 w-8 shrink-0 rounded-full bg-muted sm:h-9 sm:w-9" />
                   <div className="max-w-[88%] rounded-xl border border-border bg-card px-3.5 py-3 text-[15px] leading-relaxed sm:max-w-[82%] sm:px-4">
-                    <p className="text-foreground/90">{PRE_RESPONSE_STEPS[preResponseStepIndex]}</p>
+                    <p className="text-foreground/90">
+                      {serverStageLabel ?? PRE_RESPONSE_STEPS[preResponseStepIndex]}
+                    </p>
                     <div className="mt-2 flex items-center gap-1.5 text-muted-foreground">
                       <span className="h-2 w-2 animate-bounce rounded-full bg-current [animation-delay:-0.2s]" />
                       <span className="h-2 w-2 animate-bounce rounded-full bg-current [animation-delay:-0.1s]" />
