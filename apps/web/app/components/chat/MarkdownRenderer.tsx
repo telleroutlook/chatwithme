@@ -138,14 +138,46 @@ const downloadSvgElementAsPng = async (
       }, 'image/png');
     });
 
+    const isMobileWebKit =
+      /AppleWebKit/i.test(navigator.userAgent) &&
+      /Mobile|iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+    if (isMobileWebKit) {
+      const file = new File([pngBlob], filename, { type: 'image/png' });
+      const shareData = { files: [file], title: filename };
+
+      if (
+        typeof navigator.canShare === 'function' &&
+        navigator.canShare(shareData) &&
+        typeof navigator.share === 'function'
+      ) {
+        await navigator.share(shareData);
+        return;
+      }
+
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error('Failed to open PNG data URL'));
+        reader.readAsDataURL(pngBlob);
+      });
+
+      const popup = window.open(dataUrl, '_blank');
+      if (!popup) {
+        window.location.href = dataUrl;
+      }
+      return;
+    }
+
     const pngUrl = URL.createObjectURL(pngBlob);
     const link = document.createElement('a');
     link.href = pngUrl;
     link.download = filename;
+    link.rel = 'noopener';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(pngUrl);
+    window.setTimeout(() => URL.revokeObjectURL(pngUrl), 30_000);
   } finally {
     URL.revokeObjectURL(svgUrl);
   }

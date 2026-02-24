@@ -18,11 +18,14 @@ import type { Message, MessageFile, ThinkMode } from '@chatwithme/shared';
 const THINK_MODE_STORAGE_KEY = 'chatwithme-think-mode';
 const ACTIVE_CONVERSATION_STORAGE_KEY = 'chatwithme-active-conversation-id';
 const THINK_MODE_VALUES: ThinkMode[] = ['instant', 'think', 'deepthink'];
+const PRE_RESPONSE_STEPS = ['正在理解你的问题', '正在检索上下文', '正在组织回复'];
 
 export default function Home() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [thinkMode, setThinkMode] = useState<ThinkMode>('think');
+  const [isWaitingFirstChunk, setIsWaitingFirstChunk] = useState(false);
+  const [preResponseStepIndex, setPreResponseStepIndex] = useState(0);
   const streamingContentRef = useRef('');
   const streamingSuggestionsRef = useRef<string[]>([]);
   const messageScrollRef = useRef<HTMLDivElement>(null);
@@ -130,12 +133,8 @@ export default function Home() {
   }, [thinkMode]);
 
   useEffect(() => {
-    if (activeConversationId) {
-      window.localStorage.setItem(ACTIVE_CONVERSATION_STORAGE_KEY, activeConversationId);
-      return;
-    }
-
-    window.localStorage.removeItem(ACTIVE_CONVERSATION_STORAGE_KEY);
+    if (!activeConversationId) return;
+    window.localStorage.setItem(ACTIVE_CONVERSATION_STORAGE_KEY, activeConversationId);
   }, [activeConversationId]);
 
   useEffect(() => {
@@ -153,6 +152,19 @@ export default function Home() {
       document.body.style.overflow = '';
     };
   }, [sidebarOpen]);
+
+  useEffect(() => {
+    if (!isWaitingFirstChunk) {
+      setPreResponseStepIndex(0);
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setPreResponseStepIndex((prev) => (prev + 1) % PRE_RESPONSE_STEPS.length);
+    }, 1500);
+
+    return () => window.clearInterval(timer);
+  }, [isWaitingFirstChunk]);
 
   const loadConversations = async () => {
     const response = await api.get<{ conversations: typeof conversations }>('/chat/conversations');
@@ -264,6 +276,7 @@ export default function Home() {
 
       // Start streaming
       setStreaming(true);
+      setIsWaitingFirstChunk(true);
       clearStreamingMessage();
       streamingContentRef.current = '';
       streamingSuggestionsRef.current = [];
@@ -278,6 +291,7 @@ export default function Home() {
           thinkMode: selectedThinkMode,
         },
           (content) => {
+            setIsWaitingFirstChunk(false);
             streamingContentRef.current += content;
             appendToStreamingMessage(content);
           },
@@ -297,11 +311,13 @@ export default function Home() {
             };
             addMessage(conversationId, assistantMessage);
             clearStreamingMessage();
+            setIsWaitingFirstChunk(false);
             setStreaming(false);
           },
           (error) => {
             console.error('Stream error:', error);
             clearStreamingMessage();
+            setIsWaitingFirstChunk(false);
             const errorMessage: Message = {
               id: crypto.randomUUID(),
               userId: user?.id || '',
@@ -322,6 +338,7 @@ export default function Home() {
       );
     } catch (error) {
       console.error('Send message error:', error);
+      setIsWaitingFirstChunk(false);
       setStreaming(false);
     }
   };
@@ -366,6 +383,7 @@ export default function Home() {
 
     // Re-send the last user message
     setStreaming(true);
+    setIsWaitingFirstChunk(true);
     clearStreamingMessage();
     streamingContentRef.current = '';
     streamingSuggestionsRef.current = [];
@@ -380,6 +398,7 @@ export default function Home() {
           thinkMode,
         },
         (content) => {
+          setIsWaitingFirstChunk(false);
           streamingContentRef.current += content;
           appendToStreamingMessage(content);
         },
@@ -398,11 +417,13 @@ export default function Home() {
           };
           addMessage(activeConversationId, assistantMessage);
           clearStreamingMessage();
+          setIsWaitingFirstChunk(false);
           setStreaming(false);
         },
         (error) => {
           console.error('Regenerate stream error:', error);
           clearStreamingMessage();
+          setIsWaitingFirstChunk(false);
           const errorMessage: Message = {
             id: crypto.randomUUID(),
             userId: user?.id || '',
@@ -423,6 +444,7 @@ export default function Home() {
       );
     } catch (error) {
       console.error('Regenerate error:', error);
+      setIsWaitingFirstChunk(false);
       setStreaming(false);
     }
   };
@@ -552,6 +574,19 @@ export default function Home() {
                   message={{ role: 'assistant', message: streamingMessage }}
                   isStreaming
                 />
+              )}
+              {isStreaming && !streamingMessage && isWaitingFirstChunk && (
+                <div className="flex gap-2 p-3 sm:gap-3 sm:p-4" role="status" aria-live="polite">
+                  <div className="h-8 w-8 shrink-0 rounded-full bg-muted sm:h-9 sm:w-9" />
+                  <div className="max-w-[88%] rounded-xl border border-border bg-card px-3.5 py-3 text-[15px] leading-relaxed sm:max-w-[82%] sm:px-4">
+                    <p className="text-foreground/90">{PRE_RESPONSE_STEPS[preResponseStepIndex]}</p>
+                    <div className="mt-2 flex items-center gap-1.5 text-muted-foreground">
+                      <span className="h-2 w-2 animate-bounce rounded-full bg-current [animation-delay:-0.2s]" />
+                      <span className="h-2 w-2 animate-bounce rounded-full bg-current [animation-delay:-0.1s]" />
+                      <span className="h-2 w-2 animate-bounce rounded-full bg-current" />
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           )}
