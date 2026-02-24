@@ -285,7 +285,6 @@ export default function Home() {
       };
       addMessage(conversationId, userMessage);
 
-      // Start stage status (backend stage events)
       setStreaming(true);
       setIsWaitingFirstChunk(true);
       clearStreamingMessage();

@@ -154,7 +154,7 @@ class ApiClient {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: tokens ? `Bearer ${tokens.accessToken}` : '',
+        'Authorization': tokens ? `Bearer ${tokens.accessToken}` : '',
       },
       body: JSON.stringify(body),
     });
