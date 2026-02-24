@@ -69,6 +69,88 @@ const isPreviewCodeComplete = (rawCode: string, isSvg: boolean): boolean => {
   return hasBalancedHtmlTags(trimmedCode);
 };
 
+const parseSvgNumber = (value: string | null): number | null => {
+  if (!value) return null;
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const getSvgSize = (svgElement: SVGSVGElement): { width: number; height: number } => {
+  const widthAttr = parseSvgNumber(svgElement.getAttribute('width'));
+  const heightAttr = parseSvgNumber(svgElement.getAttribute('height'));
+
+  if (widthAttr && heightAttr) {
+    return { width: widthAttr, height: heightAttr };
+  }
+
+  const viewBox = svgElement.viewBox.baseVal;
+  if (viewBox && viewBox.width > 0 && viewBox.height > 0) {
+    return { width: viewBox.width, height: viewBox.height };
+  }
+
+  const rect = svgElement.getBoundingClientRect();
+  if (rect.width > 0 && rect.height > 0) {
+    return { width: rect.width, height: rect.height };
+  }
+
+  return { width: 1200, height: 800 };
+};
+
+const downloadSvgElementAsPng = async (
+  svgElement: SVGSVGElement,
+  filename: string
+): Promise<void> => {
+  const svgClone = svgElement.cloneNode(true) as SVGSVGElement;
+  svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+
+  const { width, height } = getSvgSize(svgClone);
+  const serializedSvg = new XMLSerializer().serializeToString(svgClone);
+  const svgBlob = new Blob([serializedSvg], { type: 'image/svg+xml;charset=utf-8' });
+  const svgUrl = URL.createObjectURL(svgBlob);
+
+  try {
+    const image = new Image();
+
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error('Failed to load SVG for PNG export'));
+      image.src = svgUrl;
+    });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(width));
+    canvas.height = Math.max(1, Math.round(height));
+    const context = canvas.getContext('2d');
+
+    if (!context) {
+      throw new Error('Canvas 2D context is not available');
+    }
+
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    const pngBlob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error('Failed to convert canvas to PNG'));
+          return;
+        }
+        resolve(blob);
+      }, 'image/png');
+    });
+
+    const pngUrl = URL.createObjectURL(pngBlob);
+    const link = document.createElement('a');
+    link.href = pngUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(pngUrl);
+  } finally {
+    URL.revokeObjectURL(svgUrl);
+  }
+};
+
 // ============================================================================
 // KATEX RENDERER (Client-side only)
 // ============================================================================
@@ -130,6 +212,24 @@ const MermaidRenderer = memo<MermaidRendererProps>(({ chart }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const handleDownloadPng = async () => {
+    if (!containerRef.current || isLoading || isDownloading) return;
+
+    const svgElement = containerRef.current.querySelector('svg');
+    if (!svgElement) return;
+
+    setIsDownloading(true);
+    try {
+      await downloadSvgElementAsPng(svgElement, 'mermaid-diagram.png');
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Failed to export Mermaid PNG';
+      setError(message);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -190,8 +290,18 @@ const MermaidRenderer = memo<MermaidRendererProps>(({ chart }) => {
 
   return (
     <div className="my-4 rounded-lg border border-border bg-background overflow-hidden">
-      <div className="px-3 py-2 border-b border-border text-xs text-muted-foreground font-mono">
-        mermaid
+      <div className="px-3 py-2 border-b border-border flex items-center justify-between">
+        <span className="text-xs text-muted-foreground font-mono">mermaid</span>
+        <button
+          onClick={() => void handleDownloadPng()}
+          disabled={isLoading || isDownloading}
+          className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Download PNG"
+          aria-label="Download Mermaid PNG"
+        >
+          <Download className="h-3.5 w-3.5" />
+          {isDownloading ? 'Exporting...' : 'PNG'}
+        </button>
       </div>
       <div className="p-4 overflow-x-auto">
         <div ref={containerRef} className="mermaid-diagram min-h-[120px]" />
