@@ -15,9 +15,8 @@ import { createMessage, getRecentMessages } from '../dao/messages';
 import { generateId } from '../utils/crypto';
 import { ERROR_CODES } from '../constants/error-codes';
 import { errorResponse, validationErrorHook } from '../utils/response';
-import { generateFollowUpSuggestions } from '../utils/suggestions';
+import { generateFollowUpSuggestions, parseAndFinalizeSuggestions } from '../utils/suggestions';
 import OpenAI from 'openai';
-import type { ThinkMode } from '@chatwithme/shared';
 
 const chat = new Hono<AppBindings>();
 
@@ -48,21 +47,35 @@ const streamRequestSchema = z.object({
     )
     .optional(),
   model: z.string().min(1).optional(),
-  thinkMode: z.enum(['instant', 'think', 'deepthink']).optional(),
+  responseFormat: z.enum(['text', 'json_object']).optional(),
 });
-
-const THINKING_EFFORT_BY_MODE: Record<ThinkMode, OpenAI.Chat.ChatCompletionReasoningEffort> = {
-  instant: 'low',
-  think: 'medium',
-  deepthink: 'high',
-};
-const EFFORT_PLAN_BY_MODE: Record<ThinkMode, OpenAI.Chat.ChatCompletionReasoningEffort[]> = {
-  instant: ['low'],
-  think: ['medium', 'low'],
-  deepthink: ['high', 'medium', 'low'],
-};
 const MODEL_CALL_TIMEOUT_MS = 90000;
-const RESPONSE_MAX_TOKENS = 600;
+const MODEL_HEALTH_CACHE_TTL_MS = 60_000;
+const MODEL_HEALTH_PROBE_TIMEOUT_MS = 8_000;
+type ResponseFormat = 'text' | 'json_object';
+type StructuredReply = {
+  message: string;
+  suggestions: string[];
+};
+
+type ModelHealthProbeResult = {
+  ok: boolean;
+  latencyMs: number;
+  checkedAt: number;
+  error?: {
+    name: string;
+    message: string;
+    status?: number;
+    code?: string;
+    type?: string;
+    param?: string;
+    requestId?: string;
+    body?: unknown;
+    cause?: unknown;
+  };
+};
+
+const modelHealthProbeCache = new Map<string, ModelHealthProbeResult>();
 
 async function withModelTimeout<T>(task: () => Promise<T>, timeoutMs: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -172,6 +185,93 @@ function parseCompletionText(completion: unknown): string {
   return '';
 }
 
+function parseJsonObjectFromText(raw: string): Record<string, unknown> | null {
+  const cleaned = raw.trim();
+  if (!cleaned) return null;
+
+  const candidates = [
+    cleaned,
+    cleaned
+      .replace(/^```(?:json)?/i, '')
+      .replace(/```$/i, '')
+      .trim(),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate) as unknown;
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start !== -1 && end > start) {
+    try {
+      const parsed = JSON.parse(cleaned.slice(start, end + 1)) as unknown;
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return null;
+}
+
+function parseStructuredReply(raw: string): StructuredReply | null {
+  const parsed = parseJsonObjectFromText(raw);
+  if (!parsed) return null;
+
+  const message =
+    typeof parsed.message === 'string'
+      ? parsed.message.trim()
+      : typeof parsed.answer === 'string'
+        ? parsed.answer.trim()
+        : '';
+  if (!message) return null;
+
+  let suggestionsRaw = '';
+  if (Array.isArray(parsed.suggestions)) {
+    suggestionsRaw = JSON.stringify(parsed.suggestions);
+  } else if (typeof parsed.suggestions === 'string') {
+    suggestionsRaw = parsed.suggestions;
+  }
+
+  return {
+    message,
+    suggestions: parseAndFinalizeSuggestions(suggestionsRaw, message),
+  };
+}
+
+function buildStructuredReplyMessages(messages: Array<{ role: string; content: string | Array<unknown> }>): Array<{
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}> {
+  const systemInstruction = `You are a helpful assistant.
+Return only a JSON object with this schema:
+{"message":"<assistant reply>","suggestions":["<q1>","<q2>","<q3>"]}
+Rules:
+- suggestions must contain exactly 3 concise follow-up questions.
+- suggestions must be relevant to the message.
+- no markdown code fences.`;
+
+  const normalized = messages.flatMap((item) => {
+    const role =
+      item.role === 'assistant' || item.role === 'system' ? item.role : 'user';
+    const content = typeof item.content === 'string' ? item.content.trim() : extractTextFromUnknown(item.content).trim();
+    if (!content) return [];
+    return [{ role, content }];
+  }) as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+
+  return [{ role: 'system', content: systemInstruction }, ...normalized];
+}
+
 function summarizeCompletionPayload(completion: unknown): Record<string, unknown> {
   const payload = completion as Record<string, unknown>;
   const choices = payload.choices as Array<Record<string, unknown>> | undefined;
@@ -190,6 +290,144 @@ function summarizeCompletionPayload(completion: unknown): Record<string, unknown
     outputTextPreview: truncateText(extractTextFromUnknown(payload.output_text), 200),
     outputPreview: truncateText(extractTextFromUnknown(payload.output), 200),
   };
+}
+
+function parseStreamChunkText(chunk: unknown): string {
+  const payload = chunk as Record<string, unknown>;
+  const choice0 = (payload.choices as Array<Record<string, unknown>> | undefined)?.[0];
+  const delta0 = choice0?.delta as Record<string, unknown> | undefined;
+
+  const candidates: unknown[] = [
+    delta0?.content,
+    choice0?.message,
+    choice0?.text,
+    payload.output_text,
+    payload.output,
+  ];
+
+  for (const candidate of candidates) {
+    const text = extractTextFromUnknown(candidate).trim();
+    if (text) return text;
+  }
+
+  return '';
+}
+
+function buildStreamingChatCompletionParams(params: {
+  model: string;
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+  responseFormat?: ResponseFormat;
+  maxTokens?: number;
+}): OpenAI.Chat.ChatCompletionCreateParamsStreaming {
+  const { model, messages, responseFormat = 'text', maxTokens } = params;
+  const payload: Record<string, unknown> = {
+    model,
+    messages,
+    stream: true,
+    thinking: {
+      type: 'disabled',
+    },
+  };
+  if (typeof maxTokens === 'number') payload.max_tokens = maxTokens;
+
+  if (responseFormat === 'json_object') {
+    payload.response_format = { type: 'json_object' };
+  }
+
+  return payload as unknown as OpenAI.Chat.ChatCompletionCreateParamsStreaming;
+}
+
+function buildNonStreamingChatCompletionParams(params: {
+  model: string;
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+  responseFormat?: ResponseFormat;
+  maxTokens?: number;
+}): OpenAI.Chat.ChatCompletionCreateParamsNonStreaming {
+  const { model, messages, responseFormat = 'text', maxTokens } = params;
+  const payload: Record<string, unknown> = {
+    model,
+    messages,
+    stream: false,
+    thinking: {
+      type: 'disabled',
+    },
+  };
+  if (typeof maxTokens === 'number') payload.max_tokens = maxTokens;
+
+  if (responseFormat === 'json_object') {
+    payload.response_format = { type: 'json_object' };
+  }
+
+  return payload as unknown as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming;
+}
+
+async function probeModelHealth(
+  openai: OpenAI,
+  modelName: string,
+  traceId: string
+): Promise<ModelHealthProbeResult> {
+  const cached = modelHealthProbeCache.get(modelName);
+  const now = Date.now();
+  if (cached && now - cached.checkedAt <= MODEL_HEALTH_CACHE_TTL_MS) {
+    return cached;
+  }
+
+  const startedAt = Date.now();
+  try {
+    const completionPromise = openai.chat.completions.create(
+      buildNonStreamingChatCompletionParams({
+        model: modelName,
+        messages: [{ role: 'user', content: 'Respond with exactly: ok' }],
+        maxTokens: 16,
+      })
+    );
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      const timer = setTimeout(() => {
+        clearTimeout(timer);
+        reject(new Error(`MODEL_HEALTH_PROBE_TIMEOUT_${MODEL_HEALTH_PROBE_TIMEOUT_MS}ms`));
+      }, MODEL_HEALTH_PROBE_TIMEOUT_MS);
+    });
+
+    const completion = (await Promise.race([completionPromise, timeoutPromise])) as unknown;
+    const text = parseCompletionText(completion);
+    const result: ModelHealthProbeResult = {
+      ok: Boolean(text.trim()),
+      latencyMs: Date.now() - startedAt,
+      checkedAt: now,
+      error: text.trim()
+        ? undefined
+        : {
+            name: 'EmptyCompletionError',
+            message: 'Health probe returned completion without parseable text',
+            body: summarizeCompletionPayload(completion),
+          },
+    };
+
+    modelHealthProbeCache.set(modelName, result);
+    if (!result.ok) {
+      console.warn('chat_model_health_probe_empty', {
+        traceId,
+        model: modelName,
+        latencyMs: result.latencyMs,
+      });
+    }
+    return result;
+  } catch (error) {
+    const result: ModelHealthProbeResult = {
+      ok: false,
+      latencyMs: Date.now() - startedAt,
+      checkedAt: now,
+      error: toModelErrorDetail(error),
+    };
+    modelHealthProbeCache.set(modelName, result);
+    console.warn('chat_model_health_probe_failed', {
+      traceId,
+      model: modelName,
+      latencyMs: result.latencyMs,
+      error: result.error,
+    });
+    return result;
+  }
 }
 
 chat.use('/*', authMiddleware);
@@ -293,9 +531,17 @@ chat.post('/stream', zValidator('json', streamRequestSchema, validationErrorHook
     message,
     files,
     model: requestedModel,
-    thinkMode = 'think',
+    responseFormat = 'text',
   } = c.req.valid('json');
   const model = requestedModel || c.env.OPENROUTER_CHAT_MODEL || 'gpt-5.3-codex';
+  if (responseFormat === 'json_object') {
+    return errorResponse(
+      c,
+      400,
+      ERROR_CODES.VALIDATION_ERROR,
+      'json_object responseFormat is only supported on non-stream endpoints'
+    );
+  }
   const db = createDb(c.env.DB);
 
   const conversation = await getConversationById(db, conversationId);
@@ -359,8 +605,35 @@ chat.post('/stream', zValidator('json', streamRequestSchema, validationErrorHook
     )
   );
 
-  let activeModel = modelCandidates[0] || model;
-  const baseReasoningEffort = THINKING_EFFORT_BY_MODE[thinkMode];
+  const modelHealthEntries = await Promise.all(
+    modelCandidates.map(async (candidate, index) => ({
+      model: candidate,
+      index,
+      probe: await probeModelHealth(openai, candidate, traceId),
+    }))
+  );
+  modelHealthEntries.sort((a, b) => {
+    if (a.probe.ok !== b.probe.ok) {
+      return a.probe.ok ? -1 : 1;
+    }
+    if (a.probe.latencyMs !== b.probe.latencyMs) {
+      return a.probe.latencyMs - b.probe.latencyMs;
+    }
+    return a.index - b.index;
+  });
+  const prioritizedModelCandidates = modelHealthEntries.map((entry) => entry.model);
+  console.info('chat_model_health_priority', {
+    traceId,
+    requestedModel: model,
+    order: modelHealthEntries.map((entry) => ({
+      model: entry.model,
+      ok: entry.probe.ok,
+      latencyMs: entry.probe.latencyMs,
+      error: entry.probe.error,
+    })),
+  });
+
+  let activeModel = prioritizedModelCandidates[0] || model;
   const modelInitTimeoutMs = 30_000;
   const transientRetryAttempts = 2;
 
@@ -403,18 +676,15 @@ chat.post('/stream', zValidator('json', streamRequestSchema, validationErrorHook
     throw lastError ?? new Error('Unknown transient retry failure');
   };
 
-  const createStreamWith = async (
-    modelName: string,
-    reasoningEffort: OpenAI.Chat.ChatCompletionReasoningEffort
-  ) => {
-    return runWithTransientRetry(`stream:${modelName}:${reasoningEffort}`, async () => {
-      const streamPromise = openai.chat.completions.create({
-        model: modelName,
-        messages: openAiMessages as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
-        stream: true,
-        max_tokens: RESPONSE_MAX_TOKENS,
-        ...(thinkMode === 'instant' ? {} : { reasoning_effort: reasoningEffort }),
-      });
+  const createStreamWith = async (modelName: string) => {
+    return runWithTransientRetry(`stream:${modelName}`, async () => {
+      const streamPromise = openai.chat.completions.create(
+        buildStreamingChatCompletionParams({
+          model: modelName,
+          messages: openAiMessages as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+          responseFormat,
+        })
+      );
 
       const timeoutPromise = new Promise<never>((_, reject) => {
         const timer = setTimeout(() => {
@@ -427,18 +697,15 @@ chat.post('/stream', zValidator('json', streamRequestSchema, validationErrorHook
     });
   };
 
-  const createNonStreamWith = async (
-    modelName: string,
-    reasoningEffort: OpenAI.Chat.ChatCompletionReasoningEffort
-  ) => {
-    return runWithTransientRetry(`nonstream:${modelName}:${reasoningEffort}`, async () => {
-      const completionPromise = openai.chat.completions.create({
-        model: modelName,
-        messages: openAiMessages as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
-        stream: false,
-        max_tokens: RESPONSE_MAX_TOKENS,
-        ...(thinkMode === 'instant' ? {} : { reasoning_effort: reasoningEffort }),
-      });
+  const createNonStreamWith = async (modelName: string) => {
+    return runWithTransientRetry(`nonstream:${modelName}`, async () => {
+      const completionPromise = openai.chat.completions.create(
+        buildNonStreamingChatCompletionParams({
+          model: modelName,
+          messages: openAiMessages as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+          responseFormat,
+        })
+      );
 
       const timeoutPromise = new Promise<never>((_, reject) => {
         const timer = setTimeout(() => {
@@ -452,18 +719,14 @@ chat.post('/stream', zValidator('json', streamRequestSchema, validationErrorHook
   };
 
   let stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
-  const attemptPlan: Array<{ model: string; effort: OpenAI.Chat.ChatCompletionReasoningEffort }> = [];
-  attemptPlan.push({ model: activeModel, effort: baseReasoningEffort });
-  if (baseReasoningEffort !== 'low') {
-    attemptPlan.push({ model: activeModel, effort: 'low' });
-  }
-  for (const candidateModel of modelCandidates.slice(1)) {
-    attemptPlan.push({ model: candidateModel, effort: 'low' });
+  const attemptPlan: Array<{ model: string }> = [];
+  attemptPlan.push({ model: activeModel });
+  for (const candidateModel of prioritizedModelCandidates.slice(1)) {
+    attemptPlan.push({ model: candidateModel });
   }
 
   const attemptLogs: Array<{
     model: string;
-    effort: OpenAI.Chat.ChatCompletionReasoningEffort;
     durationMs: number;
     ok: boolean;
     error?: ModelErrorDetail;
@@ -473,9 +736,9 @@ chat.post('/stream', zValidator('json', streamRequestSchema, validationErrorHook
   for (const attempt of attemptPlan) {
     const attemptStartedAt = Date.now();
     try {
-      stream = await createStreamWith(attempt.model, attempt.effort);
+      stream = await createStreamWith(attempt.model);
       const durationMs = Date.now() - attemptStartedAt;
-      attemptLogs.push({ model: attempt.model, effort: attempt.effort, durationMs, ok: true });
+      attemptLogs.push({ model: attempt.model, durationMs, ok: true });
       activeModel = attempt.model;
       initialized = true;
       break;
@@ -483,7 +746,6 @@ chat.post('/stream', zValidator('json', streamRequestSchema, validationErrorHook
       const durationMs = Date.now() - attemptStartedAt;
       attemptLogs.push({
         model: attempt.model,
-        effort: attempt.effort,
         durationMs,
         ok: false,
         error: toModelErrorDetail(error),
@@ -497,11 +759,87 @@ chat.post('/stream', zValidator('json', streamRequestSchema, validationErrorHook
       userId,
       conversationId,
       requestedModel: model,
-      candidates: modelCandidates,
+      candidates: prioritizedModelCandidates,
       attempts: attemptLogs,
       elapsedMs: Date.now() - requestStartedAt,
     });
-    return errorResponse(c, 500, ERROR_CODES.STREAM_FAILED, `Model request failed. traceId=${traceId}`);
+    let recoveredText = '';
+    let recoveredModel = activeModel;
+    for (const candidateModel of prioritizedModelCandidates) {
+      try {
+        const completion = await createNonStreamWith(candidateModel);
+        const parsed = parseCompletionText(completion);
+        if (parsed.trim()) {
+          recoveredText = parsed;
+          recoveredModel = candidateModel;
+          break;
+        }
+      } catch (recoverError) {
+        console.warn('chat_stream_init_recovery_attempt_failed', {
+          traceId,
+          model: candidateModel,
+          error: toModelErrorDetail(recoverError),
+        });
+      }
+    }
+
+    if (!recoveredText.trim()) {
+      return errorResponse(c, 500, ERROR_CODES.STREAM_FAILED, `Model request failed. traceId=${traceId}`);
+    }
+
+    await createMessage(db, {
+      id: generateId(),
+      userId,
+      conversationId,
+      role: 'assistant',
+      message: recoveredText,
+      files: null,
+      generatedImageUrls: null,
+      searchResults: null,
+      createdAt: new Date(),
+    });
+
+    let suggestions: string[] = [];
+    const recoveredSuggestionModel = c.env.OPENROUTER_SUGGESTION_MODEL || recoveredModel;
+    try {
+      suggestions = await generateFollowUpSuggestions({
+        openai,
+        model: recoveredSuggestionModel,
+        answerText: recoveredText,
+      });
+    } catch (error) {
+      console.warn('chat_stream_init_recovery_suggestions_failed', {
+        traceId,
+        error: toModelErrorDetail(error),
+      });
+    }
+
+    if (!conversation.title) {
+      const title = message.slice(0, 50) + (message.length > 50 ? '...' : '');
+      await updateConversation(db, conversationId, { title });
+    }
+
+    const encoder = new TextEncoder();
+    const readable = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'message', message: recoveredText })}\n\n`)
+        );
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'suggestions', suggestions })}\n\n`)
+        );
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`));
+        controller.close();
+      },
+    });
+
+    return new Response(readable, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      },
+    });
   }
 
   console.info('chat_stream_init_ok', {
@@ -527,7 +865,7 @@ chat.post('/stream', zValidator('json', streamRequestSchema, validationErrorHook
     async start(controller) {
       try {
         for await (const chunk of stream) {
-          const content = chunk.choices[0]?.delta?.content || '';
+          const content = parseStreamChunkText(chunk);
           if (content) {
             if (firstChunkLatencyMs === null) {
               firstChunkLatencyMs = Date.now() - requestStartedAt;
@@ -536,6 +874,54 @@ chat.post('/stream', zValidator('json', streamRequestSchema, validationErrorHook
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({ type: 'message', message: content })}\n\n`)
             );
+          }
+        }
+
+        if (!fullResponse.trim()) {
+          console.warn('chat_stream_empty_after_complete', {
+            traceId,
+            userId,
+            conversationId,
+            activeModel,
+            elapsedMs: Date.now() - requestStartedAt,
+          });
+
+          let recoveredText = '';
+          for (const candidateModel of prioritizedModelCandidates) {
+            try {
+              const completion = await createNonStreamWith(candidateModel);
+              recoveredText = parseCompletionText(completion);
+
+              if (recoveredText.trim()) {
+                activeModel = candidateModel;
+                break;
+              }
+            } catch (recoverError) {
+              console.warn('chat_stream_empty_recovery_attempt_failed', {
+                traceId,
+                model: candidateModel,
+                error: toModelErrorDetail(recoverError),
+              });
+            }
+          }
+
+          if (recoveredText.trim()) {
+            fullResponse = recoveredText;
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ type: 'message', message: recoveredText })}\n\n`)
+            );
+          } else {
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: 'error',
+                  error: `Stream produced empty content and recovery failed. traceId=${traceId}`,
+                  code: ERROR_CODES.STREAM_FAILED,
+                })}\n\n`
+              )
+            );
+            controller.close();
+            return;
           }
         }
 
@@ -633,9 +1019,9 @@ chat.post('/stream', zValidator('json', streamRequestSchema, validationErrorHook
         // Recovery path: fallback to a non-stream completion once.
         try {
           let recoveredText = '';
-          for (const candidateModel of modelCandidates) {
+          for (const candidateModel of prioritizedModelCandidates) {
             try {
-              const completion = await createNonStreamWith(candidateModel, 'low');
+              const completion = await createNonStreamWith(candidateModel);
               recoveredText = parseCompletionText(completion);
 
               if (recoveredText.trim()) {
@@ -716,7 +1102,6 @@ chat.post('/respond', zValidator('json', streamRequestSchema, validationErrorHoo
     message,
     files,
     model: requestedModel,
-    thinkMode = 'think',
   } = c.req.valid('json');
   const model = requestedModel || c.env.OPENROUTER_CHAT_MODEL || 'gpt-5.3-codex';
   const db = createDb(c.env.DB);
@@ -775,41 +1160,40 @@ chat.post('/respond', zValidator('json', streamRequestSchema, validationErrorHoo
 
   let activeModel = candidates[0] || model;
   let answerText = '';
-  const attemptLogs: Array<{ model: string; effort: string | null; error?: ModelErrorDetail }> = [];
+  let bundledSuggestions: string[] = [];
+  const attemptLogs: Array<{ model: string; error?: ModelErrorDetail }> = [];
 
   for (const candidate of candidates) {
-    const effortPlan = EFFORT_PLAN_BY_MODE[thinkMode];
-    for (const effort of effortPlan) {
-      try {
-        const completion = await withModelTimeout(
-          () =>
-            openai.chat.completions.create({
+    try {
+      const completion = await withModelTimeout(
+        () =>
+          openai.chat.completions.create(
+            buildNonStreamingChatCompletionParams({
               model: candidate,
-              messages: openAiMessages as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
-              stream: false,
-              max_tokens: RESPONSE_MAX_TOKENS,
-              ...(thinkMode === 'instant' ? {} : { reasoning_effort: effort }),
-            }),
-          MODEL_CALL_TIMEOUT_MS
-        );
-        const text = parseCompletionText(completion);
-        if (text.trim()) {
-          answerText = text;
-          activeModel = candidate;
-          break;
-        }
-        attemptLogs.push({
-          model: candidate,
-          effort,
-          error: {
-            name: 'EmptyCompletionError',
-            message: 'Model returned completion without parseable text',
-            body: summarizeCompletionPayload(completion),
-          },
-        });
-      } catch (error) {
-        attemptLogs.push({ model: candidate, effort, error: toModelErrorDetail(error) });
+              messages: buildStructuredReplyMessages(openAiMessages),
+              responseFormat: 'json_object',
+            })
+          ),
+        MODEL_CALL_TIMEOUT_MS
+      );
+      const text = parseCompletionText(completion);
+      const structured = parseStructuredReply(text);
+      if (structured) {
+        answerText = structured.message;
+        bundledSuggestions = structured.suggestions;
+        activeModel = candidate;
+        break;
       }
+      attemptLogs.push({
+        model: candidate,
+        error: {
+          name: 'InvalidStructuredReplyError',
+          message: 'Model returned completion without parseable structured reply',
+          body: summarizeCompletionPayload(completion),
+        },
+      });
+    } catch (error) {
+      attemptLogs.push({ model: candidate, error: toModelErrorDetail(error) });
     }
     if (answerText.trim()) break;
   }
@@ -837,18 +1221,6 @@ chat.post('/respond', zValidator('json', streamRequestSchema, validationErrorHoo
     createdAt: new Date(),
   });
 
-  let suggestions: string[] = [];
-  const suggestionModel = c.env.OPENROUTER_SUGGESTION_MODEL || activeModel;
-  try {
-    suggestions = await generateFollowUpSuggestions({
-      openai,
-      model: suggestionModel,
-      answerText,
-    });
-  } catch (error) {
-    console.warn('Respond suggestions generation failed', { traceId, error });
-  }
-
   await updateConversation(db, conversationId, { updatedAt: now });
   if (!conversation.title) {
     const title = message.slice(0, 50) + (message.length > 50 ? '...' : '');
@@ -859,7 +1231,7 @@ chat.post('/respond', zValidator('json', streamRequestSchema, validationErrorHoo
     success: true,
     data: {
       message: answerText,
-      suggestions,
+      suggestions: bundledSuggestions,
       model: activeModel,
       traceId,
     },
@@ -884,7 +1256,6 @@ chat.post('/respond/stream', zValidator('json', streamRequestSchema, validationE
     message,
     files,
     model: requestedModel,
-    thinkMode = 'think',
   } = c.req.valid('json');
   const model = requestedModel || c.env.OPENROUTER_CHAT_MODEL || 'gpt-5.3-codex';
   const db = createDb(c.env.DB);
@@ -949,36 +1320,35 @@ chat.post('/respond/stream', zValidator('json', streamRequestSchema, validationE
 
         let activeModel = candidates[0] || model;
         let answerText = '';
+        let bundledSuggestions: string[] = [];
         for (const candidate of candidates) {
-          const effortPlan = EFFORT_PLAN_BY_MODE[thinkMode];
-          for (const effort of effortPlan) {
-            try {
-              const completion = await withModelTimeout(
-                () =>
-                  openai.chat.completions.create({
+          try {
+            const completion = await withModelTimeout(
+              () =>
+                openai.chat.completions.create(
+                  buildNonStreamingChatCompletionParams({
                     model: candidate,
-                    messages: openAiMessages as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
-                    stream: false,
-                    max_tokens: RESPONSE_MAX_TOKENS,
-                    ...(thinkMode === 'instant' ? {} : { reasoning_effort: effort }),
-                  }),
-                MODEL_CALL_TIMEOUT_MS
-              );
-              const text = parseCompletionText(completion);
-              if (text.trim()) {
-                answerText = text;
-                activeModel = candidate;
-                break;
-              }
-              console.warn('chat_respond_stream_empty_completion', {
-                traceId,
-                model: candidate,
-                effort,
-                completion: summarizeCompletionPayload(completion),
-              });
-            } catch {
-              // continue trying other candidates
+                    messages: buildStructuredReplyMessages(openAiMessages),
+                    responseFormat: 'json_object',
+                  })
+                ),
+              MODEL_CALL_TIMEOUT_MS
+            );
+            const text = parseCompletionText(completion);
+            const structured = parseStructuredReply(text);
+            if (structured) {
+              answerText = structured.message;
+              bundledSuggestions = structured.suggestions;
+              activeModel = candidate;
+              break;
             }
+            console.warn('chat_respond_stream_empty_completion', {
+              traceId,
+              model: candidate,
+              completion: summarizeCompletionPayload(completion),
+            });
+          } catch {
+            // continue trying other candidates
           }
           if (answerText.trim()) break;
         }
@@ -1008,18 +1378,6 @@ chat.post('/respond/stream', zValidator('json', streamRequestSchema, validationE
           createdAt: new Date(),
         });
 
-        let suggestions: string[] = [];
-        const suggestionModel = c.env.OPENROUTER_SUGGESTION_MODEL || activeModel;
-        try {
-          suggestions = await generateFollowUpSuggestions({
-            openai,
-            model: suggestionModel,
-            answerText,
-          });
-        } catch {
-          suggestions = [];
-        }
-
         await updateConversation(db, conversationId, { updatedAt: now });
         if (!conversation.title) {
           const title = message.slice(0, 50) + (message.length > 50 ? '...' : '');
@@ -1027,7 +1385,7 @@ chat.post('/respond/stream', zValidator('json', streamRequestSchema, validationE
         }
 
         emit(controller, { type: 'message', message: answerText, traceId });
-        emit(controller, { type: 'suggestions', suggestions, traceId });
+        emit(controller, { type: 'suggestions', suggestions: bundledSuggestions, traceId });
         emit(controller, { type: 'done', traceId });
         controller.close();
       } catch (error) {

@@ -108,6 +108,51 @@ describe('ApiClient.stream', () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
+  it('progressively emits a large single message event in multiple chunks', async () => {
+    useAuthStore.getState().setAuth(user, {
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      expiresIn: 3600,
+    });
+
+    const longMessage = 'A'.repeat(240);
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(
+          encoder.encode(`data: {"type":"message","message":"${longMessage}"}\n\ndata: {"type":"done"}\n\n`)
+        );
+        controller.close();
+      },
+    });
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(stream, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      })
+    );
+
+    const chunks: string[] = [];
+    const onDone = vi.fn();
+    const onError = vi.fn();
+
+    await api.stream(
+      '/chat/stream',
+      { message: 'hello' },
+      (content) => {
+        chunks.push(content);
+      },
+      onDone,
+      onError
+    );
+
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.join('')).toBe(longMessage);
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it('returns error callback on non-OK response', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ success: false, error: 'Bad request' }), {

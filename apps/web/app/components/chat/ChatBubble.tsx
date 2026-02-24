@@ -61,7 +61,7 @@ export const ChatBubble = memo<ChatBubbleProps>(
                 <button
                   key={`${suggestion}-${index}`}
                   onClick={() => onQuickReply(suggestion)}
-                  className="rounded-full border border-border bg-muted/40 px-3 py-2 text-xs text-foreground transition-colors hover:bg-muted"
+                  className="rounded-full border border-border bg-muted/40 px-3 py-2.5 text-xs text-foreground transition-colors hover:bg-muted active:bg-muted/80"
                 >
                   {suggestion}
                 </button>
@@ -69,14 +69,13 @@ export const ChatBubble = memo<ChatBubbleProps>(
             </div>
           )}
 
-          {/* AI message action buttons - always visible */}
-          {!isUser && !isStreaming && (
+          {!isStreaming && (
             <div className="mt-3 flex items-center gap-1">
-              <CopyMessageButton text={message.message} />
-              {isLast && onRegenerate && (
+              <CopyMessageButton text={message.message} isUser={isUser} />
+              {!isUser && isLast && onRegenerate && (
                 <button
                   onClick={onRegenerate}
-                  className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  className="h-10 w-10 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:bg-muted/80 active:text-foreground"
                   title="Regenerate response"
                 >
                   <RefreshCw className="h-4 w-4" />
@@ -93,9 +92,10 @@ ChatBubble.displayName = 'ChatBubble';
 
 interface CopyMessageButtonProps {
   text: string;
+  isUser?: boolean;
 }
 
-const CopyMessageButton = memo<CopyMessageButtonProps>(({ text }) => {
+const CopyMessageButton = memo<CopyMessageButtonProps>(({ text, isUser = false }) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -107,7 +107,12 @@ const CopyMessageButton = memo<CopyMessageButtonProps>(({ text }) => {
   return (
     <button
       onClick={handleCopy}
-      className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      className={cn(
+        'h-10 w-10 rounded-lg p-2 transition-colors',
+        isUser
+          ? 'text-primary-foreground/80 hover:bg-primary-foreground/10 hover:text-primary-foreground active:bg-primary-foreground/20'
+          : 'text-muted-foreground hover:bg-muted hover:text-foreground active:bg-muted/80'
+      )}
       title="Copy text"
     >
       {copied ? (

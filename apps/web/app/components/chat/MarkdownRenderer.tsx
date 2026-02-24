@@ -624,7 +624,7 @@ const CodeBlockWithPreview = memo<CodeBlockWithPreviewProps>(
 
         {/* Content */}
         {activeTab === 'preview' && isPreviewReady ? (
-          <div className="bg-background overflow-hidden h-[400px] resize-y relative rounded-b-lg border-t border-border">
+          <div className="bg-background overflow-hidden h-[50vh] min-h-[200px] max-h-[60vh] sm:h-[400px] resize-y relative rounded-b-lg border-t border-border">
             <iframe
               srcDoc={iframeSrc}
               className="w-full h-full border-0 bg-transparent"

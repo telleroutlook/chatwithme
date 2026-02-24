@@ -80,10 +80,8 @@ export interface SendMessageRequest {
   message: string;
   files?: MessageFile[];
   model?: string;
-  thinkMode?: ThinkMode;
+  responseFormat?: 'text' | 'json_object';
 }
-
-export type ThinkMode = 'instant' | 'think' | 'deepthink';
 
 export interface StreamMessageEvent {
   type: 'message' | 'done' | 'error' | 'suggestions' | 'stage';

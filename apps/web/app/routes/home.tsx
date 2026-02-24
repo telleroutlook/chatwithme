@@ -13,17 +13,17 @@ import { MessageInput } from '~/components/chat/MessageInput';
 import { ScrollArea } from '~/components/ui/scroll-area';
 import { exportChatToHtml } from '~/lib/chatExport';
 import { ensureConversationId } from '~/lib/chatFlow';
-import type { Message, MessageFile, ThinkMode } from '@chatwithme/shared';
+import type { Message, MessageFile } from '@chatwithme/shared';
 
-const THINK_MODE_STORAGE_KEY = 'chatwithme-think-mode';
 const ACTIVE_CONVERSATION_STORAGE_KEY = 'chatwithme-active-conversation-id';
-const THINK_MODE_VALUES: ThinkMode[] = ['instant', 'think', 'deepthink'];
-const PRE_RESPONSE_STEPS = ['正在理解你的问题', '正在调用模型服务', '正在组织最终答案'];
+const SIDEBAR_COLLAPSED_STORAGE_KEY = 'chatwithme-sidebar-collapsed';
+const PRE_RESPONSE_STEPS = ['正在准备上下文', '正在调用模型服务', '正在组织最终答案'];
 
 export default function Home() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [thinkMode, setThinkMode] = useState<ThinkMode>('think');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [deletingConversationId, setDeletingConversationId] = useState<string | null>(null);
   const [isWaitingFirstChunk, setIsWaitingFirstChunk] = useState(false);
   const [preResponseStepIndex, setPreResponseStepIndex] = useState(0);
   const [serverStageLabel, setServerStageLabel] = useState<string | null>(null);
@@ -49,7 +49,6 @@ export default function Home() {
     setActiveConversation,
     setMessages,
     addMessage,
-    appendToStreamingMessage,
     clearStreamingMessage,
     setLoading,
     setStreaming,
@@ -86,7 +85,8 @@ export default function Home() {
       return;
     }
 
-    const frame = window.requestAnimationFrame(() => {
+    // Use setTimeout to ensure virtual keyboard layout is complete
+    const timer = setTimeout(() => {
       const viewport = messageScrollRef.current?.querySelector<HTMLElement>(
         '[data-radix-scroll-area-viewport]'
       );
@@ -99,13 +99,13 @@ export default function Home() {
 
         if (targetElement) {
           skipNextAutoScrollRef.current = true;
-          targetElement.scrollIntoView({ block: 'start' });
+          targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
       }
-    });
+    }, 100);
 
     restoreScrollConversationIdRef.current = null;
-    return () => window.cancelAnimationFrame(frame);
+    return () => clearTimeout(timer);
   }, [activeConversationId, currentMessages]);
 
   useEffect(() => {
@@ -130,20 +130,20 @@ export default function Home() {
   }, [activeConversationId, currentMessages.length, isStreaming, streamingMessage]);
 
   useEffect(() => {
-    window.localStorage.setItem(THINK_MODE_STORAGE_KEY, thinkMode);
-  }, [thinkMode]);
-
-  useEffect(() => {
     if (!activeConversationId) return;
     window.localStorage.setItem(ACTIVE_CONVERSATION_STORAGE_KEY, activeConversationId);
   }, [activeConversationId]);
 
   useEffect(() => {
-    const savedMode = window.localStorage.getItem(THINK_MODE_STORAGE_KEY);
-    if (savedMode && THINK_MODE_VALUES.includes(savedMode as ThinkMode)) {
-      setThinkMode(savedMode as ThinkMode);
+    const saved = window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY);
+    if (saved === 'true') {
+      setSidebarCollapsed(true);
     }
   }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     if (!sidebarOpen) return;
@@ -223,10 +223,24 @@ export default function Home() {
     setSidebarOpen(false);
   };
 
+  const handleSidebarToggle = () => {
+    if (window.matchMedia('(min-width: 1024px)').matches) {
+      setSidebarCollapsed((prev) => !prev);
+      return;
+    }
+    setSidebarOpen(true);
+  };
+
   const handleDeleteConversation = async (id: string) => {
-    const response = await api.delete(`/chat/conversations/${id}`);
-    if (response.success) {
-      removeConversation(id);
+    if (deletingConversationId) return;
+    setDeletingConversationId(id);
+    try {
+      const response = await api.delete(`/chat/conversations/${id}`);
+      if (response.success) {
+        removeConversation(id);
+      }
+    } finally {
+      setDeletingConversationId(null);
     }
   };
 
@@ -253,11 +267,7 @@ export default function Home() {
       onConversationCreated: addConversation,
     });
 
-  const handleSendMessage = async (
-    message: string,
-    files?: MessageFile[],
-    selectedThinkMode: ThinkMode = thinkMode
-  ) => {
+  const handleSendMessage = async (message: string, files?: MessageFile[]) => {
     const conversationId = await ensureConversation();
     if (!conversationId) return;
 
@@ -284,60 +294,33 @@ export default function Home() {
       setServerStageLabel('正在准备上下文');
 
     try {
-      await new Promise<void>((resolve, reject) => {
-        let settled = false;
-        const timeout = window.setTimeout(() => {
-          if (settled) return;
-          settled = true;
-          reject(new Error('流式响应超时'));
-        }, 120_000);
+      const response = await api.post<{ message: string; suggestions: string[] }>(
+        '/chat/respond',
+        {
+          conversationId,
+          message,
+          files,
+        }
+      );
 
-        void api.stream(
-          '/chat/respond/stream',
-          {
-            conversationId,
-            message,
-            files,
-            thinkMode: selectedThinkMode,
-          },
-          (content) => {
-            if (!content) return;
-            setIsWaitingFirstChunk(false);
-            setServerStageLabel(null);
-            streamingContentRef.current += content;
-            appendToStreamingMessage(content);
-          },
-          () => {
-            if (settled) return;
-            settled = true;
-            window.clearTimeout(timeout);
-            resolve();
-          },
-          (error) => {
-            if (settled) return;
-            settled = true;
-            window.clearTimeout(timeout);
-            reject(new Error(error));
-          },
-          (suggestions) => {
-            streamingSuggestionsRef.current = suggestions;
-          },
-          (_stage, label) => {
-            if (label) setServerStageLabel(label);
-          }
-        );
-      });
+      if (!response.success || !response.data) {
+        throw new Error('非流式响应失败');
+      }
+      setIsWaitingFirstChunk(false);
+      setServerStageLabel(null);
+      streamingContentRef.current = response.data.message ?? '';
+      streamingSuggestionsRef.current = response.data.suggestions ?? [];
 
       const assistantMessage: Message = {
         id: crypto.randomUUID(),
         userId: user?.id || '',
         conversationId,
         role: 'assistant',
-        message: streamingContentRef.current,
+        message: response.data.message,
         files: [],
         generatedImageUrls: [],
         searchResults: [],
-        suggestions: streamingSuggestionsRef.current,
+        suggestions: response.data.suggestions ?? [],
         createdAt: new Date(),
       };
       addMessage(conversationId, assistantMessage);
@@ -421,40 +404,33 @@ export default function Home() {
           reject(new Error('流式响应超时'));
         }, 120_000);
 
-        void api.stream(
-          '/chat/respond/stream',
-          {
-            conversationId: activeConversationId,
-            message: lastUserMessage.message,
-            files: lastUserMessage.files || undefined,
-            thinkMode,
-          },
-          (content) => {
-            if (!content) return;
-            setIsWaitingFirstChunk(false);
-            setServerStageLabel(null);
-            streamingContentRef.current += content;
-            appendToStreamingMessage(content);
-          },
-          () => {
-            if (settled) return;
-            settled = true;
-            window.clearTimeout(timeout);
-            resolve();
-          },
-          (error) => {
-            if (settled) return;
-            settled = true;
-            window.clearTimeout(timeout);
-            reject(new Error(error));
-          },
-          (suggestions) => {
-            streamingSuggestionsRef.current = suggestions;
-          },
-          (_stage, label) => {
-            if (label) setServerStageLabel(label);
+        void (async () => {
+          const response = await api.post<{ message: string; suggestions: string[] }>(
+            '/chat/respond',
+            {
+              conversationId: activeConversationId,
+              message: lastUserMessage.message,
+              files: lastUserMessage.files || undefined,
+            }
+          );
+
+          if (!response.success || !response.data) {
+            throw new Error('非流式响应失败');
           }
-        );
+          setIsWaitingFirstChunk(false);
+          setServerStageLabel(null);
+          streamingContentRef.current = response.data.message ?? '';
+          streamingSuggestionsRef.current = response.data.suggestions ?? [];
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timeout);
+          resolve();
+        })().catch((error: unknown) => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timeout);
+          reject(error instanceof Error ? error : new Error(String(error)));
+        });
       });
 
       const assistantMessage: Message = {
@@ -526,8 +502,12 @@ export default function Home() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed z-50 h-full w-[84vw] max-w-80 border-r border-border bg-card/95 backdrop-blur-xl transform transition-transform lg:relative lg:z-0 lg:w-72 lg:max-w-none lg:transform-none ${
+        className={`fixed z-50 h-full w-[90vw] max-w-[85vw] border-r border-border bg-card/95 backdrop-blur-xl transform transition-[transform,width,border] lg:relative lg:z-0 lg:max-w-none lg:transform-none ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        } ${
+          sidebarCollapsed
+            ? 'lg:w-0 lg:min-w-0 lg:border-r-0 lg:overflow-hidden'
+            : 'lg:w-72'
         }`}
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3 lg:hidden">
@@ -540,6 +520,7 @@ export default function Home() {
         <ConversationList
           conversations={conversations}
           activeId={activeConversationId}
+          deletingId={deletingConversationId}
           onSelect={handleSelectConversation}
           onCreate={handleCreateConversation}
           onDelete={handleDeleteConversation}
@@ -555,8 +536,9 @@ export default function Home() {
             <Button
               variant="ghost"
               size="icon"
-              className="lg:hidden"
-              onClick={() => setSidebarOpen(true)}
+              onClick={handleSidebarToggle}
+              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
               <Menu className="h-5 w-5" />
             </Button>
@@ -645,8 +627,6 @@ export default function Home() {
           onSend={handleSendMessage}
           disabled={isStreaming || isLoading}
           autoFocus
-          thinkMode={thinkMode}
-          onThinkModeChange={setThinkMode}
           placeholder={
             activeConversationId
               ? 'Type a message...'

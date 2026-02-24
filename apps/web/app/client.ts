@@ -4,6 +4,9 @@ import type { ApiResponse, StreamMessageEvent } from '@chatwithme/shared';
 // Use empty string for relative URLs (same origin) in production
 // Falls back to localhost:8787 for local development
 const API_BASE = import.meta.env.VITE_API_URL || '';
+const STREAM_MESSAGE_SPLIT_THRESHOLD = 160;
+const STREAM_MESSAGE_CHUNK_SIZE = 48;
+const STREAM_MESSAGE_CHUNK_DELAY_MS = 16;
 
 interface RequestOptions extends RequestInit {
   withAuth?: boolean;
@@ -49,6 +52,23 @@ async function getStreamErrorMessage(response: Response): Promise<string> {
   }
 
   return text.length > 300 ? `${text.slice(0, 300)}...` : text;
+}
+
+async function emitMessageWithProgressiveChunks(
+  content: string,
+  onMessage: (content: string) => void
+): Promise<void> {
+  if (content.length <= STREAM_MESSAGE_SPLIT_THRESHOLD) {
+    onMessage(content);
+    return;
+  }
+
+  for (let i = 0; i < content.length; i += STREAM_MESSAGE_CHUNK_SIZE) {
+    onMessage(content.slice(i, i + STREAM_MESSAGE_CHUNK_SIZE));
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, STREAM_MESSAGE_CHUNK_DELAY_MS);
+    });
+  }
 }
 
 class ApiClient {
@@ -216,7 +236,7 @@ class ApiClient {
             try {
               const event = JSON.parse(line.slice(6)) as StreamMessageEvent;
               if (event.type === 'message') {
-                onMessage(event.message ?? '');
+                await emitMessageWithProgressiveChunks(event.message ?? '', onMessage);
               } else if (event.type === 'stage') {
                 onStage?.(event.stage ?? '', event.label);
               } else if (event.type === 'suggestions') {
@@ -237,7 +257,7 @@ class ApiClient {
         try {
           const event = JSON.parse(buffer.slice(6)) as StreamMessageEvent;
           if (event.type === 'message') {
-            onMessage(event.message ?? '');
+            await emitMessageWithProgressiveChunks(event.message ?? '', onMessage);
           } else if (event.type === 'stage') {
             onStage?.(event.stage ?? '', event.label);
           } else if (event.type === 'suggestions') {

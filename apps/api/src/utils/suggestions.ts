@@ -154,6 +154,10 @@ function finalizeSuggestions(items: string[], context: string): string[] {
   return unique.slice(0, 3);
 }
 
+export function parseAndFinalizeSuggestions(raw: string, context: string): string[] {
+  return finalizeSuggestions(parseJsonSuggestions(raw), clampText(context));
+}
+
 export async function generateFollowUpSuggestions(params: {
   openai: OpenAI;
   model: string;
@@ -175,7 +179,7 @@ Assistant response:
 ${context}`;
 
   try {
-    const completion = await params.openai.chat.completions.create({
+    const payload: Record<string, unknown> = {
       model: params.model,
       messages: [
         {
@@ -186,7 +190,12 @@ ${context}`;
       ],
       temperature: 0.2,
       max_tokens: 200,
-    });
+      response_format: { type: 'json_object' },
+      thinking: { type: 'disabled' },
+    };
+    const completion = await params.openai.chat.completions.create(
+      payload as unknown as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming
+    );
 
     const raw = completion.choices[0]?.message?.content || '';
     return finalizeSuggestions(parseJsonSuggestions(raw), context);
@@ -197,5 +206,5 @@ ${context}`;
 }
 
 export function __test__parseAndFinalizeSuggestions(raw: string): string[] {
-  return finalizeSuggestions(parseJsonSuggestions(raw), '测试上下文：AI agent workflow and deployment risk');
+  return parseAndFinalizeSuggestions(raw, '测试上下文：AI agent workflow and deployment risk');
 }

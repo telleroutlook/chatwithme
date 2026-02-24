@@ -1,13 +1,13 @@
-import { Plus, MessageSquare, Star, Trash2, MoreHorizontal } from 'lucide-react';
+import { Loader2, Plus, MessageSquare, Star, Trash2 } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { ScrollArea } from '~/components/ui/scroll-area';
 import { cn } from '~/lib/utils';
 import type { Conversation } from '@chatwithme/shared';
-import { useState } from 'react';
 
 interface ConversationListProps {
   conversations: Conversation[];
   activeId: string | null;
+  deletingId?: string | null;
   onSelect: (id: string) => void;
   onCreate: () => void;
   onDelete: (id: string) => void;
@@ -17,12 +17,11 @@ interface ConversationListProps {
 export function ConversationList({
   conversations,
   activeId,
+  deletingId = null,
   onSelect,
   onCreate,
   onDelete,
 }: ConversationListProps) {
-  const [menuOpen, setMenuOpen] = useState<string | null>(null);
-
   const formatDate = (date: Date | string) => {
     const d = new Date(date);
     const now = new Date();
@@ -50,62 +49,52 @@ export function ConversationList({
             <div
               key={conversation.id}
               className={cn(
-                'group flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2.5 transition-colors',
+                'group flex cursor-pointer items-center justify-between gap-1 rounded-xl px-3 py-2.5 transition-colors overflow-hidden',
                 activeId === conversation.id
                   ? 'bg-primary/20 text-primary'
                   : 'hover:bg-muted'
               )}
               onClick={() => onSelect(conversation.id)}
             >
-              <MessageSquare className="h-4 w-4 shrink-0" />
+              <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+                <MessageSquare className="h-4 w-4 shrink-0" />
 
-              <div className="flex-1 min-w-0">
-                <p className="truncate text-sm font-medium">
-                  {conversation.title || 'New Chat'}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {formatDate(conversation.updatedAt)}
-                </p>
+                <div className="min-w-0 flex-1 overflow-hidden">
+                  <p className="truncate text-sm font-medium">
+                    {conversation.title || 'New Chat'}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {formatDate(conversation.updatedAt)}
+                  </p>
+                </div>
               </div>
 
-              {conversation.starred && (
-                <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
-              )}
+              <div className="flex shrink-0 items-center gap-1">
+                {conversation.starred && (
+                  <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
+                )}
 
-              <div className="relative opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 rounded-lg"
+                  className="h-10 w-10 shrink-0 rounded-lg text-muted-foreground opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:bg-destructive hover:text-destructive-foreground active:opacity-100 active:bg-destructive/90 transition-opacity"
+                  disabled={deletingId === conversation.id}
                   onClick={(e) => {
                     e.stopPropagation();
-                    setMenuOpen(menuOpen === conversation.id ? null : conversation.id);
+                    const confirmed = window.confirm('Delete this conversation?');
+                    if (confirmed) {
+                      onDelete(conversation.id);
+                    }
                   }}
+                  title="Delete conversation"
+                  aria-label="Delete conversation"
                 >
-                  <MoreHorizontal className="h-4 w-4" />
+                  {deletingId === conversation.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
                 </Button>
-
-                {menuOpen === conversation.id && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-40"
-                      onClick={() => setMenuOpen(null)}
-                    />
-                    <div className="absolute right-0 top-full mt-1 z-50 bg-card border border-border rounded-lg shadow-lg py-1 min-w-[120px]">
-                      <button
-                        className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2 text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDelete(conversation.id);
-                          setMenuOpen(null);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Delete
-                      </button>
-                    </div>
-                  </>
-                )}
               </div>
             </div>
           ))}

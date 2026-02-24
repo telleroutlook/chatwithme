@@ -2,15 +2,13 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { Send, Paperclip, X, Image as ImageIcon } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
-import type { MessageFile, ThinkMode } from '@chatwithme/shared';
+import type { MessageFile } from '@chatwithme/shared';
 
 interface MessageInputProps {
-  onSend: (message: string, files?: MessageFile[], thinkMode?: ThinkMode) => void;
+  onSend: (message: string, files?: MessageFile[]) => void;
   disabled?: boolean;
   placeholder?: string;
   autoFocus?: boolean;
-  thinkMode: ThinkMode;
-  onThinkModeChange: (mode: ThinkMode) => void;
 }
 
 export function MessageInput({
@@ -18,8 +16,6 @@ export function MessageInput({
   disabled,
   placeholder = 'Type a message...',
   autoFocus = false,
-  thinkMode,
-  onThinkModeChange,
 }: MessageInputProps) {
   const [message, setMessage] = useState('');
   const [files, setFiles] = useState<MessageFile[]>([]);
@@ -39,10 +35,10 @@ export function MessageInput({
     if (disabled) return;
     if (!message.trim() && files.length === 0) return;
 
-    onSend(message.trim(), files.length > 0 ? files : undefined, thinkMode);
+    onSend(message.trim(), files.length > 0 ? files : undefined);
     setMessage('');
     setFiles([]);
-  }, [message, files, disabled, onSend, thinkMode]);
+  }, [message, files, disabled, onSend]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -55,7 +51,9 @@ export function MessageInput({
     setMessage(value);
     if (!textareaRef.current) return;
     textareaRef.current.style.height = 'auto';
-    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 128)}px`;
+    // Use smaller max-height on mobile for virtual keyboard compatibility
+    const maxHeight = window.innerWidth < 640 ? 120 : 128;
+    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, maxHeight)}px`;
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,23 +123,6 @@ export function MessageInput({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
     >
-      <div className="mb-2 flex items-center justify-end gap-2">
-        <label htmlFor="think-mode" className="text-xs font-medium text-muted-foreground">
-          Think mode
-        </label>
-        <select
-          id="think-mode"
-          value={thinkMode}
-          onChange={(event) => onThinkModeChange(event.target.value as ThinkMode)}
-          disabled={disabled}
-          className="h-9 rounded-lg border border-input bg-background px-2.5 text-xs font-medium"
-        >
-          <option value="instant">instant</option>
-          <option value="think">think</option>
-          <option value="deepthink">deepthink</option>
-        </select>
-      </div>
-
       {/* File previews */}
       {files.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-2">
@@ -203,9 +184,9 @@ export function MessageInput({
               'w-full resize-none rounded-xl border border-input bg-background px-4 py-3.5 text-[15px] pr-12',
               'focus:outline-none focus:ring-1 focus:ring-ring',
               'placeholder:text-muted-foreground',
-              'max-h-32 overflow-y-auto'
+              'overflow-y-auto'
             )}
-            style={{ minHeight: '52px' }}
+            style={{ minHeight: '52px', maxHeight: 'min(120px, 30vh)' }}
           />
         </div>
 

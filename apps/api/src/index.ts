@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { corsMiddleware } from './middleware/cors';
+import { corsMiddleware } from './middleware';
 import authRoutes from './routes/auth';
 import chatRoutes from './routes/chat';
 import fileRoutes from './routes/file';
@@ -46,6 +46,13 @@ app.notFound((c) => {
 // Error handler
 app.onError((err, c) => {
   console.error('Server error:', err);
+
+  // Check for JSON parsing errors
+  // Hono throws errors with message containing "JSON" when parsing fails
+  if (err instanceof Error && err.message.includes('JSON')) {
+    return errorResponse(c, 400, ERROR_CODES.VALIDATION_ERROR, 'Invalid JSON format');
+  }
+
   return errorResponse(c, 500, ERROR_CODES.INTERNAL_SERVER_ERROR, 'Internal Server Error');
 });
 
