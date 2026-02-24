@@ -2,6 +2,7 @@ import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
+import 'katex/dist/katex.min.css';
 import { Copy, Check, Download, Eye, Code, Sun, Moon } from 'lucide-react';
 import { useState, useMemo, memo, useEffect, useRef } from 'react';
 import { cn } from '~/lib/utils';
@@ -194,20 +195,19 @@ interface KatexRendererProps {
 
 const KatexRenderer = memo<KatexRendererProps>(({ math, inline = false }) => {
   const containerRef = useRef<HTMLSpanElement>(null);
-  const [rendered, setRendered] = useState(false);
 
   useEffect(() => {
-    if (!containerRef.current || rendered) return;
+    if (!containerRef.current) return;
 
     // Dynamic import of katex
     import('katex').then((katex) => {
       if (containerRef.current) {
         try {
+          containerRef.current.textContent = '';
           katex.render(math, containerRef.current, {
             throwOnError: false,
             displayMode: !inline,
           });
-          setRendered(true);
         } catch (e) {
           console.error('KaTeX render error:', e);
           if (containerRef.current) {
@@ -221,7 +221,7 @@ const KatexRenderer = memo<KatexRendererProps>(({ math, inline = false }) => {
         containerRef.current.textContent = math;
       }
     });
-  }, [math, inline, rendered]);
+  }, [math, inline]);
 
   return (
     <span
@@ -369,6 +369,14 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
             const match = /language-(\w+)/.exec(className || '');
             const language = match ? match[1] : '';
             const rawText = extractText(children).replace(/\n$/, '');
+            const isMathInline = (className || '').includes('math-inline');
+            const isMathDisplay = (className || '').includes('math-display');
+            const isMath = language.toLowerCase() === 'math' || isMathInline || isMathDisplay;
+
+            if (isMath) {
+              return <KatexRenderer math={rawText} inline={inline || isMathInline} />;
+            }
+
             const isBlock = !inline && (!!match || rawText.includes('\n'));
             const isMermaid = language.toLowerCase() === 'mermaid';
 
@@ -392,19 +400,6 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
                 {children}
               </code>
             );
-          },
-          // Handle math nodes from remark-math
-          span: ({ className, children, ...props }) => {
-            if (className === 'math math-inline') {
-              return <KatexRenderer math={extractText(children)} inline />;
-            }
-            return <span className={className} {...props}>{children}</span>;
-          },
-          div: ({ className, children, ...props }) => {
-            if (className === 'math math-display') {
-              return <KatexRenderer math={extractText(children)} />;
-            }
-            return <div className={className} {...props}>{children}</div>;
           },
         }}
       >

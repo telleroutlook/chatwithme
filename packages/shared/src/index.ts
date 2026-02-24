@@ -86,10 +86,13 @@ export interface SendMessageRequest {
 export type ThinkMode = 'instant' | 'think' | 'deepthink';
 
 export interface StreamMessageEvent {
-  type: 'message' | 'done' | 'error' | 'suggestions';
+  type: 'message' | 'done' | 'error' | 'suggestions' | 'stage';
   message?: string;
   suggestions?: string[];
   error?: string;
+  stage?: string;
+  label?: string;
+  traceId?: string;
 }
 
 // API Response types

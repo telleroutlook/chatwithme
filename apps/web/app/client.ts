@@ -171,7 +171,8 @@ class ApiClient {
     onMessage: (content: string) => void,
     onDone: () => void,
     onError: (error: string) => void,
-    onSuggestions?: (suggestions: string[]) => void
+    onSuggestions?: (suggestions: string[]) => void,
+    onStage?: (stage: string, label?: string) => void
   ): Promise<void> {
     let response = await this.streamWithAuth(endpoint, body);
 
@@ -216,6 +217,8 @@ class ApiClient {
               const event = JSON.parse(line.slice(6)) as StreamMessageEvent;
               if (event.type === 'message') {
                 onMessage(event.message ?? '');
+              } else if (event.type === 'stage') {
+                onStage?.(event.stage ?? '', event.label);
               } else if (event.type === 'suggestions') {
                 onSuggestions?.(event.suggestions ?? []);
               } else if (event.type === 'done') {
@@ -235,6 +238,8 @@ class ApiClient {
           const event = JSON.parse(buffer.slice(6)) as StreamMessageEvent;
           if (event.type === 'message') {
             onMessage(event.message ?? '');
+          } else if (event.type === 'stage') {
+            onStage?.(event.stage ?? '', event.label);
           } else if (event.type === 'suggestions') {
             onSuggestions?.(event.suggestions ?? []);
           } else if (event.type === 'done') {
