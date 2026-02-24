@@ -15,6 +15,7 @@ import { createMessage, getRecentMessages } from '../dao/messages';
 import { generateId } from '../utils/crypto';
 import { ERROR_CODES } from '../constants/error-codes';
 import { errorResponse, validationErrorHook } from '../utils/response';
+import { generateFollowUpSuggestions } from '../utils/suggestions';
 import OpenAI from 'openai';
 
 const chat = new Hono<AppBindings>();
@@ -194,6 +195,7 @@ chat.post('/stream', zValidator('json', streamRequestSchema, validationErrorHook
     apiKey: c.env.OPENROUTER_API_KEY,
     baseURL: c.env.OPENROUTER_BASE_URL,
   });
+  const suggestionModel = c.env.OPENROUTER_SUGGESTION_MODEL || model;
 
   const stream = await openai.chat.completions.create({
     model,
@@ -231,11 +233,20 @@ chat.post('/stream', zValidator('json', streamRequestSchema, validationErrorHook
           createdAt: new Date(),
         });
 
+        const suggestions = await generateFollowUpSuggestions({
+          openai,
+          model: suggestionModel,
+          answerText: fullResponse,
+        });
+
         if (!conversation.title) {
           const title = message.slice(0, 50) + (message.length > 50 ? '...' : '');
           await updateConversation(db, conversationId, { title });
         }
 
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'suggestions', suggestions })}\n\n`)
+        );
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`));
         controller.close();
       } catch (error) {

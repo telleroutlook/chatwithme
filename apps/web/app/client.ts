@@ -127,7 +127,8 @@ class ApiClient {
     body: unknown,
     onMessage: (content: string) => void,
     onDone: () => void,
-    onError: (error: string) => void
+    onError: (error: string) => void,
+    onSuggestions?: (suggestions: string[]) => void
   ): Promise<void> {
     const tokens = useAuthStore.getState().tokens;
 
@@ -170,6 +171,8 @@ class ApiClient {
               const event = JSON.parse(line.slice(6)) as StreamMessageEvent;
               if (event.type === 'message') {
                 onMessage(event.message ?? '');
+              } else if (event.type === 'suggestions') {
+                onSuggestions?.(event.suggestions ?? []);
               } else if (event.type === 'done') {
                 onDone();
               } else if (event.type === 'error') {
@@ -187,6 +190,8 @@ class ApiClient {
           const event = JSON.parse(buffer.slice(6)) as StreamMessageEvent;
           if (event.type === 'message') {
             onMessage(event.message ?? '');
+          } else if (event.type === 'suggestions') {
+            onSuggestions?.(event.suggestions ?? []);
           } else if (event.type === 'done') {
             onDone();
           } else if (event.type === 'error') {

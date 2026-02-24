@@ -43,6 +43,7 @@ export interface Message {
   files: MessageFile[];
   generatedImageUrls: string[];
   searchResults: SearchResult[];
+  suggestions?: string[];
   createdAt: Date;
 }
 
@@ -82,8 +83,9 @@ export interface SendMessageRequest {
 }
 
 export interface StreamMessageEvent {
-  type: 'message' | 'done' | 'error';
+  type: 'message' | 'done' | 'error' | 'suggestions';
   message?: string;
+  suggestions?: string[];
   error?: string;
 }
 

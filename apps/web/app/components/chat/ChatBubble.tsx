@@ -14,11 +14,13 @@ interface ChatBubbleProps {
   isStreaming?: boolean;
   isLast?: boolean;
   onRegenerate?: () => void;
+  onQuickReply?: (question: string) => void;
 }
 
 export const ChatBubble = memo<ChatBubbleProps>(
-  ({ message, isStreaming, isLast, onRegenerate }) => {
+  ({ message, isStreaming, isLast, onRegenerate, onQuickReply }) => {
     const isUser = message.role === 'user';
+    const suggestions = 'suggestions' in message ? message.suggestions : undefined;
 
     return (
       <div
@@ -55,6 +57,20 @@ export const ChatBubble = memo<ChatBubbleProps>(
 
           {isStreaming && (
             <span className="inline-block w-2 h-4 bg-foreground/50 animate-pulse ml-1" />
+          )}
+
+          {!isUser && !isStreaming && suggestions && suggestions.length > 0 && onQuickReply && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {suggestions.map((suggestion, index) => (
+                <button
+                  key={`${suggestion}-${index}`}
+                  onClick={() => onQuickReply(suggestion)}
+                  className="text-xs px-3 py-1.5 rounded-full border border-border bg-muted/40 text-foreground hover:bg-muted transition-colors"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
           )}
 
           {/* AI message action buttons - always visible */}

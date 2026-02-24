@@ -18,6 +18,7 @@ export default function Home() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const streamingContentRef = useRef('');
+  const streamingSuggestionsRef = useRef<string[]>([]);
 
   const { user, tokens, isAuthenticated, logout } = useAuthStore();
   const {
@@ -147,6 +148,7 @@ export default function Home() {
       setStreaming(true);
       clearStreamingMessage();
       streamingContentRef.current = '';
+      streamingSuggestionsRef.current = [];
 
     try {
       await api.stream(
@@ -171,6 +173,7 @@ export default function Home() {
               files: [],
               generatedImageUrls: [],
               searchResults: [],
+              suggestions: streamingSuggestionsRef.current,
               createdAt: new Date(),
             };
             addMessage(conversationId, assistantMessage);
@@ -180,6 +183,9 @@ export default function Home() {
           (error) => {
             console.error('Stream error:', error);
             setStreaming(false);
+          },
+          (suggestions) => {
+            streamingSuggestionsRef.current = suggestions;
           }
       );
     } catch (error) {
@@ -229,6 +235,7 @@ export default function Home() {
     setStreaming(true);
     clearStreamingMessage();
     streamingContentRef.current = '';
+    streamingSuggestionsRef.current = [];
 
     try {
       await api.stream(
@@ -252,6 +259,7 @@ export default function Home() {
             files: [],
             generatedImageUrls: [],
             searchResults: [],
+            suggestions: streamingSuggestionsRef.current,
             createdAt: new Date(),
           };
           addMessage(activeConversationId, assistantMessage);
@@ -261,12 +269,20 @@ export default function Home() {
         (error) => {
           console.error('Regenerate stream error:', error);
           setStreaming(false);
+        },
+        (suggestions) => {
+          streamingSuggestionsRef.current = suggestions;
         }
       );
     } catch (error) {
       console.error('Regenerate error:', error);
       setStreaming(false);
     }
+  };
+
+  const handleQuickReply = async (question: string) => {
+    if (!question.trim() || isStreaming || isLoading) return;
+    await handleSendMessage(question);
   };
 
   if (!isAuthenticated) {
@@ -361,6 +377,7 @@ export default function Home() {
                   message={msg}
                   isLast={index === currentMessages.length - 1 && !isStreaming}
                   onRegenerate={handleRegenerate}
+                  onQuickReply={handleQuickReply}
                 />
               ))}
               {isStreaming && streamingMessage && (

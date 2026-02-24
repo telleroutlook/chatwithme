@@ -69,6 +69,45 @@ describe('ApiClient.stream', () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
+  it('parses suggestions event and calls suggestions callback', async () => {
+    useAuthStore.getState().setAuth(user, {
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      expiresIn: 3600,
+    });
+
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(
+          encoder.encode(
+            'data: {"type":"suggestions","suggestions":["Q1","Q2","Q3"]}\n\ndata: {"type":"done"}\n\n'
+          )
+        );
+        controller.close();
+      },
+    });
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(stream, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      })
+    );
+
+    const onMessage = vi.fn();
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    const onSuggestions = vi.fn();
+
+    await api.stream('/chat/stream', { message: 'hello' }, onMessage, onDone, onError, onSuggestions);
+
+    expect(onMessage).not.toHaveBeenCalled();
+    expect(onSuggestions).toHaveBeenCalledWith(['Q1', 'Q2', 'Q3']);
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it('returns error callback on non-OK response', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ success: false, error: 'Bad request' }), {

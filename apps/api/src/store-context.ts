@@ -8,6 +8,7 @@ export interface Env {
   ENVIRONMENT: string;
   OPENROUTER_API_KEY: string;
   OPENROUTER_BASE_URL: string;
+  OPENROUTER_SUGGESTION_MODEL?: string;
   JWT_SECRET: string;
 }
 
