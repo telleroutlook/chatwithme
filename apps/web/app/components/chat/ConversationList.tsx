@@ -1,6 +1,7 @@
 import { Loader2, Plus, MessageSquare, Star, Trash2 } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { ScrollArea } from '~/components/ui/scroll-area';
+import { ConversationSkeleton } from '~/components/skeleton';
 import { cn } from '~/lib/utils';
 import type { Conversation } from '@chatwithme/shared';
 
@@ -8,6 +9,7 @@ interface ConversationListProps {
   conversations: Conversation[];
   activeId: string | null;
   deletingId?: string | null;
+  isLoading?: boolean;
   onSelect: (id: string) => void;
   onCreate: () => void;
   onDelete: (id: string) => void;
@@ -18,6 +20,7 @@ export function ConversationList({
   conversations,
   activeId,
   deletingId = null,
+  isLoading = false,
   onSelect,
   onCreate,
   onDelete,
@@ -44,8 +47,11 @@ export function ConversationList({
       </div>
 
       <ScrollArea className="flex-1">
-        <div className="space-y-1 p-2">
-          {conversations.map((conversation) => (
+        {isLoading && conversations.length === 0 ? (
+          <ConversationSkeleton />
+        ) : (
+          <div className="space-y-1 p-2">
+            {conversations.map((conversation) => (
             <div
               key={conversation.id}
               className={cn(
@@ -99,14 +105,15 @@ export function ConversationList({
             </div>
           ))}
 
-          {conversations.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No conversations yet</p>
-              <p className="text-xs">Start a new chat to begin</p>
-            </div>
-          )}
-        </div>
+            {conversations.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No conversations yet</p>
+                <p className="text-xs">Start a new chat to begin</p>
+              </div>
+            )}
+          </div>
+        )}
       </ScrollArea>
     </div>
   );

@@ -65,21 +65,62 @@ export default function App() {
 export function HydrateFallback() {
   return (
     <div className="flex min-h-screen bg-background text-foreground">
+      {/* Sidebar skeleton */}
       <aside className="hidden w-80 border-r border-border p-4 lg:block">
-        <div className="animate-pulse space-y-3">
-          <div className="h-10 w-full rounded-md bg-muted" />
-          <div className="h-8 w-2/3 rounded-md bg-muted" />
-          <div className="h-8 w-4/5 rounded-md bg-muted" />
-          <div className="h-8 w-3/5 rounded-md bg-muted" />
+        <div className="space-y-3">
+          {/* New chat button */}
+          <div className="shimmer h-10 w-full rounded-md bg-muted" />
+          {/* Conversation items */}
+          <div className="mt-4 space-y-2">
+            <div className="shimmer h-12 w-full rounded-md bg-muted" />
+            <div className="shimmer h-12 w-[85%] rounded-md bg-muted" />
+            <div className="shimmer h-12 w-[90%] rounded-md bg-muted" />
+            <div className="shimmer h-12 w-[75%] rounded-md bg-muted" />
+          </div>
         </div>
       </aside>
-      <main className="flex-1 p-4">
-        <div className="mx-auto max-w-4xl animate-pulse space-y-4">
-          <div className="h-10 w-64 rounded-md bg-muted" />
-          <div className="h-28 w-full rounded-xl bg-muted" />
-          <div className="h-28 w-5/6 rounded-xl bg-muted" />
-          <div className="h-28 w-3/4 rounded-xl bg-muted" />
-          <div className="h-12 w-full rounded-xl bg-muted" />
+
+      {/* Main content skeleton */}
+      <main className="flex-1 flex flex-col">
+        {/* Header skeleton */}
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-background/80 px-3 py-2.5 backdrop-blur-xl sm:px-4 sm:py-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="shimmer h-9 w-9 rounded-md bg-muted" />
+            <div className="shimmer h-6 w-40 rounded-md bg-muted sm:w-48" />
+          </div>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="shimmer h-9 w-9 rounded-md bg-muted" />
+            <div className="shimmer h-9 w-9 rounded-md bg-muted" />
+            <div className="shimmer h-9 w-9 rounded-md bg-muted" />
+          </div>
+        </header>
+
+        {/* Chat messages skeleton */}
+        <div className="flex-1 p-4">
+          <div className="mx-auto max-w-4xl space-y-4">
+            {/* Header skeleton */}
+            <div className="shimmer h-10 w-64 rounded-md bg-muted" />
+            {/* Message bubbles */}
+            <div className="flex gap-3 p-3">
+              <div className="shimmer h-9 w-9 shrink-0 rounded-full bg-muted" />
+              <div className="shimmer h-24 flex-1 rounded-xl bg-muted sm:max-w-[82%]" />
+            </div>
+            <div className="flex gap-3 flex-row-reverse p-3">
+              <div className="shimmer h-9 w-9 shrink-0 rounded-full bg-muted" />
+              <div className="shimmer h-32 flex-1 rounded-xl bg-muted sm:max-w-[88%]" />
+            </div>
+            <div className="flex gap-3 p-3">
+              <div className="shimmer h-9 w-9 shrink-0 rounded-full bg-muted" />
+              <div className="shimmer h-20 flex-1 rounded-xl bg-muted sm:max-w-[82%]" />
+            </div>
+          </div>
+        </div>
+
+        {/* Input skeleton */}
+        <div className="border-t border-border p-4">
+          <div className="mx-auto max-w-4xl">
+            <div className="shimmer h-12 w-full rounded-xl bg-muted" />
+          </div>
         </div>
       </main>
     </div>

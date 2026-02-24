@@ -13,4 +13,25 @@ export default defineConfig({
   ssr: {
     noExternal: ['lucide-react'],
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Only apply manual chunks for client builds
+          if (id.includes('node_modules')) {
+            if (id.includes('react-markdown') || id.includes('rehype-highlight') ||
+                id.includes('remark-gfm') || id.includes('remark-math')) {
+              return 'markdown';
+            }
+            if (id.includes('katex')) {
+              return 'katex';
+            }
+            if (id.includes('mermaid')) {
+              return 'mermaid';
+            }
+          }
+        }
+      }
+    }
+  }
 });

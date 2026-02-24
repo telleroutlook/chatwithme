@@ -96,6 +96,17 @@
   --radius-lg: 0.9rem;
   --radius-md: 0.72rem;
   --radius-sm: 0.54rem;
+
+  /* Animation timing */
+  --animation-fast: 150ms;
+  --animation-normal: 250ms;
+  --animation-slow: 350ms;
+
+  /* Easing functions */
+  --easing-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --easing-in: cubic-bezier(0.4, 0, 1, 1);
+  --easing-out: cubic-bezier(0, 0, 0.2, 1);
+  --easing-in-out: cubic-bezier(0.4, 0, 0.6, 1);
 }
 
 @layer base {
@@ -162,4 +173,93 @@ code {
 
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-muted-foreground/50;
+}
+
+/* ========================================
+   Animation System
+   ======================================== */
+
+/* Keyframe animations */
+@keyframes message-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Animation utility classes */
+.message-enter {
+  animation: message-slide-in var(--animation-normal) var(--easing-out);
+}
+
+.fade-in {
+  animation: fade-in var(--animation-normal) var(--easing-default);
+}
+
+.scale-in {
+  animation: scale-in var(--animation-normal) var(--easing-out);
+}
+
+.slide-in-right {
+  animation: slide-in-right var(--animation-normal) var(--easing-out);
+}
+
+/* Shimmer effect for skeleton loaders */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    oklch(from var(--muted) l c h) 0%,
+    oklch(from var(--muted-foreground) l c h / 0.1) 50%,
+    oklch(from var(--muted) l c h) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* Smooth transitions for interactive elements */
+.transition-smooth {
+  transition: all var(--animation-normal) var(--easing-default);
+}
+
+.transition-colors-smooth {
+  transition:
+    color var(--animation-fast) var(--easing-default),
+    background-color var(--animation-fast) var(--easing-default),
+    border-color var(--animation-fast) var(--easing-default);
 }

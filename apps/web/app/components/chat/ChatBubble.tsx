@@ -1,9 +1,11 @@
 import { cn } from '~/lib/utils';
 import { Avatar, AvatarFallback } from '~/components/ui/avatar';
 import { Bot, User, Copy, Check, RefreshCw } from 'lucide-react';
-import { useState, memo } from 'react';
+import { useState, memo, Suspense, lazy, useEffect } from 'react';
+import { ErrorBoundary } from '~/components/error';
 import type { Message } from '@chatwithme/shared';
-import { MarkdownRenderer } from './MarkdownRenderer';
+
+const LazyMarkdownRenderer = lazy(() => import('./MarkdownRenderer').then(m => ({ default: m.MarkdownRenderer })));
 
 interface ChatBubbleProps {
   message: Message | { role: 'user' | 'assistant'; message: string };
@@ -17,13 +19,19 @@ export const ChatBubble = memo<ChatBubbleProps>(
   ({ message, messageId, isLast, onRegenerate, onQuickReply }) => {
     const isUser = message.role === 'user';
     const suggestions = 'suggestions' in message ? message.suggestions : undefined;
+    const [animateEntry, setAnimateEntry] = useState(true);
+
+    useEffect(() => {
+      setAnimateEntry(false);
+    }, []);
 
     return (
       <div
         data-message-id={messageId}
         className={cn(
           'flex gap-2 p-3 sm:gap-3 sm:p-4',
-          isUser ? 'flex-row-reverse' : 'flex-row'
+          isUser ? 'flex-row-reverse' : 'flex-row',
+          animateEntry ? 'message-enter' : ''
         )}
       >
         <Avatar className="h-8 w-8 shrink-0 sm:h-9 sm:w-9">
@@ -47,7 +55,13 @@ export const ChatBubble = memo<ChatBubbleProps>(
           {isUser ? (
             <p className="whitespace-pre-wrap break-words">{message.message}</p>
           ) : (
-            <MarkdownRenderer content={message.message} />
+            <ErrorBoundary fallback={({ error }) => (
+              <div className="text-destructive text-sm">Failed to render message</div>
+            )}>
+              <Suspense fallback={<div className="animate-pulse bg-muted rounded-lg h-20" />}>
+                <LazyMarkdownRenderer content={message.message} />
+              </Suspense>
+            </ErrorBoundary>
           )}
 
           {!isUser && suggestions && suggestions.length > 0 && onQuickReply && (
