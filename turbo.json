@@ -3,7 +3,10 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**", ".worker-next/**"]
+      "outputs": ["build/**", "dist/**", ".next/**", "!.next/cache/**", ".worker-next/**"]
+    },
+    "@chatwithme/api#build": {
+      "dependsOn": ["@chatwithme/web#build", "^build"]
     },
     "dev": {
       "cache": false,

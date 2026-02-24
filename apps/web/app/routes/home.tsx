@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { Menu, LogOut, X, Download } from 'lucide-react';
 import { useState } from 'react';
@@ -11,6 +11,7 @@ import { ChatBubble } from '~/components/chat/ChatBubble';
 import { MessageInput } from '~/components/chat/MessageInput';
 import { ScrollArea } from '~/components/ui/scroll-area';
 import { exportChatToHtml } from '~/lib/chatExport';
+import { ensureConversationId } from '~/lib/chatFlow';
 import type { Message, MessageFile } from '@chatwithme/shared';
 
 export default function Home() {
@@ -28,6 +29,7 @@ export default function Home() {
     streamingMessage,
     setConversations,
     addConversation,
+    updateConversation,
     removeConversation,
     setActiveConversation,
     setMessages,
@@ -37,6 +39,7 @@ export default function Home() {
     setLoading,
     setStreaming,
   } = useChatStore();
+  const currentMessages = activeConversationId ? messages[activeConversationId] || [] : [];
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -93,33 +96,44 @@ export default function Home() {
   };
 
   const handleDeleteConversation = async (id: string) => {
-    await api.delete(`/chat/conversations/${id}`);
-    removeConversation(id);
+    const response = await api.delete(`/chat/conversations/${id}`);
+    if (response.success) {
+      removeConversation(id);
+    }
   };
 
   const handleRenameConversation = async (id: string, title: string) => {
-    await api.patch(`/chat/conversations/${id}`, { title });
+    const response = await api.patch(`/chat/conversations/${id}`, { title });
+    if (response.success) {
+      updateConversation(id, { title });
+    }
   };
 
-  const handleSendMessage = useCallback(
-    async (message: string, files?: MessageFile[]) => {
-      if (!activeConversationId) {
-        // Create a new conversation first
-        const response = await api.post<{ conversation: typeof conversations[0] }>(
+  const ensureConversation = async (): Promise<string | null> =>
+    ensureConversationId({
+      activeConversationId,
+      createConversation: async () => {
+        const response = await api.post<{ conversation: typeof conversations[number] }>(
           '/chat/conversations',
           {}
         );
-        if (response.success && response.data) {
-          addConversation(response.data.conversation);
+        if (!response.success || !response.data) {
+          return null;
         }
-        return;
-      }
+        return response.data.conversation;
+      },
+      onConversationCreated: addConversation,
+    });
+
+  const handleSendMessage = async (message: string, files?: MessageFile[]) => {
+    const conversationId = await ensureConversation();
+    if (!conversationId) return;
 
       // Add user message immediately
       const userMessage: Message = {
         id: crypto.randomUUID(),
         userId: user?.id || '',
-        conversationId: activeConversationId,
+        conversationId,
         role: 'user',
         message,
         files: files || [],
@@ -127,21 +141,21 @@ export default function Home() {
         searchResults: [],
         createdAt: new Date(),
       };
-      addMessage(activeConversationId, userMessage);
+      addMessage(conversationId, userMessage);
 
       // Start streaming
       setStreaming(true);
       clearStreamingMessage();
       streamingContentRef.current = '';
 
-      try {
-        await api.stream(
-          '/chat/stream',
-          {
-            conversationId: activeConversationId,
-            message,
-            files,
-          },
+    try {
+      await api.stream(
+        '/chat/stream',
+        {
+          conversationId,
+          message,
+          files,
+        },
           (content) => {
             streamingContentRef.current += content;
             appendToStreamingMessage(content);
@@ -151,15 +165,15 @@ export default function Home() {
             const assistantMessage: Message = {
               id: crypto.randomUUID(),
               userId: user?.id || '',
-              conversationId: activeConversationId,
+              conversationId,
               role: 'assistant',
               message: streamingContentRef.current,
-              files: null,
-              generatedImageUrls: null,
-              searchResults: null,
+              files: [],
+              generatedImageUrls: [],
+              searchResults: [],
               createdAt: new Date(),
             };
-            addMessage(activeConversationId, assistantMessage);
+            addMessage(conversationId, assistantMessage);
             clearStreamingMessage();
             setStreaming(false);
           },
@@ -167,14 +181,12 @@ export default function Home() {
             console.error('Stream error:', error);
             setStreaming(false);
           }
-        );
-      } catch (error) {
-        console.error('Send message error:', error);
-        setStreaming(false);
-      }
-    },
-    [activeConversationId, user?.id]
-  );
+      );
+    } catch (error) {
+      console.error('Send message error:', error);
+      setStreaming(false);
+    }
+  };
 
   const handleLogout = async () => {
     if (tokens?.refreshToken) {
@@ -191,7 +203,7 @@ export default function Home() {
     exportChatToHtml(currentMessages, title);
   };
 
-  const handleRegenerate = useCallback(async () => {
+  const handleRegenerate = async () => {
     if (!activeConversationId || currentMessages.length < 2) return;
 
     // Find the last user message
@@ -237,9 +249,9 @@ export default function Home() {
             conversationId: activeConversationId,
             role: 'assistant',
             message: streamingContentRef.current,
-            files: null,
-            generatedImageUrls: null,
-            searchResults: null,
+            files: [],
+            generatedImageUrls: [],
+            searchResults: [],
             createdAt: new Date(),
           };
           addMessage(activeConversationId, assistantMessage);
@@ -255,13 +267,11 @@ export default function Home() {
       console.error('Regenerate error:', error);
       setStreaming(false);
     }
-  }, [activeConversationId, currentMessages, user?.id]);
+  };
 
   if (!isAuthenticated) {
     return null;
   }
-
-  const currentMessages = activeConversationId ? messages[activeConversationId] || [] : [];
 
   return (
     <div className="flex h-screen bg-background">

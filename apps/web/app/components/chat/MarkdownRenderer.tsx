@@ -2,36 +2,9 @@ import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
-import DOMPurify from 'isomorphic-dompurify';
 import { Copy, Check, Download, Eye, Code, Sun, Moon } from 'lucide-react';
 import { useState, useMemo, memo, useEffect, useRef } from 'react';
 import { cn } from '~/lib/utils';
-
-// ============================================================================
-// XSS PROTECTION CONFIGURATION
-// ============================================================================
-
-const PURIFY_CONFIG = {
-  ALLOWED_TAGS: [
-    'p', 'br', 'strong', 'em', 'u', 's', 'code', 'pre',
-    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-    'ul', 'ol', 'li',
-    'blockquote',
-    'a', 'img',
-    'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
-    'div', 'span',
-  ],
-  ALLOWED_ATTR: [
-    'href', 'src', 'alt', 'title', 'class', 'target', 'rel',
-    'colspan', 'rowspan',
-  ],
-  ALLOW_DATA_ATTR: true,
-  ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|data):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
-};
-
-const sanitizeContent = (content: string): string => {
-  return DOMPurify.sanitize(content, PURIFY_CONFIG);
-};
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -42,10 +15,58 @@ const extractText = (node: React.ReactNode): string => {
   if (typeof node === 'number') return String(node);
   if (!node) return '';
   if (Array.isArray(node)) return node.map(extractText).join('');
-  if (typeof node === 'object' && 'props' in node) {
-    return extractText(node.props.children);
+  if (typeof node === 'object' && node !== null && 'props' in node) {
+    const nodeWithProps = node as { props?: { children?: React.ReactNode } };
+    return extractText(nodeWithProps.props?.children ?? '');
   }
   return '';
+};
+
+const VOID_TAGS = new Set([
+  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+  'link', 'meta', 'param', 'source', 'track', 'wbr',
+]);
+
+const hasBalancedHtmlTags = (code: string): boolean => {
+  const stack: string[] = [];
+  const tagRegex = /<\/?([a-zA-Z][\w:-]*)(\s[^<>]*?)?>/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = tagRegex.exec(code)) !== null) {
+    const fullTag = match[0];
+    const tagName = match[1].toLowerCase();
+    const isClosing = fullTag.startsWith('</');
+    const isSelfClosing = fullTag.endsWith('/>');
+
+    if (isClosing) {
+      const top = stack[stack.length - 1];
+      if (top !== tagName) {
+        return false;
+      }
+      stack.pop();
+      continue;
+    }
+
+    if (!isSelfClosing && !VOID_TAGS.has(tagName)) {
+      stack.push(tagName);
+    }
+  }
+
+  return stack.length === 0;
+};
+
+const isPreviewCodeComplete = (rawCode: string, isSvg: boolean): boolean => {
+  const trimmedCode = rawCode.trim();
+  if (!trimmedCode) return false;
+  if (!/<[a-z!/]/i.test(trimmedCode)) return false;
+  if (/<[^>]*$/.test(trimmedCode)) return false;
+
+  if (isSvg) {
+    if (!/<svg[\s>]/i.test(trimmedCode)) return false;
+    if (!/<\/svg>/i.test(trimmedCode)) return false;
+  }
+
+  return hasBalancedHtmlTags(trimmedCode);
 };
 
 // ============================================================================
@@ -107,8 +128,6 @@ interface MarkdownRendererProps {
 }
 
 export function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
-  const sanitizedContent = useMemo(() => sanitizeContent(content), [content]);
-
   return (
     <div className={cn('prose prose-invert max-w-none', className)}>
       <ReactMarkdown
@@ -154,7 +173,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
           },
         }}
       >
-        {sanitizedContent}
+        {content}
       </ReactMarkdown>
     </div>
   );
@@ -261,9 +280,23 @@ const CodeBlockWithPreview = memo<CodeBlockWithPreviewProps>(
     // Enhanced detection for previewable content
     const isSvg = language === 'svg' || (language === 'xml' && rawCode.trim().startsWith('<svg'));
     const canPreview = language === 'html' || isSvg;
+    const isPreviewReady = useMemo(
+      () => (canPreview ? isPreviewCodeComplete(rawCode, isSvg) : false),
+      [canPreview, rawCode, isSvg]
+    );
 
-    const [activeTab, setActiveTab] = useState<'code' | 'preview'>(canPreview ? 'preview' : 'code');
+    const [activeTab, setActiveTab] = useState<'code' | 'preview'>(() =>
+      isPreviewReady ? 'preview' : 'code'
+    );
     const [previewBg, setPreviewBg] = useState<'light' | 'dark'>('light');
+
+    useEffect(() => {
+      setActiveTab((prev) => {
+        if (isPreviewReady && prev === 'code') return 'preview';
+        if (!isPreviewReady && prev === 'preview') return 'code';
+        return prev;
+      });
+    }, [isPreviewReady]);
 
     const iframeSrc = useMemo(() => {
       const bg = previewBg === 'light' ? '#ffffff' : '#0f172a';
@@ -325,11 +358,13 @@ const CodeBlockWithPreview = memo<CodeBlockWithPreviewProps>(
                 </button>
                 <button
                   onClick={() => setActiveTab('preview')}
+                  disabled={!isPreviewReady}
                   className={cn(
                     'flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-colors',
                     activeTab === 'preview'
                       ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:text-foreground'
+                      : 'text-muted-foreground hover:text-foreground',
+                    !isPreviewReady && 'opacity-50 cursor-not-allowed'
                   )}
                   aria-label="View Preview"
                 >
@@ -339,7 +374,7 @@ const CodeBlockWithPreview = memo<CodeBlockWithPreviewProps>(
             )}
           </div>
           <div className="flex items-center gap-1">
-            {activeTab === 'preview' && canPreview && (
+            {activeTab === 'preview' && isPreviewReady && (
               <button
                 onClick={() => setPreviewBg((prev) => (prev === 'light' ? 'dark' : 'light'))}
                 className="p-1.5 text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded-md transition-all mr-1"
@@ -358,7 +393,7 @@ const CodeBlockWithPreview = memo<CodeBlockWithPreviewProps>(
         </div>
 
         {/* Content */}
-        {activeTab === 'preview' && canPreview ? (
+        {activeTab === 'preview' && isPreviewReady ? (
           <div className="bg-background overflow-hidden h-[400px] resize-y relative rounded-b-lg border-t border-border">
             <iframe
               srcDoc={iframeSrc}

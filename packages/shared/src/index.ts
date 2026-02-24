@@ -91,7 +91,7 @@ export interface StreamMessageEvent {
 export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
-  error?: string;
+  error?: string | { code: string; message: string };
 }
 
 export interface PaginatedResponse<T> {

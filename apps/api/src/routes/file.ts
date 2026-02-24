@@ -1,46 +1,47 @@
 import { Hono } from 'hono';
-import type { Env } from '../store-context';
-import { createDb } from '../db';
+import { zValidator } from '@hono/zod-validator';
+import { z } from 'zod';
+import type { AppBindings } from '../store-context';
 import { authMiddleware, getAuthInfo } from '../middleware/auth';
+import { ERROR_CODES } from '../constants/error-codes';
 import { generateId } from '../utils/crypto';
+import { errorResponse, validationErrorHook } from '../utils/response';
 import type { MessageFile, UploadResponse } from '../types';
 
-const file = new Hono<{ Bindings: Env }>();
+const file = new Hono<AppBindings>();
 
-// All file routes require authentication
+const fileUploadSchema = z.object({
+  file: z.custom<File>((value) => value instanceof File, {
+    message: 'No file provided',
+  }),
+});
+
+const fileKeyParamSchema = z.object({
+  key: z.string().min(1),
+});
+
 file.use('/*', authMiddleware);
 
-// Upload a file
-file.post('/upload', async (c) => {
+file.post('/upload', zValidator('form', fileUploadSchema, validationErrorHook), async (c) => {
   const { userId } = getAuthInfo(c);
 
   try {
-    const formData = await c.req.formData();
-    const uploadedFile = formData.get('file');
+    const { file: uploadedFile } = c.req.valid('form');
 
-    if (!uploadedFile || !(uploadedFile instanceof File)) {
-      return c.json({ success: false, error: 'No file provided' }, 400);
-    }
-
-    // Check file size (max 10MB)
     if (uploadedFile.size > 10 * 1024 * 1024) {
-      return c.json({ success: false, error: 'File size exceeds 10MB limit' }, 400);
+      return errorResponse(c, 400, ERROR_CODES.FILE_TOO_LARGE, 'File size exceeds 10MB limit');
     }
 
-    // Generate unique key
     const ext = uploadedFile.name.split('.').pop() || '';
     const key = `uploads/${userId}/${generateId()}.${ext}`;
 
-    // Upload to R2
     await c.env.BUCKET.put(key, await uploadedFile.arrayBuffer(), {
       httpMetadata: {
         contentType: uploadedFile.type,
       },
     });
 
-    // Generate public URL (assuming R2 public bucket or custom domain)
     const url = `${c.req.url.split('/api/')[0]}/api/file/download/${key}`;
-
     const fileInfo: MessageFile = {
       url,
       fileName: uploadedFile.name,
@@ -49,23 +50,20 @@ file.post('/upload', async (c) => {
     };
 
     const response: UploadResponse = { file: fileInfo };
-
     return c.json({ success: true, data: response });
   } catch (error) {
     console.error('Upload error:', error);
-    return c.json({ success: false, error: 'Upload failed' }, 500);
+    return errorResponse(c, 500, ERROR_CODES.UPLOAD_FAILED, 'Upload failed');
   }
 });
 
-// Download/serve a file
-file.get('/download/:key{.+}', async (c) => {
-  const key = c.req.param('key');
+file.get('/download/:key{.+}', zValidator('param', fileKeyParamSchema, validationErrorHook), async (c) => {
+  const { key } = c.req.valid('param');
 
   try {
     const object = await c.env.BUCKET.get(key);
-
     if (!object) {
-      return c.json({ success: false, error: 'File not found' }, 404);
+      return errorResponse(c, 404, ERROR_CODES.FILE_NOT_FOUND, 'File not found');
     }
 
     const headers = new Headers();
@@ -75,18 +73,16 @@ file.get('/download/:key{.+}', async (c) => {
     return new Response(object.body, { headers });
   } catch (error) {
     console.error('Download error:', error);
-    return c.json({ success: false, error: 'Download failed' }, 500);
+    return errorResponse(c, 500, ERROR_CODES.DOWNLOAD_FAILED, 'Download failed');
   }
 });
 
-// Delete a file
-file.delete('/delete/:key{.+}', async (c) => {
+file.delete('/delete/:key{.+}', zValidator('param', fileKeyParamSchema, validationErrorHook), async (c) => {
   const { userId } = getAuthInfo(c);
-  const key = c.req.param('key');
+  const { key } = c.req.valid('param');
 
-  // Verify the file belongs to the user
   if (!key.startsWith(`uploads/${userId}/`)) {
-    return c.json({ success: false, error: 'Unauthorized' }, 403);
+    return errorResponse(c, 403, ERROR_CODES.FORBIDDEN, 'Unauthorized');
   }
 
   try {
@@ -94,7 +90,7 @@ file.delete('/delete/:key{.+}', async (c) => {
     return c.json({ success: true, data: { message: 'File deleted' } });
   } catch (error) {
     console.error('Delete error:', error);
-    return c.json({ success: false, error: 'Delete failed' }, 500);
+    return errorResponse(c, 500, ERROR_CODES.DELETE_FAILED, 'Delete failed');
   }
 });
 

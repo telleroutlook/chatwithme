@@ -33,6 +33,13 @@ export function MessageInput({ onSend, disabled, placeholder = 'Type a message..
     }
   };
 
+  const handleMessageChange = (value: string) => {
+    setMessage(value);
+    if (!textareaRef.current) return;
+    textareaRef.current.style.height = 'auto';
+    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 128)}px`;
+  };
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = e.target.files;
     if (!selectedFiles) return;
@@ -42,29 +49,33 @@ export function MessageInput({ onSend, disabled, placeholder = 'Type a message..
   };
 
   const processFiles = async (fileList: File[]) => {
-    const newFiles: MessageFile[] = [];
+    const validFiles = fileList.filter((file) => {
+      if (!file.type.startsWith('image/')) return false;
+      if (file.size > 10 * 1024 * 1024) return false;
+      return true;
+    });
+    if (validFiles.length === 0) return;
 
-    for (const file of fileList) {
-      // Only allow images for now
-      if (!file.type.startsWith('image/')) continue;
-      if (file.size > 10 * 1024 * 1024) continue; // 10MB limit
+    const converted = await Promise.all(
+      validFiles.map(
+        (file) =>
+          new Promise<MessageFile>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              resolve({
+                url: String(reader.result),
+                fileName: file.name,
+                mimeType: file.type,
+                size: file.size,
+              });
+            };
+            reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
+            reader.readAsDataURL(file);
+          })
+      )
+    );
 
-      // Convert to base64 for preview
-      const reader = new FileReader();
-      reader.onload = () => {
-        newFiles.push({
-          url: reader.result as string,
-          fileName: file.name,
-          mimeType: file.type,
-          size: file.size,
-        });
-
-        if (newFiles.length === fileList.filter(f => f.type.startsWith('image/')).length) {
-          setFiles(prev => [...prev, ...newFiles]);
-        }
-      };
-      reader.readAsDataURL(file);
-    }
+    setFiles((prev) => [...prev, ...converted]);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -110,6 +121,7 @@ export function MessageInput({ onSend, disabled, placeholder = 'Type a message..
                 className="w-full h-full object-cover"
               />
               <button
+                type="button"
                 onClick={() => removeFile(index)}
                 className="absolute top-1 right-1 p-1 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
               >
@@ -145,7 +157,7 @@ export function MessageInput({ onSend, disabled, placeholder = 'Type a message..
           <textarea
             ref={textareaRef}
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={(e) => handleMessageChange(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             disabled={disabled}

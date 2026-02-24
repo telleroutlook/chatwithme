@@ -3,14 +3,20 @@ import { corsMiddleware } from './middleware/cors';
 import authRoutes from './routes/auth';
 import chatRoutes from './routes/chat';
 import fileRoutes from './routes/file';
-import type { Env } from './store-context';
+import type { AppBindings, Env } from './store-context';
+import { ERROR_CODES } from './constants/error-codes';
+import { errorResponse } from './utils/response';
 
 // Extend Env type to include ASSETS binding
 interface ExtendedEnv extends Env {
   ASSETS: Fetcher;
 }
 
-const app = new Hono<{ Bindings: ExtendedEnv }>();
+type WorkerBindings = Omit<AppBindings, 'Bindings'> & {
+  Bindings: ExtendedEnv;
+};
+
+const app = new Hono<WorkerBindings>();
 
 // Apply CORS middleware
 app.use('*', corsMiddleware);
@@ -34,13 +40,13 @@ app.route('/file', fileRoutes);
 
 // 404 handler for API routes
 app.notFound((c) => {
-  return c.json({ success: false, error: 'Not Found' }, 404);
+  return errorResponse(c, 404, ERROR_CODES.NOT_FOUND, 'Not Found');
 });
 
 // Error handler
 app.onError((err, c) => {
   console.error('Server error:', err);
-  return c.json({ success: false, error: 'Internal Server Error' }, 500);
+  return errorResponse(c, 500, ERROR_CODES.INTERNAL_SERVER_ERROR, 'Internal Server Error');
 });
 
 // Export for Cloudflare Workers with static asset handling

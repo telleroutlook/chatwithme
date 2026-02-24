@@ -52,12 +52,13 @@ export const useChatStore = create<ChatState>((set) => ({
   removeConversation: (id) =>
     set((state) => {
       const { [id]: _, ...remainingMessages } = state.messages;
+      const remainingConversations = state.conversations.filter((c) => c.id !== id);
       return {
-        conversations: state.conversations.filter((c) => c.id !== id),
+        conversations: remainingConversations,
         messages: remainingMessages,
         activeConversationId:
           state.activeConversationId === id
-            ? state.conversations[0]?.id || null
+            ? remainingConversations[0]?.id || null
             : state.activeConversationId,
       };
     }),

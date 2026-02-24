@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
-import type { Env } from '../store-context';
+import { zValidator } from '@hono/zod-validator';
+import { z } from 'zod';
+import type { AppBindings } from '../store-context';
 import { createDb } from '../db';
 import { authMiddleware, getAuthInfo } from '../middleware/auth';
 import {
@@ -11,31 +13,55 @@ import {
 } from '../dao/conversations';
 import { createMessage, getRecentMessages } from '../dao/messages';
 import { generateId } from '../utils/crypto';
-import type { SendMessageRequest } from '../types';
-import type { Conversation, Message } from '../models';
+import { ERROR_CODES } from '../constants/error-codes';
+import { errorResponse, validationErrorHook } from '../utils/response';
 import OpenAI from 'openai';
 
-const chat = new Hono<{ Bindings: Env }>();
+const chat = new Hono<AppBindings>();
 
-// All chat routes require authentication
+const conversationIdParamSchema = z.object({
+  id: z.string().min(1),
+});
+
+const updateConversationSchema = z
+  .object({
+    title: z.string().trim().min(1).max(200).optional(),
+    starred: z.boolean().optional(),
+  })
+  .refine((payload) => payload.title !== undefined || payload.starred !== undefined, {
+    message: 'At least one field is required',
+  });
+
+const streamRequestSchema = z.object({
+  conversationId: z.string().min(1),
+  message: z.string().trim().min(1),
+  files: z
+    .array(
+      z.object({
+        url: z.string().url(),
+        fileName: z.string().min(1),
+        mimeType: z.string().min(1),
+        size: z.number().int().nonnegative(),
+      })
+    )
+    .optional(),
+  model: z.string().min(1).optional(),
+});
+
 chat.use('/*', authMiddleware);
 
-// Get all conversations for the current user
 chat.get('/conversations', async (c) => {
   const { userId } = getAuthInfo(c);
   const db = createDb(c.env.DB);
-
   const conversations = await getConversationsByUserId(db, userId);
-
   return c.json({ success: true, data: { conversations } });
 });
 
-// Create a new conversation
 chat.post('/conversations', async (c) => {
   const { userId } = getAuthInfo(c);
   const db = createDb(c.env.DB);
-
   const now = new Date();
+
   const conversation = await createConversation(db, {
     id: generateId(),
     userId,
@@ -48,95 +74,87 @@ chat.post('/conversations', async (c) => {
   return c.json({ success: true, data: { conversation } });
 });
 
-// Get a single conversation
-chat.get('/conversations/:id', async (c) => {
+chat.get('/conversations/:id', zValidator('param', conversationIdParamSchema, validationErrorHook), async (c) => {
   const { userId } = getAuthInfo(c);
-  const { id } = c.req.param();
+  const { id } = c.req.valid('param');
   const db = createDb(c.env.DB);
 
   const conversation = await getConversationById(db, id);
-
   if (!conversation) {
-    return c.json({ success: false, error: 'Conversation not found' }, 404);
+    return errorResponse(c, 404, ERROR_CODES.CONVERSATION_NOT_FOUND, 'Conversation not found');
   }
 
   if (conversation.userId !== userId) {
-    return c.json({ success: false, error: 'Unauthorized' }, 403);
+    return errorResponse(c, 403, ERROR_CODES.FORBIDDEN, 'Unauthorized');
   }
 
-  // Get messages for this conversation
   const messages = await getRecentMessages(db, id, 100);
-
   return c.json({ success: true, data: { conversation, messages } });
 });
 
-// Update a conversation
-chat.patch('/conversations/:id', async (c) => {
+chat.patch(
+  '/conversations/:id',
+  zValidator('param', conversationIdParamSchema, validationErrorHook),
+  zValidator('json', updateConversationSchema, validationErrorHook),
+  async (c) => {
+    const { userId } = getAuthInfo(c);
+    const { id } = c.req.valid('param');
+    const body = c.req.valid('json');
+    const db = createDb(c.env.DB);
+
+    const conversation = await getConversationById(db, id);
+    if (!conversation) {
+      return errorResponse(c, 404, ERROR_CODES.CONVERSATION_NOT_FOUND, 'Conversation not found');
+    }
+
+    if (conversation.userId !== userId) {
+      return errorResponse(c, 403, ERROR_CODES.FORBIDDEN, 'Unauthorized');
+    }
+
+    const updated = await updateConversation(db, id, {
+      ...body,
+      updatedAt: new Date(),
+    });
+
+    return c.json({ success: true, data: { conversation: updated } });
+  }
+);
+
+chat.delete('/conversations/:id', zValidator('param', conversationIdParamSchema, validationErrorHook), async (c) => {
   const { userId } = getAuthInfo(c);
-  const { id } = c.req.param();
-  const body = await c.req.json<{ title?: string; starred?: boolean }>();
+  const { id } = c.req.valid('param');
   const db = createDb(c.env.DB);
 
   const conversation = await getConversationById(db, id);
-
   if (!conversation) {
-    return c.json({ success: false, error: 'Conversation not found' }, 404);
+    return errorResponse(c, 404, ERROR_CODES.CONVERSATION_NOT_FOUND, 'Conversation not found');
   }
 
   if (conversation.userId !== userId) {
-    return c.json({ success: false, error: 'Unauthorized' }, 403);
-  }
-
-  const updated = await updateConversation(db, id, {
-    ...body,
-    updatedAt: new Date(),
-  });
-
-  return c.json({ success: true, data: { conversation: updated } });
-});
-
-// Delete a conversation
-chat.delete('/conversations/:id', async (c) => {
-  const { userId } = getAuthInfo(c);
-  const { id } = c.req.param();
-  const db = createDb(c.env.DB);
-
-  const conversation = await getConversationById(db, id);
-
-  if (!conversation) {
-    return c.json({ success: false, error: 'Conversation not found' }, 404);
-  }
-
-  if (conversation.userId !== userId) {
-    return c.json({ success: false, error: 'Unauthorized' }, 403);
+    return errorResponse(c, 403, ERROR_CODES.FORBIDDEN, 'Unauthorized');
   }
 
   await deleteConversation(db, id);
-
   return c.json({ success: true, data: { message: 'Conversation deleted' } });
 });
 
-// Send a message and get streaming response
-chat.post('/stream', async (c) => {
+chat.post('/stream', zValidator('json', streamRequestSchema, validationErrorHook), async (c) => {
   const { userId } = getAuthInfo(c);
-  const body = await c.req.json<SendMessageRequest>();
-  const { conversationId, message, files, model = 'gpt-5.3-codex' } = body;
+  const { conversationId, message, files, model = 'gpt-5.3-codex' } = c.req.valid('json');
   const db = createDb(c.env.DB);
 
-  // Verify conversation exists and belongs to user
   const conversation = await getConversationById(db, conversationId);
   if (!conversation) {
-    return c.json({ success: false, error: 'Conversation not found' }, 404);
+    return errorResponse(c, 404, ERROR_CODES.CONVERSATION_NOT_FOUND, 'Conversation not found');
   }
 
   if (conversation.userId !== userId) {
-    return c.json({ success: false, error: 'Unauthorized' }, 403);
+    return errorResponse(c, 403, ERROR_CODES.FORBIDDEN, 'Unauthorized');
   }
 
   const now = new Date();
 
-  // Save user message
-  const userMessage = await createMessage(db, {
+  await createMessage(db, {
     id: generateId(),
     userId,
     conversationId,
@@ -148,20 +166,16 @@ chat.post('/stream', async (c) => {
     createdAt: now,
   });
 
-  // Get conversation history for context
   const history = await getRecentMessages(db, conversationId, 20);
-
-  // Format messages for OpenAI API
   const openAiMessages: Array<{ role: string; content: string | Array<unknown> }> = [];
 
-  // Add history in chronological order
   for (const msg of history) {
     if (msg.role === 'user') {
       if (msg.files && msg.files.length > 0) {
-        // Multimodal message with images
         const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
           { type: 'text', text: msg.message },
         ];
+
         for (const file of msg.files) {
           if (file.mimeType.startsWith('image/')) {
             content.push({ type: 'image_url', image_url: { url: file.url } });
@@ -176,23 +190,19 @@ chat.post('/stream', async (c) => {
     }
   }
 
-  // Create OpenAI client for OpenRouter
   const openai = new OpenAI({
     apiKey: c.env.OPENROUTER_API_KEY,
     baseURL: c.env.OPENROUTER_BASE_URL,
   });
 
-  // Create streaming response
   const stream = await openai.chat.completions.create({
     model,
     messages: openAiMessages as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
     stream: true,
   });
 
-  // Update conversation timestamp
   await updateConversation(db, conversationId, { updatedAt: now });
 
-  // Create SSE stream
   const encoder = new TextEncoder();
   let fullResponse = '';
 
@@ -209,7 +219,6 @@ chat.post('/stream', async (c) => {
           }
         }
 
-        // Save assistant message
         await createMessage(db, {
           id: generateId(),
           userId,
@@ -222,7 +231,6 @@ chat.post('/stream', async (c) => {
           createdAt: new Date(),
         });
 
-        // Update conversation title if it's the first message
         if (!conversation.title) {
           const title = message.slice(0, 50) + (message.length > 50 ? '...' : '');
           await updateConversation(db, conversationId, { title });
@@ -233,7 +241,9 @@ chat.post('/stream', async (c) => {
       } catch (error) {
         console.error('Stream error:', error);
         controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ type: 'error', error: 'Stream failed' })}\n\n`)
+          encoder.encode(
+            `data: ${JSON.stringify({ type: 'error', error: 'Stream failed', code: ERROR_CODES.STREAM_FAILED })}\n\n`
+          )
         );
         controller.close();
       }
@@ -249,25 +259,26 @@ chat.post('/stream', async (c) => {
   });
 });
 
-// Get messages for a conversation
-chat.get('/conversations/:id/messages', async (c) => {
-  const { userId } = getAuthInfo(c);
-  const { id } = c.req.param();
-  const db = createDb(c.env.DB);
+chat.get(
+  '/conversations/:id/messages',
+  zValidator('param', conversationIdParamSchema, validationErrorHook),
+  async (c) => {
+    const { userId } = getAuthInfo(c);
+    const { id } = c.req.valid('param');
+    const db = createDb(c.env.DB);
 
-  const conversation = await getConversationById(db, id);
+    const conversation = await getConversationById(db, id);
+    if (!conversation) {
+      return errorResponse(c, 404, ERROR_CODES.CONVERSATION_NOT_FOUND, 'Conversation not found');
+    }
 
-  if (!conversation) {
-    return c.json({ success: false, error: 'Conversation not found' }, 404);
+    if (conversation.userId !== userId) {
+      return errorResponse(c, 403, ERROR_CODES.FORBIDDEN, 'Unauthorized');
+    }
+
+    const messages = await getRecentMessages(db, id, 100);
+    return c.json({ success: true, data: { messages } });
   }
-
-  if (conversation.userId !== userId) {
-    return c.json({ success: false, error: 'Unauthorized' }, 403);
-  }
-
-  const messages = await getRecentMessages(db, id, 100);
-
-  return c.json({ success: true, data: { messages } });
-});
+);
 
 export default chat;

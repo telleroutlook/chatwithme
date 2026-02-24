@@ -7,8 +7,9 @@
     "dev": "react-router dev",
     "build": "react-router build",
     "start": "react-router-serve ./build/server/index.js",
-    "lint": "eslint app",
-    "deploy": "wrangler pages deploy ./build/client"
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "deploy": "echo \"Web deploy disabled: static assets are deployed via @chatwithme/api worker\""
   },
   "dependencies": {
     "@chatwithme/shared": "workspace:*",
@@ -46,10 +47,12 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "autoprefixer": "^10.4.0",
+    "jsdom": "^28.1.0",
     "postcss": "^8.4.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.0",
     "vite": "^6.0.0",
-    "wrangler": "^3.107.0"
+    "vitest": "^4.0.18",
+    "wrangler": "^4.68.0"
   }
 }

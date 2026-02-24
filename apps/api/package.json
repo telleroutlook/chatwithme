@@ -7,7 +7,8 @@
     "dev": "wrangler dev",
     "build": "wrangler deploy --dry-run",
     "deploy": "wrangler deploy",
-    "lint": "eslint src",
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "wrangler d1 migrations apply chatwithme-db",
     "db:migrate:local": "wrangler d1 migrations apply chatwithme-db --local",
@@ -16,15 +17,18 @@
   },
   "dependencies": {
     "@chatwithme/shared": "workspace:*",
+    "@hono/zod-validator": "^0.7.6",
     "drizzle-orm": "^0.39.0",
     "hono": "^4.6.0",
     "jose": "^5.10.0",
-    "openai": "^4.77.0"
+    "openai": "^4.77.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250214.0",
     "drizzle-kit": "^0.30.0",
     "typescript": "^5.7.0",
-    "wrangler": "^3.107.0"
+    "vitest": "^4.0.18",
+    "wrangler": "^4.68.0"
   }
 }

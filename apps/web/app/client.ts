@@ -1,4 +1,5 @@
 import { useAuthStore } from './stores/auth';
+import type { ApiResponse, StreamMessageEvent } from '@chatwithme/shared';
 
 // Use empty string for relative URLs (same origin) in production
 // Falls back to localhost:8787 for local development
@@ -6,6 +7,18 @@ const API_BASE = import.meta.env.VITE_API_URL || '';
 
 interface RequestOptions extends RequestInit {
   withAuth?: boolean;
+}
+
+export function getApiErrorMessage(error: ApiResponse['error']): string {
+  if (!error) {
+    return 'Request failed';
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  return error.message || 'Request failed';
 }
 
 class ApiClient {
@@ -18,7 +31,7 @@ class ApiClient {
   private async request<T>(
     endpoint: string,
     options: RequestOptions = {}
-  ): Promise<{ success: boolean; data?: T; error?: string }> {
+  ): Promise<ApiResponse<T>> {
     const { withAuth = true, ...fetchOptions } = options;
 
     const headers: HeadersInit = {
@@ -38,7 +51,15 @@ class ApiClient {
       headers,
     });
 
-    const data = await response.json();
+    const contentType = response.headers.get('content-type') || '';
+    const data: ApiResponse<T> = contentType.includes('application/json')
+      ? ((await response.json()) as ApiResponse<T>)
+      : {
+          success: response.ok,
+          error: response.ok
+            ? undefined
+            : { code: `HTTP_${response.status}`, message: response.statusText },
+        };
 
     // Handle 401 - try to refresh token
     if (response.status === 401 && withAuth) {
@@ -65,7 +86,7 @@ class ApiClient {
         body: JSON.stringify({ refreshToken }),
       });
 
-      const data = await response.json();
+      const data = (await response.json()) as ApiResponse<{ accessToken: string; expiresIn: number }>;
       if (data.success && data.data) {
         useAuthStore.getState().updateTokens(data.data.accessToken, data.data.expiresIn);
         return true;
@@ -120,8 +141,8 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      onError(errorData.error || 'Request failed');
+      const errorData = (await response.json()) as ApiResponse;
+      onError(getApiErrorMessage(errorData.error));
       return;
     }
 
@@ -132,30 +153,47 @@ class ApiClient {
     }
 
     const decoder = new TextDecoder();
+    let buffer = '';
 
     try {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const text = decoder.decode(value);
-        const lines = text.split('\n');
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             try {
-              const event = JSON.parse(line.slice(6));
+              const event = JSON.parse(line.slice(6)) as StreamMessageEvent;
               if (event.type === 'message') {
-                onMessage(event.message);
+                onMessage(event.message ?? '');
               } else if (event.type === 'done') {
                 onDone();
               } else if (event.type === 'error') {
-                onError(event.error);
+                onError(event.error ?? 'Stream failed');
               }
             } catch {
               // Ignore parse errors
             }
           }
+        }
+      }
+
+      if (buffer.startsWith('data: ')) {
+        try {
+          const event = JSON.parse(buffer.slice(6)) as StreamMessageEvent;
+          if (event.type === 'message') {
+            onMessage(event.message ?? '');
+          } else if (event.type === 'done') {
+            onDone();
+          } else if (event.type === 'error') {
+            onError(event.error ?? 'Stream failed');
+          }
+        } catch {
+          // Ignore trailing parse errors
         }
       }
     } finally {

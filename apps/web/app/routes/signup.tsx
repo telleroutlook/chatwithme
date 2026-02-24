@@ -4,8 +4,9 @@ import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { useAuthStore } from '~/stores/auth';
-import { api } from '~/client';
+import { api, getApiErrorMessage } from '~/client';
 import { Link } from 'react-router';
+import type { AuthResponse } from '@chatwithme/shared';
 
 export default function SignUp() {
   const [email, setEmail] = useState('');
@@ -34,7 +35,7 @@ export default function SignUp() {
     setLoading(true);
 
     try {
-      const response = await api.post<{ user: ReturnType<typeof useAuthStore.getState>['user']; tokens: ReturnType<typeof useAuthStore.getState>['tokens'] }>(
+      const response = await api.post<AuthResponse>(
         '/auth/signup',
         { email, username, password },
         { withAuth: false }
@@ -44,7 +45,7 @@ export default function SignUp() {
         setAuth(response.data.user, response.data.tokens);
         navigate('/');
       } else {
-        setError(response.error || 'Sign up failed');
+        setError(getApiErrorMessage(response.error));
       }
     } catch {
       setError('Network error. Please try again.');

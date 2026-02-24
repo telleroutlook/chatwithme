@@ -1,9 +1,13 @@
 import { cn } from '~/lib/utils';
 import { Avatar, AvatarFallback } from '~/components/ui/avatar';
-import { MarkdownRenderer } from './MarkdownRenderer';
 import { Bot, User, Copy, Check, RefreshCw } from 'lucide-react';
-import { useState, memo } from 'react';
+import { useState, memo, lazy, Suspense } from 'react';
 import type { Message } from '@chatwithme/shared';
+
+const MarkdownRenderer = lazy(async () => {
+  const mod = await import('./MarkdownRenderer');
+  return { default: mod.MarkdownRenderer };
+});
 
 interface ChatBubbleProps {
   message: Message | { role: 'user' | 'assistant'; message: string };
@@ -44,7 +48,9 @@ export const ChatBubble = memo<ChatBubbleProps>(
           {isUser ? (
             <p className="whitespace-pre-wrap break-words">{message.message}</p>
           ) : (
-            <MarkdownRenderer content={message.message} />
+            <Suspense fallback={<p className="whitespace-pre-wrap break-words">{message.message}</p>}>
+              <MarkdownRenderer content={message.message} />
+            </Suspense>
           )}
 
           {isStreaming && (

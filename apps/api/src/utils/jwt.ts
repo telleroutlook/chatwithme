@@ -1,6 +1,6 @@
-import { SignJWT, jwtVerify } from 'jose';
+import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 
-export interface TokenPayload {
+export interface TokenPayload extends JWTPayload {
   userId: string;
   email: string;
 }

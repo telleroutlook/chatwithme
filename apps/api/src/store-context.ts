@@ -1,4 +1,5 @@
 import type { Db } from './db';
+import { createDb } from './db';
 
 export interface Env {
   DB: D1Database;
@@ -21,9 +22,18 @@ export interface AppContext {
   auth?: AuthInfo;
 }
 
+export interface AppVariables {
+  userId: string;
+  email: string;
+}
+
+export interface AppBindings {
+  Bindings: Env;
+  Variables: AppVariables;
+}
+
 // Helper to create context from Hono context
 export function createContext(env: Env): AppContext {
-  const { createDb } = require('./db');
   return {
     env,
     db: createDb(env.DB),
