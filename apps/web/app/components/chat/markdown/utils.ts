@@ -69,6 +69,15 @@ export const isPreviewCodeComplete = (rawCode: string, isSvg: boolean): boolean 
   if (isSvg) {
     if (!/<svg[\s>]/i.test(trimmedCode)) return false;
     if (!/<\/svg>/i.test(trimmedCode)) return false;
+  } else {
+    // For non-SVG code, apply length limits to avoid showing preview for short snippets
+    const nonEmptyLines = trimmedCode.split('\n').filter((line) => line.trim().length > 0);
+    const minLines = 3;
+    const minChars = 100;
+
+    if (nonEmptyLines.length < minLines && trimmedCode.length < minChars) {
+      return false;
+    }
   }
 
   return hasBalancedHtmlTags(trimmedCode);

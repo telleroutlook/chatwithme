@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { Download } from 'lucide-react';
+import { useThemeStore } from '~/stores/theme';
 import { downloadSvgElementAsPng } from './utils';
 import type { MermaidRendererProps } from './types';
 
@@ -8,6 +9,7 @@ export const MermaidRenderer = memo<MermaidRendererProps>(({ chart }) => {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
+  const { resolvedTheme } = useThemeStore();
 
   const handleDownloadPng = async () => {
     if (!containerRef.current || isLoading || isDownloading) return;
@@ -42,7 +44,7 @@ export const MermaidRenderer = memo<MermaidRendererProps>(({ chart }) => {
         mermaid.initialize({
           startOnLoad: false,
           securityLevel: 'strict',
-          theme: 'dark',
+          theme: resolvedTheme === 'dark' ? 'dark' : 'default',
         });
 
         const renderId = `mermaid-${Math.random().toString(36).slice(2, 10)}`;
@@ -68,7 +70,7 @@ export const MermaidRenderer = memo<MermaidRendererProps>(({ chart }) => {
     return () => {
       mounted = false;
     };
-  }, [chart]);
+  }, [chart, resolvedTheme]);
 
   if (error) {
     return (

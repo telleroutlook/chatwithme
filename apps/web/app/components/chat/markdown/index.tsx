@@ -4,11 +4,11 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import { Suspense, lazy } from 'react';
 import 'katex/dist/katex.min.css';
-import 'highlight.js/styles/github-dark.css';
 import { cn } from '~/lib/utils';
 import { extractText, normalizeMarkdownContent } from './utils';
 import { KatexRenderer } from './KatexBlock';
 import { CodeBlockWithPreview } from './CodeBlock';
+import { CodeHighlightTheme } from './CodeHighlightTheme';
 import type { MarkdownRendererProps } from './types';
 
 const LazyMermaidRenderer = lazy(() =>
@@ -20,6 +20,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
 
   return (
     <div className={cn('prose prose-invert max-w-none', className)}>
+      <CodeHighlightTheme />
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeHighlight]}
