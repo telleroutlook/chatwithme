@@ -4,6 +4,9 @@ import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import type { MessageFile } from '@chatwithme/shared';
 
+// Import mammoth for DOCX extraction
+import mammoth from 'mammoth/mammoth.browser.js';
+
 const CODE_EXTENSIONS = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'go', 'rs', 'c', 'cpp', 'h', 'hpp', 'cs', 'rb', 'php', 'sh', 'json', 'yaml', 'yml', 'toml', 'md', 'txt'];
 const OFFICE_EXTENSIONS = ['pptx', 'xlsx', 'docx'];
 
@@ -17,7 +20,6 @@ const ACCEPTED_FILE_TYPES = [
 // DOCX text extraction using mammoth
 async function extractDocxText(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
-  const mammoth = await import('mammoth');
   const result = await mammoth.extractRawText({ arrayBuffer });
   return result.value;
 }
@@ -25,13 +27,14 @@ async function extractDocxText(file: File): Promise<string> {
 // XLSX text extraction using xlsx
 async function extractXlsxText(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
-  const xlsx = await import('xlsx');
-  const workbook = xlsx.read(arrayBuffer);
+  // Use dynamic import for browser compatibility
+  const XLSX = await import('xlsx');
+  const workbook = XLSX.default.read(arrayBuffer);
   let text = '';
 
   workbook.SheetNames.forEach(sheetName => {
     const worksheet = workbook.Sheets[sheetName];
-    const jsonData = xlsx.utils.sheet_to_json(worksheet, { header: 1 }) as unknown[][];
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as unknown[][];
     text += `\n\n--- Sheet: ${sheetName} ---\n`;
     jsonData.forEach((row) => {
       text += row.join('\t') + '\n';
@@ -44,6 +47,7 @@ async function extractXlsxText(file: File): Promise<string> {
 // PPTX text extraction using jszip
 async function extractPptxText(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
+  // Use dynamic import for browser compatibility
   const { default: JSZip } = await import('jszip');
   const zip = await JSZip.loadAsync(arrayBuffer);
   let text = '';
