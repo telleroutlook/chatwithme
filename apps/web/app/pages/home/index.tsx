@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuthStore } from '~/stores/auth';
 import { useChatStore } from '~/stores/chat';
@@ -10,38 +10,49 @@ import { Sidebar } from './Sidebar';
 import { useChatActions } from './hooks';
 import { cn } from '~/lib/utils';
 
-const SIDEBAR_WIDTH_STORAGE_KEY = 'chatwithme-sidebar-width';
-const DEFAULT_SIDEBAR_WIDTH = 280;
-const MIN_SIDEBAR_WIDTH = 200;
-const MAX_SIDEBAR_WIDTH = 500;
+const SIDEBAR_WIDTH_KEY = 'chatwithme-sidebar-width';
+const SIDEBAR_COLLAPSED_KEY = 'chatwithme-sidebar-collapsed';
+const CONFIG = {
+  MIN_WIDTH: 220,
+  DEFAULT_WIDTH: 280,
+  MAX_WIDTH: 450,
+};
 
 export function Home() {
   const navigate = useNavigate();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // Sidebar State
+  const [sidebarWidth, setSidebarWidth] = useState(CONFIG.DEFAULT_WIDTH);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // Mobile drawer
   const [isResizing, setIsResizing] = useState(false);
   const [deletingConversationId, setDeletingConversationId] = useState<string | null>(null);
 
   const { isAuthenticated, hasHydrated, user } = useAuthStore();
   const { mode: themeMode, setMode: setThemeMode } = useThemeStore();
   const { conversations, activeConversationId, messages, isLoading } = useChatStore();
+  
   const {
     loadConversations, loadMessages, handleCreateConversation,
-    handleSelectConversation: chatActionsHandleSelectConversation,
-    handleDeleteConversation: chatActionsHandleDeleteConversation,
+    handleSelectConversation, handleDeleteConversation,
     handleRenameConversation, handleSendMessage,
-    handleRegenerate: chatActionsHandleRegenerate,
-    handleQuickReply, handleExportChat, handleLogout,
+    handleRegenerate, handleQuickReply, handleExportChat, handleLogout,
   } = useChatActions();
 
-  const currentMessages = activeConversationId ? messages[activeConversationId] || [] : [];
+  const currentMessages = useMemo(() => 
+    activeConversationId ? messages[activeConversationId] || [] : [], 
+    [activeConversationId, messages]
+  );
 
+  // Persistence & Initial Load
   useEffect(() => {
-    const savedWidth = window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY);
-    if (savedWidth) setSidebarWidth(parseInt(savedWidth, 10));
+    const savedWidth = localStorage.getItem(SIDEBAR_WIDTH_KEY);
+    const savedCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+    if (savedWidth) setSidebarWidth(Math.min(parseInt(savedWidth, 10), CONFIG.MAX_WIDTH));
+    if (savedCollapsed === 'true') setSidebarCollapsed(true);
   }, []);
 
+  // Resize Handling
   const startResizing = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setIsResizing(true);
@@ -49,70 +60,90 @@ export function Home() {
 
   const stopResizing = useCallback(() => {
     setIsResizing(false);
-    window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, sidebarWidth.toString());
+    localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
   }, [sidebarWidth]);
 
   const resize = useCallback((e: MouseEvent) => {
-    if (isResizing) {
-      const newWidth = e.clientX;
-      if (newWidth >= MIN_SIDEBAR_WIDTH && newWidth <= MAX_SIDEBAR_WIDTH) {
-        setSidebarWidth(newWidth);
-      }
+    if (!isResizing) return;
+    const newWidth = e.clientX;
+    if (newWidth >= CONFIG.MIN_WIDTH && newWidth <= CONFIG.MAX_WIDTH) {
+      setSidebarWidth(newWidth);
     }
   }, [isResizing]);
 
   useEffect(() => {
-    window.addEventListener('mousemove', resize);
-    window.addEventListener('mouseup', stopResizing);
+    if (isResizing) {
+      window.addEventListener('mousemove', resize);
+      window.addEventListener('mouseup', stopResizing);
+    }
     return () => {
       window.removeEventListener('mousemove', resize);
       window.removeEventListener('mouseup', stopResizing);
     };
-  }, [resize, stopResizing]);
+  }, [isResizing, resize, stopResizing]);
 
+  // Auth & Data sync
   useEffect(() => {
     if (!hasHydrated) return;
     if (!isAuthenticated) navigate('/signin');
-  }, [hasHydrated, isAuthenticated, navigate]);
+    else loadConversations();
+  }, [hasHydrated, isAuthenticated, navigate, loadConversations]);
 
   useEffect(() => {
-    if (hasHydrated && isAuthenticated) loadConversations();
-  }, [hasHydrated, isAuthenticated, loadConversations]);
-
-  useEffect(() => {
-    if (activeConversationId && !messages[activeConversationId]) loadMessages(activeConversationId);
+    if (activeConversationId && !messages[activeConversationId]) {
+      loadMessages(activeConversationId);
+    }
   }, [activeConversationId, messages, loadMessages]);
 
-  const handleSelectConversation = (id: string) => {
-    chatActionsHandleSelectConversation(id);
-    setSidebarOpen(false);
-  };
-
-  const handleSidebarToggle = () => {
-    if (window.matchMedia('(min-width: 1024px)').matches) {
-      setSidebarCollapsed((prev) => !prev);
-      return;
+  const onSidebarToggle = useCallback(() => {
+    if (window.innerWidth >= 1024) {
+      const newState = !sidebarCollapsed;
+      setSidebarCollapsed(newState);
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(newState));
+    } else {
+      setSidebarOpen(true);
     }
-    setSidebarOpen(true);
-  };
+  }, [sidebarCollapsed]);
+
+  const onThemeCycle = useCallback(() => {
+    const order: ThemeMode[] = ['system', 'dark', 'light'];
+    setThemeMode(order[(order.indexOf(themeMode) + 1) % order.length]);
+  }, [themeMode, setThemeMode]);
+
+  const onDelete = useCallback(async (id: string) => {
+    if (deletingConversationId) return;
+    setDeletingConversationId(id);
+    try {
+      await handleDeleteConversation(id);
+    } finally {
+      setDeletingConversationId(null);
+    }
+  }, [deletingConversationId, handleDeleteConversation]);
 
   if (!hasHydrated || !isAuthenticated) return null;
 
-  const title = conversations.find((c) => c.id === activeConversationId)?.title || 'New Chat';
+  const currentTitle = conversations.find((c) => c.id === activeConversationId)?.title || 'New Chat';
 
   return (
-    <div className={`flex h-dvh w-full overflow-hidden bg-background ${isResizing ? 'cursor-col-resize select-none' : ''}`}>
+    <div className={cn(
+      "flex h-dvh w-full overflow-hidden bg-background font-sans selection:bg-primary/10",
+      isResizing && "cursor-col-resize select-none"
+    )}>
+      {/* Mobile Overlay */}
       {sidebarOpen && (
-        <div className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[1px] lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <div 
+          className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm lg:hidden animate-in fade-in duration-200" 
+          onClick={() => setSidebarOpen(false)} 
+        />
       )}
 
-      {/* Sidebar Container - HARD GRID PROTECTION */}
-      <div 
-        style={{ width: sidebarCollapsed ? 0 : `${sidebarWidth}px`, minWidth: sidebarCollapsed ? 0 : undefined }}
+      {/* Sidebar - Desktop Resizable Container */}
+      <aside 
+        style={{ width: sidebarCollapsed ? 0 : `${sidebarWidth}px` }}
         className={cn(
-          "shrink-0 lg:relative lg:z-20 border-r border-border bg-card flex flex-col h-full",
+          "relative shrink-0 overflow-hidden border-r border-border bg-card flex flex-col h-full z-30",
           !isResizing && "transition-[width] duration-300 ease-in-out",
-          sidebarCollapsed && "lg:border-r-0 lg:w-0"
+          sidebarCollapsed && "lg:w-0 lg:border-r-0"
         )}
       >
         <Sidebar
@@ -123,62 +154,59 @@ export function Home() {
           deletingId={deletingConversationId}
           isLoading={isLoading}
           onClose={() => setSidebarOpen(false)}
-          onSelect={handleSelectConversation}
+          onSelect={(id) => { handleSelectConversation(id); setSidebarOpen(false); }}
           onCreate={handleCreateConversation}
-          onDelete={async (id) => {
-            if (deletingConversationId) return;
-            setDeletingConversationId(id);
-            try { await chatActionsHandleDeleteConversation(id); } finally { setDeletingConversationId(null); }
-          }}
+          onDelete={onDelete}
           onRename={handleRenameConversation}
         />
-      </div>
+      </aside>
 
-      {/* Resize Handle */}
+      {/* Drag Handle */}
       {!sidebarCollapsed && (
         <div
           onMouseDown={startResizing}
-          className="hidden lg:flex w-1 hover:w-1.5 transition-all cursor-col-resize items-center justify-center z-30 group"
-          style={{ marginLeft: '-2px' }}
+          className="hidden lg:flex w-1 hover:w-1.5 active:w-1.5 transition-all cursor-col-resize items-center justify-center z-40 group -ml-[2px]"
         >
-          <div className="h-12 w-1 rounded-full bg-border group-hover:bg-primary transition-colors" />
+          <div className="h-10 w-[2px] rounded-full bg-border group-hover:bg-primary/50 group-active:bg-primary transition-colors" />
         </div>
       )}
 
-      {/* Main Content - GUARANTEED MIN WIDTH */}
-      <main className="flex min-w-[320px] flex-1 flex-col relative z-10 bg-background overflow-hidden">
+      {/* Main Area */}
+      <main className="flex min-w-0 flex-1 flex-col relative z-10">
         <Header
-          title={title}
+          title={currentTitle}
           userEmail={user?.email}
           themeMode={themeMode}
           currentMessagesLength={currentMessages.length}
-          onSidebarToggle={handleSidebarToggle}
-          onThemeToggle={() => {
-            const order: ThemeMode[] = ['system', 'dark', 'light'];
-            setThemeMode(order[(order.indexOf(themeMode) + 1) % order.length]);
-          }}
+          onSidebarToggle={onSidebarToggle}
+          onThemeToggle={onThemeCycle}
           onExport={() => handleExportChat(currentMessages, activeConversationId, conversations)}
           onLogout={handleLogout}
           sidebarCollapsed={sidebarCollapsed}
         />
 
-        <div className="flex-1 min-h-0 relative">
+        <div className="flex-1 min-h-0 relative flex flex-col">
           <MessageList
             messages={currentMessages}
             activeConversationId={activeConversationId}
-            onRegenerate={() => chatActionsHandleRegenerate(currentMessages)}
-            onQuickReply={(question) => handleQuickReply(question, isLoading)}
+            onRegenerate={() => handleRegenerate(currentMessages)}
+            onQuickReply={(q) => handleQuickReply(q, isLoading)}
           />
         </div>
 
-        <div className="shrink-0 bg-background/80 backdrop-blur-md border-t border-border/50">
-          <MessageInput
-            onSend={handleSendMessage}
-            disabled={isLoading}
-            autoFocus
-            placeholder={activeConversationId ? 'Type a message...' : 'Start a new conversation...'}
-          />
-        </div>
+        <footer className="shrink-0 p-4 pt-0">
+          <div className="mx-auto max-w-4xl">
+            <MessageInput
+              onSend={handleSendMessage}
+              disabled={isLoading}
+              autoFocus
+              placeholder={activeConversationId ? 'Message ChatWithMe...' : 'Start a new conversation...'}
+            />
+            <p className="mt-2 text-center text-[10px] text-muted-foreground/50">
+              AI can make mistakes. Check important info.
+            </p>
+          </div>
+        </footer>
       </main>
     </div>
   );

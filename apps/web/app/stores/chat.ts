@@ -6,6 +6,7 @@ interface ChatState {
   activeConversationId: string | null;
   messages: Record<string, Message[]>;
   isLoading: boolean;
+  pendingConversationId: string | null;
 
   setConversations: (conversations: Conversation[]) => void;
   addConversation: (conversation: Conversation) => void;
@@ -17,6 +18,7 @@ interface ChatState {
   addMessage: (conversationId: string, message: Message) => void;
 
   setLoading: (loading: boolean) => void;
+  setPendingConversation: (conversationId: string | null) => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -24,6 +26,7 @@ export const useChatStore = create<ChatState>((set) => ({
   activeConversationId: null,
   messages: {},
   isLoading: false,
+  pendingConversationId: null,
 
   setConversations: (conversations) => set({ conversations }),
 
@@ -71,4 +74,5 @@ export const useChatStore = create<ChatState>((set) => ({
     })),
 
   setLoading: (loading) => set({ isLoading: loading }),
+  setPendingConversation: (conversationId) => set({ pendingConversationId: conversationId }),
 }));

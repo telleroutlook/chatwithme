@@ -53,7 +53,6 @@ export function Sidebar({
         onSelect={onSelect}
         onCreate={onCreate}
         onDelete={onDelete}
-        onRename={onRename}
       />
     </aside>
   );

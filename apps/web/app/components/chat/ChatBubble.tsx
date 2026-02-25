@@ -27,12 +27,13 @@ interface ChatBubbleProps {
   message: Message | { role: 'user' | 'assistant'; message: string };
   messageId?: string;
   isLast?: boolean;
+  isLastUserMessage?: boolean;
   onRegenerate?: () => void;
   onQuickReply?: (question: string) => void;
 }
 
 export const ChatBubble = memo<ChatBubbleProps>(
-  ({ message, messageId, isLast, onRegenerate, onQuickReply }) => {
+  ({ message, messageId, isLast, isLastUserMessage, onRegenerate, onQuickReply }) => {
     const isUser = message.role === 'user';
     const suggestions = 'suggestions' in message ? message.suggestions : undefined;
     const [animateEntry, setAnimateEntry] = useState(true);
@@ -130,10 +131,15 @@ export const ChatBubble = memo<ChatBubbleProps>(
 
           <div className="mt-3 flex items-center gap-1">
               <CopyMessageButton text={message.message} isUser={isUser} />
-              {!isUser && isLast && onRegenerate && (
+              {((!isUser && isLast) || (isUser && isLastUserMessage)) && onRegenerate && (
                 <button
                   onClick={onRegenerate}
-                  className="h-10 w-10 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:bg-muted/80 active:text-foreground"
+                  className={cn(
+                    'h-10 w-10 rounded-lg p-2 transition-colors',
+                    isUser
+                      ? 'text-primary-foreground/80 hover:bg-primary-foreground/10 hover:text-primary-foreground active:bg-primary-foreground/20'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground active:bg-muted/80'
+                  )}
                   title="Regenerate response"
                 >
                   <RefreshCw className="h-4 w-4" />

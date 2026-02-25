@@ -57,9 +57,10 @@ function detectVisionModel(
   env: Env
 ): string {
   const currentUserMessage = messages[messages.length - 1];
+  // Only images trigger Vision model
+  // PDFs always use text extraction and go to regular chat model
   const hasVisionContent = currentUserMessage?.files?.some(f =>
-    f.mimeType.startsWith('image/') ||
-    f.mimeType === 'application/pdf'
+    f.mimeType.startsWith('image/')
   ) ?? false;
 
   if (hasVisionContent) {
@@ -602,13 +603,14 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
     c.env
   ) || c.env.OPENROUTER_CHAT_MODEL || 'gpt-5.3-codex';
 
-  // Process files: upload image/PDF dataURLs to R2 and get API URLs
-  // Office documents are NOT uploaded to R2 - their extracted text is used instead
+  // Process files: upload image dataURLs to R2 and get API URLs
+  // PDFs and Office documents are NOT uploaded to R2 - their extracted text is used instead
   let processedFiles = files;
   if (files && files.length > 0) {
     processedFiles = await Promise.all(files.map(async (file) => {
-      // Only upload images and PDFs to R2
-      if ((file.mimeType.startsWith('image/') || file.mimeType === 'application/pdf') && file.url.startsWith('data:')) {
+      // Only upload images to R2 (for vision model)
+      // PDFs always use browser-side text extraction, no R2 upload needed
+      if (file.mimeType.startsWith('image/') && file.url.startsWith('data:')) {
         try {
           // Parse dataURL
           const matches = file.url.match(/^data:([^;]+);base64,(.+)$/);
@@ -619,8 +621,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
 
             // Generate file key and upload to R2
             let ext = 'bin';
-            if (mimeType === 'application/pdf') ext = 'pdf';
-            else if (mimeType === 'image/jpeg') ext = 'jpg';
+            if (mimeType === 'image/jpeg') ext = 'jpg';
             else if (mimeType === 'image/png') ext = 'png';
             else if (mimeType === 'image/gif') ext = 'gif';
             else if (mimeType === 'image/webp') ext = 'webp';
@@ -648,7 +649,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
           // Fall back to original dataURL if upload fails
         }
       }
-      // Office documents and other files keep original URL (dataURL or existing URL)
+      // PDFs, Office documents and other files keep original URL (dataURL or existing URL)
       return file;
     }));
   }
@@ -679,19 +680,21 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
           if (file.mimeType.startsWith('image/')) {
             content.push({ type: 'image_url', image_url: { url: file.url } });
           } else if (file.mimeType === 'application/pdf') {
-            content.push({ type: 'image_url', image_url: { url: file.url } });
+            // PDF: always use extracted text (browser-side parsing)
+            // If no text was extracted, add a placeholder
+            if ('extractedText' in file && file.extractedText) {
+              content[0].text += `\n\n--- File: ${file.fileName} ---\n${file.extractedText}`;
+            } else {
+              // PDF text extraction failed - add warning instead of using vision model
+              content[0].text += `\n\n--- File: ${file.fileName} ---\n[PDF text extraction failed]`;
+            }
           } else if (isOfficeFile(file)) {
             // Office documents: check if we have extracted text
             if ('extractedText' in file && file.extractedText) {
               // Use extracted text content
               content[0].text += `\n\n--- File: ${file.fileName} ---\n${file.extractedText}`;
-            } else {
-              // Fallback: try to read as dataURL (less reliable)
-              const fileContent = await readFileContentFromDataURL(file.url);
-              if (fileContent) {
-                content[0].text += `\n\n--- File: ${file.fileName} ---\n${fileContent}`;
-              }
             }
+            // Do NOT fall back to reading as dataURL for binary Office files
           } else if (isCodeFile(file)) {
             const fileContent = await readFileContentFromDataURL(file.url);
             if (fileContent) {

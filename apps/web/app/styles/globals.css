@@ -236,6 +236,21 @@ aside ::-webkit-scrollbar-thumb:hover {
   100% { background-position: 200% 0; }
 }
 
+/* Typing indicator animation */
+@keyframes typing-bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-8px);
+  }
+}
+
+/* Typing dot with staggered animation */
+.typing-dot {
+  animation: typing-bounce 1.4s infinite ease-in-out;
+}
+
 /* Animation utility classes */
 .message-enter {
   animation: message-slide-in var(--animation-normal) var(--easing-out);

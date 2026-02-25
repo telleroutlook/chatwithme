@@ -13,7 +13,7 @@ export const messages = sqliteTable('messages', {
   role: text('role', { enum: ['user', 'assistant'] }).notNull(),
   message: text('message').notNull(),
   files: text('files', { mode: 'json' }).$type<
-    Array<{ url: string; fileName: string; mimeType: string; size: number }>
+    Array<{ url: string; fileName: string; mimeType: string; size: number; extractedText?: string }>
   >(),
   generatedImageUrls: text('generated_image_urls', { mode: 'json' }).$type<string[]>(),
   searchResults: text('search_results', { mode: 'json' }).$type<

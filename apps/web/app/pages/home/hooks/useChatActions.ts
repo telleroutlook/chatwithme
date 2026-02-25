@@ -37,6 +37,7 @@ export function useChatActions(): UseChatActionsReturn {
     setMessages,
     addMessage,
     setLoading,
+    setPendingConversation,
   } = useChatStore();
 
   const loadConversations = useCallback(async () => {
@@ -140,6 +141,22 @@ export function useChatActions(): UseChatActionsReturn {
     };
     addMessage(conversationId, userMessage);
 
+    setPendingConversation(conversationId);
+
+    // Debug log: Check extractedText before sending
+    if (files && files.length > 0) {
+      console.log('[Frontend] Sending files:', files.length);
+      for (const file of files) {
+        console.log('[Frontend] File:', file.fileName, 'Type:', file.mimeType);
+        if (file.extractedText) {
+          console.log('[Frontend] Has extractedText, length:', file.extractedText.length);
+          console.log('[Frontend] Extracted text preview (first 200 chars):', file.extractedText.substring(0, 200));
+        } else {
+          console.log('[Frontend] No extractedText for file:', file.fileName);
+        }
+      }
+    }
+
     try {
       const response = await api.post<{ message: string; suggestions: string[] }>(
         '/chat/respond',
@@ -181,11 +198,15 @@ export function useChatActions(): UseChatActionsReturn {
         createdAt: new Date(),
       };
       addMessage(conversationId, errorMessage);
+    } finally {
+      setPendingConversation(null);
     }
-  }, [ensureConversation, user, addMessage]);
+  }, [ensureConversation, user, addMessage, setPendingConversation]);
 
   const handleRegenerate = useCallback(async (currentMessages: Message[]) => {
-    if (!activeConversationId || currentMessages.length < 2) return;
+    if (!activeConversationId || currentMessages.length === 0) return;
+
+    const lastMessage = currentMessages[currentMessages.length - 1];
 
     // Find the last user message
     const lastUserMessageIndex = [...currentMessages]
@@ -196,15 +217,15 @@ export function useChatActions(): UseChatActionsReturn {
     const lastUserMessage =
       currentMessages[currentMessages.length - 1 - lastUserMessageIndex];
 
-    // Remove the last assistant message
-    const lastAssistantMessage = currentMessages[currentMessages.length - 1];
-    if (lastAssistantMessage.role !== 'assistant') return;
+    // If last message is assistant, remove it before regenerating
+    if (lastMessage.role === 'assistant') {
+      setMessages(
+        activeConversationId,
+        currentMessages.slice(0, -1)
+      );
+    }
 
-    // Remove last assistant message from store
-    setMessages(
-      activeConversationId,
-      currentMessages.slice(0, -1)
-    );
+    setPendingConversation(activeConversationId);
 
     try {
       const response = await api.post<{ message: string; suggestions: string[] }>(
@@ -247,8 +268,10 @@ export function useChatActions(): UseChatActionsReturn {
         createdAt: new Date(),
       };
       addMessage(activeConversationId, errorMessage);
+    } finally {
+      setPendingConversation(null);
     }
-  }, [activeConversationId, user, setMessages, addMessage]);
+  }, [activeConversationId, user, setMessages, addMessage, setPendingConversation]);
 
   const handleQuickReply = useCallback(async (question: string, isLoading: boolean) => {
     if (!question.trim() || isLoading) return;

@@ -4,10 +4,6 @@ import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import type { MessageFile } from '@chatwithme/shared';
 
-// Import mammoth for DOCX extraction
-// @ts-ignore - mammoth.browser.js doesn't have types
-import mammoth from 'mammoth/mammoth.browser.js';
-
 const CODE_EXTENSIONS = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'go', 'rs', 'c', 'cpp', 'h', 'hpp', 'cs', 'rb', 'php', 'sh', 'json', 'yaml', 'yml', 'toml', 'md', 'txt', 'csv'];
 // Office documents: Word, Excel, PowerPoint, OpenDocument formats
 // All spreadsheet formats use the xlsx library for text extraction
@@ -28,6 +24,11 @@ async function extractDocxText(file: File): Promise<string> {
     const arrayBuffer = await file.arrayBuffer();
     console.log('[Office Extract] ArrayBuffer size:', arrayBuffer.byteLength);
 
+    // Use dynamic import for mammoth
+    // @ts-ignore
+    const mammothModule = await import('mammoth/mammoth.browser.js');
+    const mammoth = mammothModule.default || mammothModule;
+    
     const result = await mammoth.extractRawText({ arrayBuffer });
     const text = result.value;
 
@@ -154,6 +155,69 @@ async function extractPptxText(file: File): Promise<string> {
   }
 }
 
+// PDF text extraction using pdfjs-dist
+async function extractPdfText(file: File): Promise<string> {
+  console.log('[PDF Extract] PDF extraction started:', file.name, 'Size:', file.size);
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    console.log('[PDF Extract] ArrayBuffer size:', arrayBuffer.byteLength);
+
+    // Use dynamic import for pdfjs-dist
+    const pdfjsLib = await import('pdfjs-dist');
+
+    // Use local worker file to avoid CORS issues
+    // The worker is served from the same origin
+    const workerUrl = '/lib/pdfjs/pdf.worker.min.mjs';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+
+    console.log('[PDF Extract] Using local worker:', workerUrl);
+
+    // Load the PDF document
+    const loadingTask = pdfjsLib.getDocument({
+      data: arrayBuffer,
+    });
+    const pdf = await loadingTask.promise;
+
+    console.log('[PDF Extract] PDF loaded, pages:', pdf.numPages);
+
+    let text = '';
+    const maxPages = 50; // Limit to 50 pages to avoid excessive processing
+    const pagesToProcess = Math.min(pdf.numPages, maxPages);
+
+    for (let i = 1; i <= pagesToProcess; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+
+      // Extract text from items
+      const pageText = textContent.items
+        .map((item: any) => item.str)
+        .filter((str: string) => str.trim())
+        .join(' ');
+
+      text += `\n\n--- Page ${i} ---\n${pageText}`;
+
+      console.log(`[PDF Extract] Page ${i}/${pagesToProcess} processed, text length:`, pageText.length);
+    }
+
+    if (pdf.numPages > maxPages) {
+      text += `\n\n... (${pdf.numPages - maxPages} more pages not extracted)`;
+    }
+
+    console.log('[PDF Extract] PDF extraction completed');
+    console.log('[PDF Extract] Total extracted text length:', text.length);
+    console.log('[PDF Extract] Text preview (first 200 chars):', text.substring(0, 200));
+
+    // Clean up the document
+    await pdf.destroy();
+
+    return text.trim();
+  } catch (error) {
+    console.error('[PDF Extract] PDF extraction error:', error);
+    return '';
+  }
+}
+
 interface MessageInputProps {
   onSend: (message: string, files?: MessageFile[]) => void;
   disabled?: boolean;
@@ -238,7 +302,7 @@ export function MessageInput({
         async (file): Promise<MessageFile> => {
           const fileType = getFileType(file);
 
-          // For Office documents, extract text content
+          // For Office documents and PDFs, extract text content
           let extractedText: string | undefined;
           if (fileType === 'office') {
             const ext = file.name.split('.').pop()?.toLowerCase();
@@ -258,6 +322,12 @@ export function MessageInput({
               }
             } catch (error) {
               console.error('Failed to extract text from Office document:', error);
+            }
+          } else if (fileType === 'pdf') {
+            try {
+              extractedText = await extractPdfText(file);
+            } catch (error) {
+              console.error('Failed to extract text from PDF:', error);
             }
           }
 
