@@ -321,7 +321,10 @@ Available Tools:
 IMPORTANT: When users ask for news, current events, or real-time information, you MUST use the webSearchPrime tool to fetch accurate, up-to-date information. Do not claim you cannot access the internet.`;
   }
 
-  const normalized = messages.flatMap((item) => {
+  const normalized = messages.flatMap((item): Array<{
+    role: 'system' | 'user' | 'assistant';
+    content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+  }> => {
     const role =
       item.role === 'assistant' || item.role === 'system' ? item.role : 'user';
 
@@ -335,7 +338,7 @@ IMPORTANT: When users ask for news, current events, or real-time information, yo
       if (!content) return [];
       return [{ role, content }];
     }
-  }) as Array<{ role: 'system' | 'user' | 'assistant'; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }>;
+  });
 
   return [{ role: 'system', content: systemInstruction }, ...normalized];
 }

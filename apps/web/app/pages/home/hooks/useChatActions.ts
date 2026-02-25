@@ -66,7 +66,7 @@ export function useChatActions(): UseChatActionsReturn {
 
       setActiveConversation(loadedConversations[0]?.id ?? null);
     }
-  }, [conversations, activeConversationId, setConversations, setActiveConversation]);
+  }, [activeConversationId, setConversations, setActiveConversation]);
 
   const loadMessages = useCallback(async (conversationId: string) => {
     setLoading(true);

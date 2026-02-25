@@ -17,7 +17,7 @@ export interface SidebarProps {
   onRename: (id: string, title: string) => void;
 }
 
-// Sidebar component - optimized for better display
+// Simplified Sidebar - Content provider, layout handled by Home
 export function Sidebar({
   isOpen,
   isCollapsed,
@@ -33,15 +33,12 @@ export function Sidebar({
 }: SidebarProps) {
   return (
     <aside
-      className={`fixed z-50 h-full w-[85vw] max-w-[320px] border-r border-border bg-card/95 backdrop-blur-xl lg:relative lg:z-0 lg:max-w-none transition-[transform,width,margin,opacity] duration-300 ease-out ${
-        isOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0 lg:translate-x-0 lg:opacity-100'
-      } ${
-        isCollapsed
-          ? 'lg:w-0 lg:min-w-0 lg:border-r-0 lg:overflow-hidden lg:opacity-0'
-          : 'lg:w-80 lg:opacity-100'
-      }`}
+      className={`fixed inset-y-0 left-0 z-50 w-[85vw] max-w-[300px] border-r border-border bg-card transition-transform duration-300 ease-in-out lg:static lg:z-0 lg:w-full lg:max-w-none lg:translate-x-0 ${
+        isOpen ? 'translate-x-0' : '-translate-x-full'
+      } flex flex-col h-full overflow-hidden`}
     >
-      <div className="flex items-center justify-between border-b border-border px-4 py-3 lg:hidden">
+      {/* Mobile-only header */}
+      <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3 lg:hidden">
         <h1 className="text-base font-semibold">ChatWithMe</h1>
         <Button variant="ghost" size="icon" onClick={onClose}>
           <X className="h-5 w-5" />
