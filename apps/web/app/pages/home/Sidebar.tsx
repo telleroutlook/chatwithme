@@ -17,6 +17,7 @@ export interface SidebarProps {
   onRename: (id: string, title: string) => void;
 }
 
+// Sidebar component - optimized for better display
 export function Sidebar({
   isOpen,
   isCollapsed,
@@ -32,12 +33,12 @@ export function Sidebar({
 }: SidebarProps) {
   return (
     <aside
-      className={`fixed z-50 h-full w-[90vw] max-w-[85vw] border-r border-border bg-card/95 backdrop-blur-xl lg:relative lg:z-0 lg:max-w-none transition-[transform,width,margin] duration-250 ease-out ${
-        isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+      className={`fixed z-50 h-full w-[85vw] max-w-[320px] border-r border-border bg-card/95 backdrop-blur-xl lg:relative lg:z-0 lg:max-w-none transition-[transform,width,margin,opacity] duration-300 ease-out ${
+        isOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0 lg:translate-x-0 lg:opacity-100'
       } ${
         isCollapsed
-          ? 'lg:w-0 lg:min-w-0 lg:border-r-0 lg:overflow-hidden'
-          : 'lg:w-72'
+          ? 'lg:w-0 lg:min-w-0 lg:border-r-0 lg:overflow-hidden lg:opacity-0'
+          : 'lg:w-80 lg:opacity-100'
       }`}
     >
       <div className="flex items-center justify-between border-b border-border px-4 py-3 lg:hidden">

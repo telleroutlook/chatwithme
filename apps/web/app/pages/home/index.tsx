@@ -210,5 +210,5 @@ export function Home() {
   );
 }
 
-// Default export for backward compatibility
+// Default export for backward compatibility - rebuild v2
 export default Home;

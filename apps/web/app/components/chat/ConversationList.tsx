@@ -64,19 +64,31 @@ export function ConversationList({
       const popover = confirmPopoverRef.current;
       if (!popover) return;
 
-      const viewportPadding = 8;
+      const viewportPadding = 12;
       const rect = popover.getBoundingClientRect();
-      const rightOverflow = rect.right - (window.innerWidth - viewportPadding);
+      const viewportWidth = window.innerWidth;
 
-      if (rightOverflow <= 0) {
+      // Check right overflow
+      const rightOverflow = rect.right - (viewportWidth - viewportPadding);
+
+      // Check left overflow (for very narrow screens)
+      const leftOverflow = viewportPadding - rect.left;
+
+      if (rightOverflow <= 0 && leftOverflow <= 0) {
         setConfirmPopoverNudgeLeft(0);
         return;
       }
 
-      // Shift left but keep a minimum left safe area in narrow viewports.
-      const maxNudgeLeft = Math.max(0, rect.left - viewportPadding);
-      const nextNudgeLeft = Math.min(rightOverflow, maxNudgeLeft);
-      setConfirmPopoverNudgeLeft(nextNudgeLeft);
+      // Calculate optimal position
+      if (rightOverflow > 0) {
+        // Shift left but keep minimum left safe area
+        const maxNudgeLeft = Math.max(0, rect.left - viewportPadding);
+        const nextNudgeLeft = Math.min(rightOverflow, maxNudgeLeft);
+        setConfirmPopoverNudgeLeft(nextNudgeLeft);
+      } else if (leftOverflow > 0) {
+        // Shift right if overflowing on left
+        setConfirmPopoverNudgeLeft(-leftOverflow);
+      }
     };
 
     const rafId = window.requestAnimationFrame(reposition);
@@ -139,10 +151,10 @@ export function ConversationList({
                   >
                     <button
                       type="button"
-                      className="w-full cursor-pointer px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      className="w-full cursor-pointer px-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                       onClick={() => onSelect(conversation.id)}
                     >
-                      <div className="flex min-w-0 items-start gap-2 pr-9">
+                      <div className="flex min-w-0 items-start gap-2 pr-10">
                         <span
                           className={cn(
                             'mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full',
@@ -161,10 +173,10 @@ export function ConversationList({
                             {conversation.title || 'New Chat'}
                           </p>
                           <div className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
-                            <Clock3 className="h-3 w-3" />
-                            <span>{formatDate(conversation.updatedAt)}</span>
+                            <Clock3 className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{formatDate(conversation.updatedAt)}</span>
                             {conversation.starred && (
-                              <Star className="ml-1 h-3 w-3 fill-yellow-500 text-yellow-500" />
+                              <Star className="ml-1 h-3 w-3 shrink-0 fill-yellow-500 text-yellow-500" />
                             )}
                           </div>
                         </div>
@@ -174,7 +186,7 @@ export function ConversationList({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="absolute right-1.5 top-1.5 h-7 w-7 rounded-md text-muted-foreground/85 opacity-100 transition-all hover:bg-destructive hover:text-destructive-foreground sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+                      className="absolute right-2 top-2 z-50 h-8 w-8 rounded-lg text-muted-foreground/70 hover:text-destructive hover:bg-destructive/10 focus-visible:bg-destructive/15 focus-visible:text-destructive transition-all"
                       disabled={deletingId === conversation.id}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -187,16 +199,16 @@ export function ConversationList({
                       aria-label={`Delete ${conversation.title || 'conversation'}`}
                     >
                       {deletingId === conversation.id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-4 w-4" />
                       )}
                     </Button>
 
                     {confirmingDeleteId === conversation.id && (
                       <div
                         ref={confirmPopoverRef}
-                        className="absolute right-1.5 top-9 z-20 w-52 rounded-lg border border-border bg-card/95 p-2 shadow-lg backdrop-blur-sm"
+                        className="absolute right-1 top-9 z-20 w-[calc(100vw-48px)] max-w-52 rounded-lg border border-border bg-card/95 p-2.5 shadow-lg backdrop-blur-sm sm:w-48"
                         style={{
                           animation: 'fade-in 120ms var(--easing-out)',
                           transform: `translateX(-${confirmPopoverNudgeLeft}px)`,
@@ -208,7 +220,7 @@ export function ConversationList({
                         <p className="px-1 pb-2 text-xs text-muted-foreground">
                           Delete this conversation?
                         </p>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5">
                           <Button
                             variant="ghost"
                             size="sm"

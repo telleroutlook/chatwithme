@@ -175,6 +175,19 @@ code {
   @apply bg-muted-foreground/50;
 }
 
+/* Sidebar-specific scrollbar - thinner and more subtle */
+aside ::-webkit-scrollbar {
+  width: 4px;
+}
+
+aside ::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground/30 rounded-full;
+}
+
+aside ::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/50;
+}
+
 /* ========================================
    Animation System
    ======================================== */

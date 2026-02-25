@@ -418,12 +418,12 @@ export default function Home() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed z-50 h-full w-[90vw] max-w-[85vw] border-r border-border bg-card/95 backdrop-blur-xl transform transition-[transform,width,border] lg:relative lg:z-0 lg:max-w-none lg:transform-none ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        className={`fixed z-50 h-full w-[85vw] max-w-[340px] border-r border-border bg-card/95 backdrop-blur-xl transform transition-[transform,width,margin,opacity] duration-300 ease-out lg:relative lg:z-0 lg:max-w-none lg:transform-none overflow-hidden ${
+          sidebarOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0 lg:translate-x-0 lg:opacity-100'
         } ${
           sidebarCollapsed
-            ? 'lg:w-0 lg:min-w-0 lg:border-r-0 lg:overflow-hidden'
-            : 'lg:w-72'
+            ? 'lg:w-0 lg:min-w-0 lg:border-r-0 lg:overflow-hidden lg:opacity-0'
+            : 'lg:w-[22rem] lg:opacity-100'
         }`}
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3 lg:hidden">
