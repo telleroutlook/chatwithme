@@ -21,8 +21,9 @@ import { MCPManager } from '../mcp/manager';
 import { parseToolCalls, type ToolCall } from '../mcp/parser';
 import type { MessageFile } from '@chatwithme/shared';
 
-const CODE_EXTENSIONS = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'go', 'rs', 'c', 'cpp', 'h', 'hpp', 'cs', 'rb', 'php', 'sh', 'json', 'yaml', 'yml', 'toml', 'md', 'txt'];
-const OFFICE_EXTENSIONS = ['pptx', 'xlsx', 'docx'];
+const CODE_EXTENSIONS = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'go', 'rs', 'c', 'cpp', 'h', 'hpp', 'cs', 'rb', 'php', 'sh', 'json', 'yaml', 'yml', 'toml', 'md', 'txt', 'csv'];
+// Office documents: Word, Excel, PowerPoint, OpenDocument formats
+const OFFICE_EXTENSIONS = ['pptx', 'xlsx', 'xls', 'xlsm', 'xlsb', 'docx', 'ods'];
 
 function isCodeFile(file: MessageFile): boolean {
   const ext = file.fileName.split('.').pop()?.toLowerCase();
@@ -92,6 +93,7 @@ const chatRequestSchema = z.object({
         fileName: z.string().min(1),
         mimeType: z.string().min(1),
         size: z.number().int().nonnegative(),
+        extractedText: z.string().optional(), // For Office document text extraction
       })
     )
     .optional(),
@@ -561,6 +563,20 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
     model: requestedModel,
   } = c.req.valid('json');
   const db = createDb(c.env.DB);
+
+  // Debug: Log extracted text from Office documents
+  if (files && files.length > 0) {
+    console.log('[Backend] Received files:', files.length);
+    for (const file of files) {
+      console.log('[Backend] File:', file.fileName, 'Type:', file.mimeType, 'Size:', file.size);
+      if ('extractedText' in file && file.extractedText) {
+        console.log('[Backend] Has extractedText, length:', file.extractedText.length);
+        console.log('[Backend] Extracted text preview (first 200 chars):', file.extractedText.substring(0, 200));
+      } else {
+        console.log('[Backend] No extractedText found for file:', file.fileName);
+      }
+    }
+  }
 
   const conversation = await getConversationById(db, conversationId);
   if (!conversation) {

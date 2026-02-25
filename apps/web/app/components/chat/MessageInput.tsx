@@ -7,8 +7,10 @@ import type { MessageFile } from '@chatwithme/shared';
 // Import mammoth for DOCX extraction
 import mammoth from 'mammoth/mammoth.browser.js';
 
-const CODE_EXTENSIONS = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'go', 'rs', 'c', 'cpp', 'h', 'hpp', 'cs', 'rb', 'php', 'sh', 'json', 'yaml', 'yml', 'toml', 'md', 'txt'];
-const OFFICE_EXTENSIONS = ['pptx', 'xlsx', 'docx'];
+const CODE_EXTENSIONS = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'go', 'rs', 'c', 'cpp', 'h', 'hpp', 'cs', 'rb', 'php', 'sh', 'json', 'yaml', 'yml', 'toml', 'md', 'txt', 'csv'];
+// Office documents: Word, Excel, PowerPoint, OpenDocument formats
+// All spreadsheet formats use the xlsx library for text extraction
+const OFFICE_EXTENSIONS = ['pptx', 'xlsx', 'xls', 'xlsm', 'xlsb', 'docx', 'ods'];
 
 const ACCEPTED_FILE_TYPES = [
   'image/*',
@@ -19,60 +21,140 @@ const ACCEPTED_FILE_TYPES = [
 
 // DOCX text extraction using mammoth
 async function extractDocxText(file: File): Promise<string> {
-  const arrayBuffer = await file.arrayBuffer();
-  const result = await mammoth.extractRawText({ arrayBuffer });
-  return result.value;
+  console.log('[Office Extract] DOCX extraction started:', file.name, 'Size:', file.size);
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    console.log('[Office Extract] ArrayBuffer size:', arrayBuffer.byteLength);
+
+    const result = await mammoth.extractRawText({ arrayBuffer });
+    const text = result.value;
+
+    console.log('[Office Extract] DOCX extraction completed');
+    console.log('[Office Extract] Extracted text length:', text.length);
+    console.log('[Office Extract] Text preview (first 200 chars):', text.substring(0, 200));
+
+    return text;
+  } catch (error) {
+    console.error('[Office Extract] DOCX extraction error:', error);
+    return '';
+  }
 }
 
 // XLSX text extraction using xlsx
 async function extractXlsxText(file: File): Promise<string> {
-  const arrayBuffer = await file.arrayBuffer();
-  // Use dynamic import for browser compatibility
-  const XLSX = await import('xlsx');
-  const workbook = XLSX.default.read(arrayBuffer);
-  let text = '';
+  console.log('[Office Extract] XLSX extraction started:', file.name, 'Size:', file.size);
 
-  workbook.SheetNames.forEach(sheetName => {
-    const worksheet = workbook.Sheets[sheetName];
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as unknown[][];
-    text += `\n\n--- Sheet: ${sheetName} ---\n`;
-    jsonData.forEach((row) => {
-      text += row.join('\t') + '\n';
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    // Use dynamic import for browser compatibility
+    // xlsx library can have different export structures depending on bundler
+    const xlsxModule = await import('xlsx');
+    // Handle different module export patterns:
+    // - Some bundlers: { default: { read, ... } }
+    // - Others: { read, ... } directly
+    // - Or nested: default.default.read
+    let XLSX: any;
+    if (xlsxModule.default) {
+      if (xlsxModule.default.read) {
+        XLSX = xlsxModule.default;
+      } else if (xlsxModule.default.default && xlsxModule.default.default.read) {
+        XLSX = xlsxModule.default.default;
+      } else {
+        XLSX = xlsxModule.default;
+      }
+    } else {
+      XLSX = xlsxModule;
+    }
+
+    console.log('[Office Extract] XLSX module loaded, checking for read function...');
+    if (typeof XLSX.read !== 'function') {
+      console.error('[Office Extract] XLSX.read is not a function:', XLSX);
+      throw new Error('XLSX library not loaded correctly');
+    }
+
+    const workbook = XLSX.read(arrayBuffer);
+
+    console.log('[Office Extract] XLSX workbook loaded, sheets:', workbook.SheetNames);
+
+    let text = '';
+
+    workbook.SheetNames.forEach(sheetName => {
+      const worksheet = workbook.Sheets[sheetName];
+      if (!XLSX.utils || typeof XLSX.utils.sheet_to_json !== 'function') {
+        console.error('[Office Extract] XLSX.utils.sheet_to_json not available');
+        return;
+      }
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as unknown[][];
+      text += `\n\n--- Sheet: ${sheetName} (${jsonData.length} rows) ---\n`;
+      jsonData.forEach((row, index) => {
+        if (index < 5) { // Log first 5 rows for debugging
+          console.log(`[Office Extract] Row ${index}:`, row);
+        }
+        text += row.join('\t') + '\n';
+      });
     });
-  });
 
-  return text;
+    console.log('[Office Extract] XLSX extraction completed');
+    console.log('[Office Extract] Extracted text length:', text.length);
+    console.log('[Office Extract] Text preview (first 200 chars):', text.substring(0, 200));
+
+    return text;
+  } catch (error) {
+    console.error('[Office Extract] XLSX extraction error:', error);
+    return '';
+  }
 }
 
 // PPTX text extraction using jszip
 async function extractPptxText(file: File): Promise<string> {
-  const arrayBuffer = await file.arrayBuffer();
-  // Use dynamic import for browser compatibility
-  const { default: JSZip } = await import('jszip');
-  const zip = await JSZip.loadAsync(arrayBuffer);
-  let text = '';
+  console.log('[Office Extract] PPTX extraction started:', file.name, 'Size:', file.size);
 
-  // Extract slide content
-  const slideFiles = Object.keys(zip.files).filter(name =>
-    name.startsWith('ppt/slides/slide') && name.endsWith('.xml')
-  );
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    // Use dynamic import for browser compatibility
+    const { default: JSZip } = await import('jszip');
+    const zip = await JSZip.loadAsync(arrayBuffer);
 
-  for (const slideFile of slideFiles.sort()) {
-    const content = await zip.file(slideFile)?.async('string');
-    if (content) {
-      text += `\n\n--- Slide ---\n`;
-      // Extract text content (simplified version, extracts <a:t> tag content)
-      const textMatches = content.match(/<a:t[^>]*>([^<]+)<\/a:t>/g);
-      if (textMatches) {
-        textMatches.forEach(match => {
-          const textContent = match.replace(/<\/?a:t[^>]*>/g, '');
-          text += textContent + ' ';
-        });
+    console.log('[Office Extract] PPTX zip loaded, files:', Object.keys(zip.files).length);
+
+    let text = '';
+    let slideCount = 0;
+
+    // Extract slide content
+    const slideFiles = Object.keys(zip.files).filter(name =>
+      name.startsWith('ppt/slides/slide') && name.endsWith('.xml')
+    );
+
+    console.log('[Office Extract] Found slides:', slideFiles.length, slideFiles);
+
+    for (const slideFile of slideFiles.sort()) {
+      const content = await zip.file(slideFile)?.async('string');
+      if (content) {
+        slideCount++;
+        text += `\n\n--- Slide ---\n`;
+        // Extract text content (simplified version, extracts <a:t> tag content)
+        const textMatches = content.match(/<a:t[^>]*>([^<]+)<\/a:t>/g);
+        if (textMatches) {
+          console.log(`[Office Extract] Slide ${slideCount}: found ${textMatches.length} text matches`);
+          textMatches.forEach(match => {
+            const textContent = match.replace(/<\/?a:t[^>]*>/g, '');
+            text += textContent + ' ';
+          });
+        }
       }
     }
-  }
 
-  return text.trim();
+    console.log('[Office Extract] PPTX extraction completed');
+    console.log('[Office Extract] Processed slides:', slideCount);
+    console.log('[Office Extract] Extracted text length:', text.length);
+    console.log('[Office Extract] Text preview (first 200 chars):', text.substring(0, 200));
+
+    return text.trim();
+  } catch (error) {
+    console.error('[Office Extract] PPTX extraction error:', error);
+    return '';
+  }
 }
 
 interface MessageInputProps {
@@ -165,12 +247,17 @@ export function MessageInput({
             const ext = file.name.split('.').pop()?.toLowerCase();
 
             try {
+              // Word documents
               if (ext === 'docx') {
                 extractedText = await extractDocxText(file);
-              } else if (ext === 'xlsx') {
-                extractedText = await extractXlsxText(file);
-              } else if (ext === 'pptx') {
+              }
+              // PowerPoint presentations
+              else if (ext === 'pptx') {
                 extractedText = await extractPptxText(file);
+              }
+              // Spreadsheet formats (xlsx, xls, xlsm, xlsb, csv, ods) - all use xlsx library
+              else if (['xlsx', 'xls', 'xlsm', 'xlsb', 'csv', 'ods'].includes(ext || '')) {
+                extractedText = await extractXlsxText(file);
               }
             } catch (error) {
               console.error('Failed to extract text from Office document:', error);
@@ -224,8 +311,14 @@ export function MessageInput({
     const ext = file.fileName.split('.').pop()?.toLowerCase();
     if (ext && CODE_EXTENSIONS.includes(ext)) return <FileCode className="h-6 w-6 text-blue-500" />;
     if (ext && OFFICE_EXTENSIONS.includes(ext)) {
+      // Word documents - blue
+      if (ext === 'docx') return <FileText className="h-6 w-6 text-blue-500" />;
+      // PowerPoint - orange
       if (ext === 'pptx') return <FileText className="h-6 w-6 text-orange-500" />;
-      if (ext === 'xlsx') return <FileText className="h-6 w-6 text-green-500" />;
+      // Excel spreadsheets - green
+      if (['xlsx', 'xls', 'xlsm', 'xlsb', 'csv', 'ods'].includes(ext)) {
+        return <FileText className="h-6 w-6 text-green-500" />;
+      }
       return <FileText className="h-6 w-6 text-blue-500" />;
     }
     return <File className="h-6 w-6 text-gray-500" />;
@@ -302,7 +395,7 @@ export function MessageInput({
           className="h-11 w-11 rounded-xl"
           onClick={() => fileInputRef.current?.click()}
           disabled={disabled}
-          title="Attach files (images, PDFs, Office docs, code, text)"
+          title="Attach files (images, PDFs, Office docs, spreadsheets, code, text)"
         >
           <Paperclip className="h-5 w-5" />
         </Button>
@@ -342,7 +435,7 @@ export function MessageInput({
         <div className="absolute inset-0 bg-primary/10 flex items-center justify-center pointer-events-none">
           <div className="flex items-center gap-2 text-primary">
             <FileText className="h-8 w-8" />
-            <span className="font-medium">Drop files here (images, PDFs, Office docs, code, text)</span>
+            <span className="font-medium">Drop files here (images, PDFs, Office docs, spreadsheets, code, text)</span>
           </div>
         </div>
       )}
