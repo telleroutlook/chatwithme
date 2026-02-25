@@ -1,8 +1,16 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Send, Paperclip, X, Image as ImageIcon } from 'lucide-react';
+import { Send, Paperclip, X, Image as ImageIcon, FileText, FileCode, File } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import type { MessageFile } from '@chatwithme/shared';
+
+const CODE_EXTENSIONS = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'go', 'rs', 'c', 'cpp', 'h', 'hpp', 'cs', 'rb', 'php', 'sh', 'json', 'yaml', 'yml', 'toml', 'md', 'txt'];
+
+const ACCEPTED_FILE_TYPES = [
+  'image/*',
+  '.pdf',
+  ...CODE_EXTENSIONS.map(ext => `.${ext}`)
+].join(',');
 
 interface MessageInputProps {
   onSend: (message: string, files?: MessageFile[]) => void;
@@ -64,9 +72,19 @@ export function MessageInput({
     e.target.value = '';
   };
 
+  const getFileType = (file: File): 'image' | 'pdf' | 'code' | 'text' => {
+    if (file.type.startsWith('image/')) return 'image';
+    if (file.type === 'application/pdf') return 'pdf';
+    if (file.type.startsWith('text/')) return 'text';
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (ext && CODE_EXTENSIONS.includes(ext)) return 'code';
+    return 'text';
+  };
+
   const processFiles = async (fileList: File[]) => {
     const validFiles = fileList.filter((file) => {
-      if (!file.type.startsWith('image/')) return false;
+      const fileType = getFileType(file);
+      if (fileType !== 'image' && fileType !== 'pdf' && fileType !== 'code' && fileType !== 'text') return false;
       if (file.size > 10 * 1024 * 1024) return false;
       return true;
     });
@@ -81,7 +99,7 @@ export function MessageInput({
               resolve({
                 url: String(reader.result),
                 fileName: file.name,
-                mimeType: file.type,
+                mimeType: file.type || 'application/octet-stream',
                 size: file.size,
               });
             };
@@ -113,6 +131,20 @@ export function MessageInput({
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  const getFileIcon = (file: MessageFile) => {
+    if (file.mimeType.startsWith('image/')) return null;
+    if (file.mimeType === 'application/pdf') return <FileText className="h-6 w-6 text-red-500" />;
+    const ext = file.fileName.split('.').pop()?.toLowerCase();
+    if (ext && CODE_EXTENSIONS.includes(ext)) return <FileCode className="h-6 w-6 text-blue-500" />;
+    return <File className="h-6 w-6 text-gray-500" />;
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   return (
     <div
       className={cn(
@@ -129,13 +161,26 @@ export function MessageInput({
           {files.map((file, index) => (
             <div
               key={index}
-              className="relative group w-16 h-16 rounded-lg overflow-hidden border border-border"
+              className={cn(
+                "relative group rounded-lg border border-border p-2",
+                file.mimeType.startsWith('image/') ? "w-16 h-16 overflow-hidden p-0" : "w-auto max-w-[200px]"
+              )}
             >
-              <img
-                src={file.url}
-                alt={file.fileName}
-                className="w-full h-full object-cover"
-              />
+              {file.mimeType.startsWith('image/') ? (
+                <img
+                  src={file.url}
+                  alt={file.fileName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="flex items-center gap-2">
+                  {getFileIcon(file)}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate max-w-[120px]">{file.fileName}</p>
+                    <p className="text-[10px] text-muted-foreground">{formatFileSize(file.size)}</p>
+                  </div>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => removeFile(index)}
@@ -152,7 +197,7 @@ export function MessageInput({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept={ACCEPTED_FILE_TYPES}
           multiple
           className="hidden"
           onChange={handleFileSelect}
@@ -165,7 +210,7 @@ export function MessageInput({
           className="h-11 w-11 rounded-xl"
           onClick={() => fileInputRef.current?.click()}
           disabled={disabled}
-          title="Attach image"
+          title="Attach files (images, PDFs, code, text)"
         >
           <Paperclip className="h-5 w-5" />
         </Button>
@@ -204,8 +249,8 @@ export function MessageInput({
       {isDragging && (
         <div className="absolute inset-0 bg-primary/10 flex items-center justify-center pointer-events-none">
           <div className="flex items-center gap-2 text-primary">
-            <ImageIcon className="h-8 w-8" />
-            <span className="font-medium">Drop images here</span>
+            <FileText className="h-8 w-8" />
+            <span className="font-medium">Drop files here (images, PDFs, code, text)</span>
           </div>
         </div>
       )}

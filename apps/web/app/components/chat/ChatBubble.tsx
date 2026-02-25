@@ -1,9 +1,25 @@
 import { cn } from '~/lib/utils';
 import { Avatar, AvatarFallback } from '~/components/ui/avatar';
-import { Bot, User, Copy, Check, RefreshCw } from 'lucide-react';
+import { Bot, User, Copy, Check, RefreshCw, FileText, FileCode, File } from 'lucide-react';
 import { useState, memo, Suspense, lazy, useEffect } from 'react';
 import { ErrorBoundary } from '~/components/error';
-import type { Message } from '@chatwithme/shared';
+import type { Message, MessageFile } from '@chatwithme/shared';
+
+const CODE_EXTENSIONS = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'go', 'rs', 'c', 'cpp', 'h', 'hpp', 'cs', 'rb', 'php', 'sh', 'json', 'yaml', 'yml', 'toml', 'md', 'txt'];
+
+function getFileIcon(file: MessageFile) {
+  if (file.mimeType.startsWith('image/')) return null;
+  if (file.mimeType === 'application/pdf') return <FileText className="h-4 w-4 text-red-400" />;
+  const ext = file.fileName.split('.').pop()?.toLowerCase();
+  if (ext && CODE_EXTENSIONS.includes(ext)) return <FileCode className="h-4 w-4 text-blue-400" />;
+  return <File className="h-4 w-4 text-gray-400" />;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 const LazyMarkdownRenderer = lazy(() => import('./MarkdownRenderer').then(m => ({ default: m.MarkdownRenderer })));
 
@@ -53,7 +69,41 @@ export const ChatBubble = memo<ChatBubbleProps>(
           )}
         >
           {isUser ? (
-            <p className="whitespace-pre-wrap break-words">{message.message}</p>
+            <>
+              <p className="whitespace-pre-wrap break-words">{message.message}</p>
+              {'files' in message && message.files && message.files.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {message.files.map((file, index) => (
+                    <div
+                      key={index}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-md px-2 py-1",
+                        "bg-primary-foreground/10 border border-primary-foreground/20"
+                      )}
+                    >
+                      {file.mimeType.startsWith('image/') ? (
+                        <>
+                          <img
+                            src={file.url}
+                            alt={file.fileName}
+                            className="h-8 w-8 rounded object-cover"
+                          />
+                          <span className="text-xs opacity-80 max-w-[100px] truncate">{file.fileName}</span>
+                        </>
+                      ) : (
+                        <>
+                          {getFileIcon(file)}
+                          <div className="flex flex-col">
+                            <span className="text-xs font-medium opacity-90 max-w-[120px] truncate">{file.fileName}</span>
+                            <span className="text-[10px] opacity-70">{formatFileSize(file.size)}</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           ) : (
             <ErrorBoundary fallback={({ error }) => (
               <div className="text-destructive text-sm">Failed to render message</div>

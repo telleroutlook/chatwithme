@@ -9,6 +9,7 @@ export interface Env {
   OPENROUTER_API_KEY: string;
   OPENROUTER_BASE_URL: string;
   OPENROUTER_CHAT_MODEL?: string;
+  OPENROUTER_VISION_MODEL?: string;
   OPENROUTER_SUGGESTION_MODEL?: string;
   OPENROUTER_FALLBACK_MODEL?: string;
   JWT_SECRET: string;

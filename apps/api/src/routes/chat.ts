@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import type { AppBindings } from '../store-context';
+import type { AppBindings, Env } from '../store-context';
 import { createDb } from '../db';
 import { authMiddleware, getAuthInfo } from '../middleware/auth';
 import {
@@ -19,6 +19,46 @@ import { generateFollowUpSuggestions, parseAndFinalizeSuggestions } from '../uti
 import OpenAI from 'openai';
 import { MCPManager } from '../mcp/manager';
 import { parseToolCalls, type ToolCall } from '../mcp/parser';
+import type { MessageFile } from '@chatwithme/shared';
+
+const CODE_EXTENSIONS = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'go', 'rs', 'c', 'cpp', 'h', 'hpp', 'cs', 'rb', 'php', 'sh', 'json', 'yaml', 'yml', 'toml', 'md', 'txt'];
+
+function isCodeFile(file: MessageFile): boolean {
+  const ext = file.fileName.split('.').pop()?.toLowerCase();
+  return CODE_EXTENSIONS.includes(ext || '');
+}
+
+async function readFileContentFromDataURL(url: string): Promise<string> {
+  if (url.startsWith('data:')) {
+    const matches = url.match(/^data:[^;]+;base64,(.+)$/);
+    if (matches) {
+      const base64 = matches[1];
+      const binaryString = atob(base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const decoder = new TextDecoder('utf-8');
+      return decoder.decode(bytes);
+    }
+  }
+  return '';
+}
+
+function detectVisionModel(
+  messages: Array<{ role: string; content: string | Array<unknown>; files?: MessageFile[] }>,
+  env: Env
+): string {
+  const currentUserMessage = messages[messages.length - 1];
+  const hasVisionContent = currentUserMessage?.files?.some(f =>
+    f.mimeType.startsWith('image/') || f.mimeType === 'application/pdf'
+  ) ?? false;
+
+  if (hasVisionContent) {
+    return env.OPENROUTER_VISION_MODEL || env.OPENROUTER_CHAT_MODEL || 'glm-4.6v';
+  }
+  return env.OPENROUTER_CHAT_MODEL || 'GLM-4.7';
+}
 
 const chat = new Hono<AppBindings>();
 
@@ -508,7 +548,6 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
     files,
     model: requestedModel,
   } = c.req.valid('json');
-  const model = requestedModel || c.env.OPENROUTER_CHAT_MODEL || 'gpt-5.3-codex';
   const db = createDb(c.env.DB);
 
   const conversation = await getConversationById(db, conversationId);
@@ -519,6 +558,18 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
   if (conversation.userId !== userId) {
     return errorResponse(c, 403, ERROR_CODES.FORBIDDEN, 'Unauthorized');
   }
+
+  // Fetch history for model detection
+  const historyForModelDetection = await getRecentMessages(db, conversationId, 20);
+
+  const model = requestedModel || detectVisionModel(
+    [...historyForModelDetection.map(msg => ({
+      role: msg.role,
+      content: msg.message,
+      files: msg.files || undefined
+    })), { role: 'user', content: message, files }],
+    c.env
+  ) || c.env.OPENROUTER_CHAT_MODEL || 'gpt-5.3-codex';
 
   const now = new Date();
   await createMessage(db, {
@@ -533,6 +584,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
     createdAt: now,
   });
 
+  // Re-fetch history after creating the new message
   const history = await getRecentMessages(db, conversationId, 20);
   const openAiMessages: Array<{ role: string; content: string | Array<unknown> }> = [];
   for (const msg of history) {
@@ -544,6 +596,13 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
         for (const file of msg.files) {
           if (file.mimeType.startsWith('image/')) {
             content.push({ type: 'image_url', image_url: { url: file.url } });
+          } else if (file.mimeType === 'application/pdf') {
+            content.push({ type: 'image_url', image_url: { url: file.url } });
+          } else if (isCodeFile(file)) {
+            const fileContent = await readFileContentFromDataURL(file.url);
+            if (fileContent) {
+              content[0].text += `\n\n--- File: ${file.fileName} ---\n${fileContent}`;
+            }
           }
         }
         openAiMessages.push({ role: 'user', content });
