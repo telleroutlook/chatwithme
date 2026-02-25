@@ -5,6 +5,7 @@ import { cn } from '~/lib/utils';
 import type { MessageFile } from '@chatwithme/shared';
 
 // Import mammoth for DOCX extraction
+// @ts-ignore - mammoth.browser.js doesn't have types
 import mammoth from 'mammoth/mammoth.browser.js';
 
 const CODE_EXTENSIONS = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'go', 'rs', 'c', 'cpp', 'h', 'hpp', 'cs', 'rb', 'php', 'sh', 'json', 'yaml', 'yml', 'toml', 'md', 'txt', 'csv'];
@@ -48,27 +49,23 @@ async function extractXlsxText(file: File): Promise<string> {
   try {
     const arrayBuffer = await file.arrayBuffer();
     // Use dynamic import for browser compatibility
-    // xlsx library can have different export structures depending on bundler
     const xlsxModule = await import('xlsx');
-    // Handle different module export patterns:
-    // - Some bundlers: { default: { read, ... } }
-    // - Others: { read, ... } directly
-    // - Or nested: default.default.read
+    
+    // Handle different module export patterns (CommonJS vs ESM)
+    // Some environments wrap it in default, some have it twice (default.default)
     let XLSX: any;
-    if (xlsxModule.default) {
-      if (xlsxModule.default.read) {
-        XLSX = xlsxModule.default;
-      } else if (xlsxModule.default.default && xlsxModule.default.default.read) {
-        XLSX = xlsxModule.default.default;
-      } else {
-        XLSX = xlsxModule.default;
-      }
+    if (xlsxModule && typeof (xlsxModule as any).read === 'function') {
+      XLSX = xlsxModule;
+    } else if (xlsxModule.default && typeof (xlsxModule.default as any).read === 'function') {
+      XLSX = xlsxModule.default;
+    } else if (xlsxModule.default && (xlsxModule.default as any).default && typeof (xlsxModule.default as any).default.read === 'function') {
+      XLSX = (xlsxModule.default as any).default;
     } else {
       XLSX = xlsxModule;
     }
 
     console.log('[Office Extract] XLSX module loaded, checking for read function...');
-    if (typeof XLSX.read !== 'function') {
+    if (!XLSX || typeof XLSX.read !== 'function') {
       console.error('[Office Extract] XLSX.read is not a function:', XLSX);
       throw new Error('XLSX library not loaded correctly');
     }
@@ -79,7 +76,7 @@ async function extractXlsxText(file: File): Promise<string> {
 
     let text = '';
 
-    workbook.SheetNames.forEach(sheetName => {
+    (workbook.SheetNames as string[]).forEach((sheetName: string) => {
       const worksheet = workbook.Sheets[sheetName];
       if (!XLSX.utils || typeof XLSX.utils.sheet_to_json !== 'function') {
         console.error('[Office Extract] XLSX.utils.sheet_to_json not available');

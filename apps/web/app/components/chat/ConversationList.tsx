@@ -25,6 +25,7 @@ export function ConversationList({
   onSelect,
   onCreate,
   onDelete,
+  onRename,
 }: ConversationListProps) {
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const [confirmPopoverNudgeLeft, setConfirmPopoverNudgeLeft] = useState(0);
@@ -186,7 +187,12 @@ export function ConversationList({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="absolute right-2 top-2 z-50 h-8 w-8 rounded-lg text-muted-foreground/70 hover:text-destructive hover:bg-destructive/10 focus-visible:bg-destructive/15 focus-visible:text-destructive transition-all"
+                      className={cn(
+                        'absolute right-2 top-2 z-50 h-8 w-8 rounded-lg transition-all duration-200',
+                        'bg-background/50 border border-border/20 shadow-sm',
+                        'text-muted-foreground hover:text-destructive hover:bg-destructive/10 focus-visible:bg-destructive/15 focus-visible:text-destructive',
+                        'opacity-100 translate-x-0'
+                      )}
                       disabled={deletingId === conversation.id}
                       onClick={(e) => {
                         e.stopPropagation();
