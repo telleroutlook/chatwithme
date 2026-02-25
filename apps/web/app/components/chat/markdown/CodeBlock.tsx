@@ -1,7 +1,7 @@
 import { memo, useState, useEffect, useMemo } from 'react';
 import { Copy, Check, Download, Eye, Code, Sun, Moon } from 'lucide-react';
 import { cn } from '~/lib/utils';
-import { extractText, isPreviewCodeComplete } from './utils';
+import { downloadSvgElementAsPng, extractText, isPreviewCodeComplete } from './utils';
 import type { CopyButtonProps, DownloadButtonProps, CodeBlockWithPreviewProps } from './types';
 
 export const CopyButton = memo<CopyButtonProps>(({ text }) => {
@@ -31,7 +31,7 @@ export const CopyButton = memo<CopyButtonProps>(({ text }) => {
 CopyButton.displayName = 'CopyButton';
 
 export const DownloadButton = memo<DownloadButtonProps>(({ text, language }) => {
-  const handleDownload = () => {
+  const saveAsTextFile = () => {
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -70,9 +70,35 @@ export const DownloadButton = memo<DownloadButtonProps>(({ text, language }) => 
     URL.revokeObjectURL(url);
   };
 
+  const handleDownload = async () => {
+    const trimmedText = text.trim();
+    const isSvgCode = language.toLowerCase() === 'svg'
+      || (language.toLowerCase() === 'xml' && trimmedText.startsWith('<svg'));
+
+    if (isSvgCode) {
+      try {
+        const parsed = new DOMParser().parseFromString(trimmedText, 'image/svg+xml');
+        const svgElement = parsed.querySelector('svg');
+        const parseError = parsed.querySelector('parsererror');
+
+        if (!svgElement || parseError) {
+          throw new Error('Invalid SVG markup');
+        }
+
+        await downloadSvgElementAsPng(svgElement as unknown as SVGSVGElement, 'code_snippet.png');
+        return;
+      } catch {
+        saveAsTextFile();
+        return;
+      }
+    }
+
+    saveAsTextFile();
+  };
+
   return (
     <button
-      onClick={handleDownload}
+      onClick={() => void handleDownload()}
       className="p-1.5 text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded-md transition-all"
       title="Download file"
       aria-label="Download code"
