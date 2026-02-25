@@ -58,8 +58,7 @@ function detectVisionModel(
   const currentUserMessage = messages[messages.length - 1];
   const hasVisionContent = currentUserMessage?.files?.some(f =>
     f.mimeType.startsWith('image/') ||
-    f.mimeType === 'application/pdf' ||
-    f.mimeType.startsWith('application/vnd.openxmlformats-officedocument')
+    f.mimeType === 'application/pdf'
   ) ?? false;
 
   if (hasVisionContent) {
@@ -584,14 +583,13 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
     c.env
   ) || c.env.OPENROUTER_CHAT_MODEL || 'gpt-5.3-codex';
 
-  // Process files: upload image/PDF/Office dataURLs to R2 and get API URLs
+  // Process files: upload image/PDF dataURLs to R2 and get API URLs
+  // Office documents are NOT uploaded to R2 - their extracted text is used instead
   let processedFiles = files;
   if (files && files.length > 0) {
     processedFiles = await Promise.all(files.map(async (file) => {
-      // For images, PDFs, and Office docs with dataURL, upload to R2 and get API URL
-      if ((file.mimeType.startsWith('image/') ||
-           file.mimeType === 'application/pdf' ||
-           file.mimeType.startsWith('application/vnd.openxmlformats-officedocument')) && file.url.startsWith('data:')) {
+      // Only upload images and PDFs to R2
+      if ((file.mimeType.startsWith('image/') || file.mimeType === 'application/pdf') && file.url.startsWith('data:')) {
         try {
           // Parse dataURL
           const matches = file.url.match(/^data:([^;]+);base64,(.+)$/);
@@ -607,9 +605,6 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
             else if (mimeType === 'image/png') ext = 'png';
             else if (mimeType === 'image/gif') ext = 'gif';
             else if (mimeType === 'image/webp') ext = 'webp';
-            else if (mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') ext = 'pptx';
-            else if (mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') ext = 'xlsx';
-            else if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') ext = 'docx';
 
             const key = `uploads/${userId}/${generateId()}.${ext}`;
 
@@ -634,6 +629,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
           // Fall back to original dataURL if upload fails
         }
       }
+      // Office documents and other files keep original URL (dataURL or existing URL)
       return file;
     }));
   }
@@ -666,8 +662,17 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
           } else if (file.mimeType === 'application/pdf') {
             content.push({ type: 'image_url', image_url: { url: file.url } });
           } else if (isOfficeFile(file)) {
-            // Office documents are treated as vision content
-            content.push({ type: 'image_url', image_url: { url: file.url } });
+            // Office documents: check if we have extracted text
+            if ('extractedText' in file && file.extractedText) {
+              // Use extracted text content
+              content[0].text += `\n\n--- File: ${file.fileName} ---\n${file.extractedText}`;
+            } else {
+              // Fallback: try to read as dataURL (less reliable)
+              const fileContent = await readFileContentFromDataURL(file.url);
+              if (fileContent) {
+                content[0].text += `\n\n--- File: ${file.fileName} ---\n${fileContent}`;
+              }
+            }
           } else if (isCodeFile(file)) {
             const fileContent = await readFileContentFromDataURL(file.url);
             if (fileContent) {

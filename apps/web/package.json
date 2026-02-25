@@ -26,8 +26,10 @@
     "highlight.js": "^11.11.1",
     "isbot": "^5.1.0",
     "isomorphic-dompurify": "^3.0.0",
+    "jszip": "^3.10.1",
     "katex": "^0.16.32",
     "lucide-react": "^0.469.0",
+    "mammoth": "^1.11.0",
     "mermaid": "^11.12.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -37,6 +39,7 @@
     "remark-gfm": "^4.0.0",
     "remark-math": "^6.0.0",
     "tailwind-merge": "^2.5.0",
+    "xlsx": "^0.18.5",
     "zustand": "^5.0.0"
   },
   "devDependencies": {
@@ -44,6 +47,7 @@
     "@react-router/dev": "^7.1.0",
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "^4.0.0",
+    "@types/jszip": "^3.4.1",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

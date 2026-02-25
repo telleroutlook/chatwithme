@@ -14,6 +14,63 @@ const ACCEPTED_FILE_TYPES = [
   ...OFFICE_EXTENSIONS.map(ext => `.${ext}`)
 ].join(',');
 
+// DOCX text extraction using mammoth
+async function extractDocxText(file: File): Promise<string> {
+  const arrayBuffer = await file.arrayBuffer();
+  const mammoth = await import('mammoth');
+  const result = await mammoth.extractRawText({ arrayBuffer });
+  return result.value;
+}
+
+// XLSX text extraction using xlsx
+async function extractXlsxText(file: File): Promise<string> {
+  const arrayBuffer = await file.arrayBuffer();
+  const xlsx = await import('xlsx');
+  const workbook = xlsx.read(arrayBuffer);
+  let text = '';
+
+  workbook.SheetNames.forEach(sheetName => {
+    const worksheet = workbook.Sheets[sheetName];
+    const jsonData = xlsx.utils.sheet_to_json(worksheet, { header: 1 }) as unknown[][];
+    text += `\n\n--- Sheet: ${sheetName} ---\n`;
+    jsonData.forEach((row) => {
+      text += row.join('\t') + '\n';
+    });
+  });
+
+  return text;
+}
+
+// PPTX text extraction using jszip
+async function extractPptxText(file: File): Promise<string> {
+  const arrayBuffer = await file.arrayBuffer();
+  const { default: JSZip } = await import('jszip');
+  const zip = await JSZip.loadAsync(arrayBuffer);
+  let text = '';
+
+  // Extract slide content
+  const slideFiles = Object.keys(zip.files).filter(name =>
+    name.startsWith('ppt/slides/slide') && name.endsWith('.xml')
+  );
+
+  for (const slideFile of slideFiles.sort()) {
+    const content = await zip.file(slideFile)?.async('string');
+    if (content) {
+      text += `\n\n--- Slide ---\n`;
+      // Extract text content (simplified version, extracts <a:t> tag content)
+      const textMatches = content.match(/<a:t[^>]*>([^<]+)<\/a:t>/g);
+      if (textMatches) {
+        textMatches.forEach(match => {
+          const textContent = match.replace(/<\/?a:t[^>]*>/g, '');
+          text += textContent + ' ';
+        });
+      }
+    }
+  }
+
+  return text.trim();
+}
+
 interface MessageInputProps {
   onSend: (message: string, files?: MessageFile[]) => void;
   disabled?: boolean;
@@ -95,20 +152,43 @@ export function MessageInput({
 
     const converted = await Promise.all(
       validFiles.map(
-        (file) =>
-          new Promise<MessageFile>((resolve, reject) => {
+        async (file): Promise<MessageFile> => {
+          const fileType = getFileType(file);
+
+          // For Office documents, extract text content
+          let extractedText: string | undefined;
+          if (fileType === 'office') {
+            const ext = file.name.split('.').pop()?.toLowerCase();
+
+            try {
+              if (ext === 'docx') {
+                extractedText = await extractDocxText(file);
+              } else if (ext === 'xlsx') {
+                extractedText = await extractXlsxText(file);
+              } else if (ext === 'pptx') {
+                extractedText = await extractPptxText(file);
+              }
+            } catch (error) {
+              console.error('Failed to extract text from Office document:', error);
+            }
+          }
+
+          // Convert file to data URL
+          const dataUrl = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
-            reader.onload = () => {
-              resolve({
-                url: String(reader.result),
-                fileName: file.name,
-                mimeType: file.type || 'application/octet-stream',
-                size: file.size,
-              });
-            };
+            reader.onload = () => resolve(String(reader.result));
             reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
             reader.readAsDataURL(file);
-          })
+          });
+
+          return {
+            url: dataUrl,
+            fileName: file.name,
+            mimeType: file.type || 'application/octet-stream',
+            size: file.size,
+            extractedText,
+          };
+        }
       )
     );
 

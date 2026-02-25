@@ -26,6 +26,7 @@ export interface MessageFile {
   fileName: string;
   mimeType: string;
   size: number;
+  extractedText?: string;
 }
 
 export interface SearchResult {
