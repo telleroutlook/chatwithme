@@ -5,11 +5,13 @@ import { cn } from '~/lib/utils';
 import type { MessageFile } from '@chatwithme/shared';
 
 const CODE_EXTENSIONS = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'go', 'rs', 'c', 'cpp', 'h', 'hpp', 'cs', 'rb', 'php', 'sh', 'json', 'yaml', 'yml', 'toml', 'md', 'txt'];
+const OFFICE_EXTENSIONS = ['pptx', 'xlsx', 'docx'];
 
 const ACCEPTED_FILE_TYPES = [
   'image/*',
   '.pdf',
-  ...CODE_EXTENSIONS.map(ext => `.${ext}`)
+  ...CODE_EXTENSIONS.map(ext => `.${ext}`),
+  ...OFFICE_EXTENSIONS.map(ext => `.${ext}`)
 ].join(',');
 
 interface MessageInputProps {
@@ -72,19 +74,20 @@ export function MessageInput({
     e.target.value = '';
   };
 
-  const getFileType = (file: File): 'image' | 'pdf' | 'code' | 'text' => {
+  const getFileType = (file: File): 'image' | 'pdf' | 'code' | 'text' | 'office' => {
     if (file.type.startsWith('image/')) return 'image';
     if (file.type === 'application/pdf') return 'pdf';
     if (file.type.startsWith('text/')) return 'text';
     const ext = file.name.split('.').pop()?.toLowerCase();
     if (ext && CODE_EXTENSIONS.includes(ext)) return 'code';
+    if (ext && OFFICE_EXTENSIONS.includes(ext)) return 'office';
     return 'text';
   };
 
   const processFiles = async (fileList: File[]) => {
     const validFiles = fileList.filter((file) => {
       const fileType = getFileType(file);
-      if (fileType !== 'image' && fileType !== 'pdf' && fileType !== 'code' && fileType !== 'text') return false;
+      if (fileType !== 'image' && fileType !== 'pdf' && fileType !== 'code' && fileType !== 'text' && fileType !== 'office') return false;
       if (file.size > 10 * 1024 * 1024) return false;
       return true;
     });
@@ -136,6 +139,11 @@ export function MessageInput({
     if (file.mimeType === 'application/pdf') return <FileText className="h-6 w-6 text-red-500" />;
     const ext = file.fileName.split('.').pop()?.toLowerCase();
     if (ext && CODE_EXTENSIONS.includes(ext)) return <FileCode className="h-6 w-6 text-blue-500" />;
+    if (ext && OFFICE_EXTENSIONS.includes(ext)) {
+      if (ext === 'pptx') return <FileText className="h-6 w-6 text-orange-500" />;
+      if (ext === 'xlsx') return <FileText className="h-6 w-6 text-green-500" />;
+      return <FileText className="h-6 w-6 text-blue-500" />;
+    }
     return <File className="h-6 w-6 text-gray-500" />;
   };
 
@@ -210,7 +218,7 @@ export function MessageInput({
           className="h-11 w-11 rounded-xl"
           onClick={() => fileInputRef.current?.click()}
           disabled={disabled}
-          title="Attach files (images, PDFs, code, text)"
+          title="Attach files (images, PDFs, Office docs, code, text)"
         >
           <Paperclip className="h-5 w-5" />
         </Button>
@@ -250,7 +258,7 @@ export function MessageInput({
         <div className="absolute inset-0 bg-primary/10 flex items-center justify-center pointer-events-none">
           <div className="flex items-center gap-2 text-primary">
             <FileText className="h-8 w-8" />
-            <span className="font-medium">Drop files here (images, PDFs, code, text)</span>
+            <span className="font-medium">Drop files here (images, PDFs, Office docs, code, text)</span>
           </div>
         </div>
       )}

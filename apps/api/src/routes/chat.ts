@@ -22,10 +22,16 @@ import { parseToolCalls, type ToolCall } from '../mcp/parser';
 import type { MessageFile } from '@chatwithme/shared';
 
 const CODE_EXTENSIONS = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'go', 'rs', 'c', 'cpp', 'h', 'hpp', 'cs', 'rb', 'php', 'sh', 'json', 'yaml', 'yml', 'toml', 'md', 'txt'];
+const OFFICE_EXTENSIONS = ['pptx', 'xlsx', 'docx'];
 
 function isCodeFile(file: MessageFile): boolean {
   const ext = file.fileName.split('.').pop()?.toLowerCase();
   return CODE_EXTENSIONS.includes(ext || '');
+}
+
+function isOfficeFile(file: MessageFile): boolean {
+  const ext = file.fileName.split('.').pop()?.toLowerCase();
+  return OFFICE_EXTENSIONS.includes(ext || '');
 }
 
 async function readFileContentFromDataURL(url: string): Promise<string> {
@@ -51,7 +57,9 @@ function detectVisionModel(
 ): string {
   const currentUserMessage = messages[messages.length - 1];
   const hasVisionContent = currentUserMessage?.files?.some(f =>
-    f.mimeType.startsWith('image/') || f.mimeType === 'application/pdf'
+    f.mimeType.startsWith('image/') ||
+    f.mimeType === 'application/pdf' ||
+    f.mimeType.startsWith('application/vnd.openxmlformats-officedocument')
   ) ?? false;
 
   if (hasVisionContent) {
@@ -576,12 +584,14 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
     c.env
   ) || c.env.OPENROUTER_CHAT_MODEL || 'gpt-5.3-codex';
 
-  // Process files: upload image/PDF dataURLs to R2 and get API URLs
+  // Process files: upload image/PDF/Office dataURLs to R2 and get API URLs
   let processedFiles = files;
   if (files && files.length > 0) {
     processedFiles = await Promise.all(files.map(async (file) => {
-      // For images and PDFs with dataURL, upload to R2 and get API URL
-      if ((file.mimeType.startsWith('image/') || file.mimeType === 'application/pdf') && file.url.startsWith('data:')) {
+      // For images, PDFs, and Office docs with dataURL, upload to R2 and get API URL
+      if ((file.mimeType.startsWith('image/') ||
+           file.mimeType === 'application/pdf' ||
+           file.mimeType.startsWith('application/vnd.openxmlformats-officedocument')) && file.url.startsWith('data:')) {
         try {
           // Parse dataURL
           const matches = file.url.match(/^data:([^;]+);base64,(.+)$/);
@@ -591,14 +601,19 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
             const buffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
 
             // Generate file key and upload to R2
-            const ext = mimeType === 'application/pdf' ? 'pdf' :
-                       mimeType === 'image/jpeg' ? 'jpg' :
-                       mimeType === 'image/png' ? 'png' :
-                       mimeType === 'image/gif' ? 'gif' :
-                       mimeType === 'image/webp' ? 'webp' : 'bin';
+            let ext = 'bin';
+            if (mimeType === 'application/pdf') ext = 'pdf';
+            else if (mimeType === 'image/jpeg') ext = 'jpg';
+            else if (mimeType === 'image/png') ext = 'png';
+            else if (mimeType === 'image/gif') ext = 'gif';
+            else if (mimeType === 'image/webp') ext = 'webp';
+            else if (mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') ext = 'pptx';
+            else if (mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') ext = 'xlsx';
+            else if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') ext = 'docx';
+
             const key = `uploads/${userId}/${generateId()}.${ext}`;
 
-            console.log(`Uploading image/PDF to R2: ${key}, size: ${buffer.length} bytes`);
+            console.log(`Uploading file to R2: ${key}, size: ${buffer.length} bytes, mimeType: ${mimeType}`);
             await c.env.BUCKET.put(key, buffer, {
               httpMetadata: { contentType: mimeType },
             });
@@ -615,7 +630,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
             };
           }
         } catch (error) {
-          console.error('Failed to upload image/PDF to R2:', error);
+          console.error('Failed to upload file to R2:', error);
           // Fall back to original dataURL if upload fails
         }
       }
@@ -649,6 +664,9 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
           if (file.mimeType.startsWith('image/')) {
             content.push({ type: 'image_url', image_url: { url: file.url } });
           } else if (file.mimeType === 'application/pdf') {
+            content.push({ type: 'image_url', image_url: { url: file.url } });
+          } else if (isOfficeFile(file)) {
+            // Office documents are treated as vision content
             content.push({ type: 'image_url', image_url: { url: file.url } });
           } else if (isCodeFile(file)) {
             const fileContent = await readFileContentFromDataURL(file.url);
