@@ -1,5 +1,5 @@
 import { memo, useState, useEffect, useMemo } from 'react';
-import { Copy, Check, Download, Eye, Code, Sun, Moon } from 'lucide-react';
+import { Copy, Check, Download, Eye, Code } from 'lucide-react';
 import { cn } from '~/lib/utils';
 import { downloadSvgElementAsPng, extractText, isPreviewCodeComplete } from './utils';
 import type { CopyButtonProps, DownloadButtonProps, CodeBlockWithPreviewProps } from './types';
@@ -124,8 +124,6 @@ export const CodeBlockWithPreview = memo<CodeBlockWithPreviewProps>(
     const [activeTab, setActiveTab] = useState<'code' | 'preview'>(() =>
       isPreviewReady ? 'preview' : 'code'
     );
-    const [previewBg, setPreviewBg] = useState<'light' | 'dark'>('light');
-
     useEffect(() => {
       setActiveTab((prev) => {
         if (isPreviewReady && prev === 'code') return 'preview';
@@ -135,8 +133,8 @@ export const CodeBlockWithPreview = memo<CodeBlockWithPreviewProps>(
     }, [isPreviewReady]);
 
     const iframeSrc = useMemo(() => {
-      const bg = previewBg === 'light' ? '#ffffff' : '#0f172a';
-      const fg = previewBg === 'light' ? '#1e293b' : '#f8fafc';
+      const bg = '#ffffff';
+      const fg = '#1e293b';
       return `
       <!DOCTYPE html>
       <html>
@@ -168,7 +166,7 @@ export const CodeBlockWithPreview = memo<CodeBlockWithPreviewProps>(
         </body>
       </html>
     `;
-    }, [rawCode, previewBg, isSvg]);
+    }, [rawCode, isSvg]);
 
     return (
       <div className="relative group my-4 rounded-lg overflow-hidden border border-border bg-muted/30">
@@ -210,19 +208,6 @@ export const CodeBlockWithPreview = memo<CodeBlockWithPreviewProps>(
             )}
           </div>
           <div className="flex items-center gap-1">
-            {activeTab === 'preview' && isPreviewReady && (
-              <button
-                onClick={() => setPreviewBg((prev) => (prev === 'light' ? 'dark' : 'light'))}
-                className="p-1.5 text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded-md transition-all mr-1"
-                title={`Switch to ${previewBg === 'light' ? 'dark' : 'light'} background`}
-              >
-                {previewBg === 'light' ? (
-                  <Moon className="h-4 w-4" />
-                ) : (
-                  <Sun className="h-4 w-4" />
-                )}
-              </button>
-            )}
             <DownloadButton text={rawCode} language={language} />
             <CopyButton text={rawCode} />
           </div>
