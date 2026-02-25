@@ -9,6 +9,9 @@ build
 .next
 .turbo
 
+# Test files
+test-attachments/
+
 # Environment files
 .env
 .env.local
