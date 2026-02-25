@@ -292,7 +292,7 @@ function parseStructuredReply(raw: string): StructuredReply | null {
 
 function buildStructuredReplyMessages(messages: Array<{ role: string; content: string | Array<unknown> }>, hasTools: boolean = false): Array<{
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
 }> {
   let systemInstruction = `You are a helpful assistant.
 Return only a JSON object with this schema:
@@ -315,10 +315,18 @@ IMPORTANT: When users ask for news, current events, or real-time information, yo
   const normalized = messages.flatMap((item) => {
     const role =
       item.role === 'assistant' || item.role === 'system' ? item.role : 'user';
-    const content = typeof item.content === 'string' ? item.content.trim() : extractTextFromUnknown(item.content).trim();
-    if (!content) return [];
-    return [{ role, content }];
-  }) as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+
+    // Preserve array content format (for images), convert others to string
+    if (Array.isArray(item.content)) {
+      // Keep array format for images
+      if (!item.content || item.content.length === 0) return [];
+      return [{ role, content: item.content as Array<{ type: string; text?: string; image_url?: { url: string } }> }];
+    } else {
+      const content = item.content?.trim();
+      if (!content) return [];
+      return [{ role, content }];
+    }
+  }) as Array<{ role: 'system' | 'user' | 'assistant'; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }>;
 
   return [{ role: 'system', content: systemInstruction }, ...normalized];
 }
@@ -346,7 +354,7 @@ function summarizeCompletionPayload(completion: unknown): Record<string, unknown
 
 function buildNonStreamingChatCompletionParams(params: {
   model: string;
-  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }>;
   responseFormat?: ResponseFormat;
   maxTokens?: number;
   tools?: OpenAI.Chat.ChatCompletionTool[];
@@ -357,9 +365,6 @@ function buildNonStreamingChatCompletionParams(params: {
     model,
     messages,
     stream: false,
-    thinking: {
-      type: 'disabled',
-    },
   };
   if (typeof maxTokens === 'number') payload.max_tokens = maxTokens;
 
@@ -571,6 +576,53 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
     c.env
   ) || c.env.OPENROUTER_CHAT_MODEL || 'gpt-5.3-codex';
 
+  // Process files: upload image/PDF dataURLs to R2 and get API URLs
+  let processedFiles = files;
+  if (files && files.length > 0) {
+    processedFiles = await Promise.all(files.map(async (file) => {
+      // For images and PDFs with dataURL, upload to R2 and get API URL
+      if ((file.mimeType.startsWith('image/') || file.mimeType === 'application/pdf') && file.url.startsWith('data:')) {
+        try {
+          // Parse dataURL
+          const matches = file.url.match(/^data:([^;]+);base64,(.+)$/);
+          if (matches) {
+            const mimeType = matches[1];
+            const base64Data = matches[2];
+            const buffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+
+            // Generate file key and upload to R2
+            const ext = mimeType === 'application/pdf' ? 'pdf' :
+                       mimeType === 'image/jpeg' ? 'jpg' :
+                       mimeType === 'image/png' ? 'png' :
+                       mimeType === 'image/gif' ? 'gif' :
+                       mimeType === 'image/webp' ? 'webp' : 'bin';
+            const key = `uploads/${userId}/${generateId()}.${ext}`;
+
+            console.log(`Uploading image/PDF to R2: ${key}, size: ${buffer.length} bytes`);
+            await c.env.BUCKET.put(key, buffer, {
+              httpMetadata: { contentType: mimeType },
+            });
+            console.log(`Upload successful: ${key}`);
+
+            // Construct download URL
+            const url = new URL(c.req.url);
+            const downloadUrl = `${url.origin}/file/download/${key}`;
+            console.log(`Download URL: ${downloadUrl}`);
+
+            return {
+              ...file,
+              url: downloadUrl
+            };
+          }
+        } catch (error) {
+          console.error('Failed to upload image/PDF to R2:', error);
+          // Fall back to original dataURL if upload fails
+        }
+      }
+      return file;
+    }));
+  }
+
   const now = new Date();
   await createMessage(db, {
     id: generateId(),
@@ -578,7 +630,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
     conversationId,
     role: 'user',
     message,
-    files: files || null,
+    files: processedFiles || null,
     generatedImageUrls: null,
     searchResults: null,
     createdAt: now,
@@ -634,7 +686,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
   // Build messages for LLM call
   const hasMcpTools = mcpManager.isConfigured();
   const llmMessages = buildStructuredReplyMessages(openAiMessages, hasMcpTools);
-  let enhancedMessages: Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content?: string; tool_call_id?: string; tool_calls?: OpenAI.Chat.ChatCompletionMessageToolCall[] }> = [...llmMessages];
+  let enhancedMessages: Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content?: string | Array<{ type: string; text?: string; image_url?: { url: string } }>; tool_call_id?: string; tool_calls?: OpenAI.Chat.ChatCompletionMessageToolCall[] }> = [...llmMessages];
 
   // First LLM call: Check if tools are needed
   // Note: When tools are present, we use 'text' format to allow function calling
@@ -646,7 +698,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
           openai.chat.completions.create(
             buildNonStreamingChatCompletionParams({
               model: candidate,
-              messages: enhancedMessages as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+              messages: enhancedMessages as Array<{ role: 'system' | 'user' | 'assistant'; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }>,
               responseFormat: mcpTools ? 'text' : 'json_object',
               tools: mcpTools,
               tool_choice: mcpTools ? 'auto' : undefined,
@@ -683,7 +735,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
             openai.chat.completions.create(
               buildNonStreamingChatCompletionParams({
                 model: candidate,
-                messages: enhancedMessages as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+                messages: enhancedMessages as Array<{ role: 'system' | 'user' | 'assistant'; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }>,
                 responseFormat: 'json_object',
               })
             ),

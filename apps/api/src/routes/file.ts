@@ -20,6 +20,30 @@ const fileKeyParamSchema = z.object({
   key: z.string().min(1),
 });
 
+// Download route doesn't require auth for AI vision models to access
+file.get('/download/:key{.+}', zValidator('param', fileKeyParamSchema, validationErrorHook), async (c) => {
+  const { key } = c.req.valid('param');
+
+  try {
+    const object = await c.env.BUCKET.get(key);
+    if (!object) {
+      return errorResponse(c, 404, ERROR_CODES.FILE_NOT_FOUND, 'File not found');
+    }
+
+    const headers = new Headers();
+    object.writeHttpMetadata(headers);
+    headers.set('etag', object.httpEtag);
+    // Add CORS headers to allow AI vision models to access
+    headers.set('Access-Control-Allow-Origin', '*');
+
+    return new Response(object.body, { headers });
+  } catch (error) {
+    console.error('Download error:', error);
+    return errorResponse(c, 500, ERROR_CODES.DOWNLOAD_FAILED, 'Download failed');
+  }
+});
+
+// All other routes require auth
 file.use('/*', authMiddleware);
 
 file.post('/upload', zValidator('form', fileUploadSchema, validationErrorHook), async (c) => {
@@ -41,9 +65,11 @@ file.post('/upload', zValidator('form', fileUploadSchema, validationErrorHook), 
       },
     });
 
-    const url = `${c.req.url.split('/api/')[0]}/api/file/download/${key}`;
+    // Construct correct download URL
+    const url = new URL(c.req.url);
+    const downloadUrl = `${url.origin}/file/download/${key}`;
     const fileInfo: MessageFile = {
-      url,
+      url: downloadUrl,
       fileName: uploadedFile.name,
       mimeType: uploadedFile.type,
       size: uploadedFile.size,
