@@ -250,17 +250,27 @@ function parseStructuredReply(raw: string): StructuredReply | null {
   };
 }
 
-function buildStructuredReplyMessages(messages: Array<{ role: string; content: string | Array<unknown> }>): Array<{
+function buildStructuredReplyMessages(messages: Array<{ role: string; content: string | Array<unknown> }>, hasTools: boolean = false): Array<{
   role: 'system' | 'user' | 'assistant';
   content: string;
 }> {
-  const systemInstruction = `You are a helpful assistant.
+  let systemInstruction = `You are a helpful assistant.
 Return only a JSON object with this schema:
 {"message":"<assistant reply>","suggestions":["<q1>","<q2>","<q3>"]}
 Rules:
 - suggestions must contain exactly 3 concise follow-up questions.
 - suggestions must be relevant to the message.
 - no markdown code fences.`;
+
+  if (hasTools) {
+    systemInstruction += `
+
+Available Tools:
+- webSearchPrime: Search the internet for latest news, current events, and real-time information. Use this when users ask about news, recent events, or time-sensitive topics.
+- webReader: Read and analyze web page content. Use this when users provide a URL or ask about a specific website.
+
+IMPORTANT: When users ask for news, current events, or real-time information, you MUST use the webSearchPrime tool to fetch accurate, up-to-date information. Do not claim you cannot access the internet.`;
+  }
 
   const normalized = messages.flatMap((item) => {
     const role =
@@ -563,7 +573,8 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
   const attemptLogs: Array<{ model: string; error?: ModelErrorDetail }> = [];
 
   // Build messages for LLM call
-  const llmMessages = buildStructuredReplyMessages(openAiMessages);
+  const hasMcpTools = mcpManager.isConfigured();
+  const llmMessages = buildStructuredReplyMessages(openAiMessages, hasMcpTools);
   let enhancedMessages: Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content?: string; tool_call_id?: string; tool_calls?: OpenAI.Chat.ChatCompletionMessageToolCall[] }> = [...llmMessages];
 
   // First LLM call: Check if tools are needed

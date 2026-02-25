@@ -10,6 +10,23 @@ export const extractText = (node: React.ReactNode): string => {
   return '';
 };
 
+const FULL_HTML_DOC_PATTERN =
+  /^\s*(?:<!DOCTYPE\s+html[^>]*>\s*)?<html[\s\S]*<\/html>\s*$/i;
+
+export const normalizeMarkdownContent = (content: string): string => {
+  const trimmed = content.trim();
+  if (!trimmed) return content;
+
+  const alreadyCodeBlock = /^```[\w-]*\n[\s\S]*\n```\s*$/m.test(trimmed);
+  if (alreadyCodeBlock) return content;
+
+  if (FULL_HTML_DOC_PATTERN.test(trimmed)) {
+    return `\`\`\`html\n${trimmed}\n\`\`\``;
+  }
+
+  return content;
+};
+
 export const VOID_TAGS = new Set([
   'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
   'link', 'meta', 'param', 'source', 'track', 'wbr',

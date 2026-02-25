@@ -2,15 +2,22 @@ import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
+import { Suspense, lazy } from 'react';
 import 'katex/dist/katex.min.css';
+import 'highlight.js/styles/github-dark.css';
 import { cn } from '~/lib/utils';
-import { extractText } from './utils';
+import { extractText, normalizeMarkdownContent } from './utils';
 import { KatexRenderer } from './KatexBlock';
-import { MermaidRenderer } from './MermaidBlock';
 import { CodeBlockWithPreview } from './CodeBlock';
 import type { MarkdownRendererProps } from './types';
 
+const LazyMermaidRenderer = lazy(() =>
+  import('./MermaidBlock').then((m) => ({ default: m.MermaidRenderer }))
+);
+
 export function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
+  const normalizedContent = normalizeMarkdownContent(content);
+
   return (
     <div className={cn('prose prose-invert max-w-none', className)}>
       <ReactMarkdown
@@ -36,7 +43,11 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
             const isMermaid = language.toLowerCase() === 'mermaid';
 
             if (isBlock && isMermaid) {
-              return <MermaidRenderer chart={rawText} />;
+              return (
+                <Suspense fallback={<div className="text-sm text-muted-foreground">Loading Mermaid...</div>}>
+                  <LazyMermaidRenderer chart={rawText} />
+                </Suspense>
+              );
             }
 
             if (isBlock) {
@@ -58,7 +69,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
           },
         }}
       >
-        {content}
+        {normalizedContent}
       </ReactMarkdown>
     </div>
   );
