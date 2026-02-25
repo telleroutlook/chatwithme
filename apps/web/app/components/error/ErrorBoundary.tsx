@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { reportError, trackErrorFrequency } from '~/lib/performance';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -9,6 +10,7 @@ export interface ErrorBoundaryProps {
   children: React.ReactNode;
   fallback?: React.ComponentType<{ error: Error; resetError: () => void }>;
   onError?: (error: Error, errorInfo: React.ErrorInfo) => void;
+  enableErrorTracking?: boolean;
 }
 
 /**
@@ -38,6 +40,14 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
+    // Track error frequency
+    trackErrorFrequency(error.name);
+
+    // Report error for analytics/tracking
+    if (this.props.enableErrorTracking !== false) {
+      reportError(error, { componentStack: errorInfo.componentStack ?? undefined });
+    }
+
     // Log error to console
     console.error('ErrorBoundary caught an error:', error, errorInfo);
 

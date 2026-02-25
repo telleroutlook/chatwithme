@@ -64,10 +64,11 @@ export function Header({
           onClick={onExport}
           disabled={currentMessagesLength === 0}
           title="Export chat"
+          aria-label="Export chat"
         >
           <Download className="h-5 w-5" />
         </Button>
-        <Button variant="ghost" size="icon" onClick={onLogout}>
+        <Button variant="ghost" size="icon" onClick={onLogout} aria-label="Log out">
           <LogOut className="h-5 w-5" />
         </Button>
       </div>

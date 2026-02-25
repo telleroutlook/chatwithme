@@ -1,9 +1,16 @@
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router';
 import type { LinksFunction } from 'react-router';
 import { useEffect } from 'react';
+import { QueryClientProvider } from '@tanstack/react-query';
 import './styles/globals.css';
 import { useAuthStore } from './stores/auth';
 import { useThemeStore } from './stores/theme';
+import { useChatStore } from './stores/chat';
+import { queryClient } from './lib/queryClient';
+import { initPerformanceMonitoring } from './lib/performance';
+import { registerSW } from './lib/serviceWorker';
+import { useOnlineStatus } from './hooks/useOnlineStatus';
+import { OfflineIndicator } from './components/OfflineIndicator';
 
 const themeBootScript = `
 (() => {
@@ -29,7 +36,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <html lang="en" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
         <Meta />
         <Links />
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
@@ -45,10 +52,26 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const syncThemeWithSystem = useThemeStore((s) => s.syncWithSystem);
+  const isOnline = useOnlineStatus();
 
   useEffect(() => {
+    // Initialize performance monitoring
+    initPerformanceMonitoring();
+
+    // Rehydrate stores
     void useAuthStore.persist.rehydrate();
     void useThemeStore.persist.rehydrate();
+
+    // Register service worker
+    registerSW({
+      onUpdate: (registration) => {
+        console.log('[SW] New version available');
+        // Optionally show update notification to user
+      },
+      onSuccess: (registration) => {
+        console.log('[SW] Service worker activated');
+      },
+    });
   }, []);
 
   useEffect(() => {
@@ -59,7 +82,18 @@ export default function App() {
     return () => media.removeEventListener('change', handleSystemThemeChange);
   }, [syncThemeWithSystem]);
 
-  return <Outlet />;
+  // Update online status in chat store
+  useEffect(() => {
+    const { setOnlineStatus } = useChatStore.getState();
+    setOnlineStatus(isOnline);
+  }, [isOnline]);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <OfflineIndicator isOnline={isOnline} />
+      <Outlet />
+    </QueryClientProvider>
+  );
 }
 
 export function HydrateFallback() {

@@ -105,6 +105,7 @@ const ConversationItem = React.memo(({
             e.stopPropagation();
             setShowConfirm(true);
           }}
+          aria-label={`Delete ${conversation.title || 'conversation'}`}
         >
           {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
         </Button>

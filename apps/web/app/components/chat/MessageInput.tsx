@@ -1,221 +1,18 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { Send, Paperclip, X, Image as ImageIcon, FileText, FileCode, File } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { Send } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import type { MessageFile } from '@chatwithme/shared';
+import { getFileType } from '~/lib/fileUtils';
+import { FILE_SIZE_LIMITS } from '~/lib/constants';
+import { FilePreview } from './FilePreview';
+import { FileUploadButton } from './FileUploadButton';
+import { TextInput } from './TextInput';
+import { useFileProcessor } from '~/hooks/useFileProcessor';
 
-const CODE_EXTENSIONS = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'go', 'rs', 'c', 'cpp', 'h', 'hpp', 'cs', 'rb', 'php', 'sh', 'json', 'yaml', 'yml', 'toml', 'md', 'txt', 'csv'];
-// Office documents: Word, Excel, PowerPoint, OpenDocument formats
-// All spreadsheet formats use the xlsx library for text extraction
-const OFFICE_EXTENSIONS = ['pptx', 'xlsx', 'xls', 'xlsm', 'xlsb', 'docx', 'ods'];
-
-const ACCEPTED_FILE_TYPES = [
-  'image/*',
-  '.pdf',
-  ...CODE_EXTENSIONS.map(ext => `.${ext}`),
-  ...OFFICE_EXTENSIONS.map(ext => `.${ext}`)
-].join(',');
-
-// DOCX text extraction using mammoth
-async function extractDocxText(file: File): Promise<string> {
-  console.log('[Office Extract] DOCX extraction started:', file.name, 'Size:', file.size);
-
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    console.log('[Office Extract] ArrayBuffer size:', arrayBuffer.byteLength);
-
-    // Use dynamic import for mammoth
-    // @ts-ignore
-    const mammothModule = await import('mammoth/mammoth.browser.js');
-    const mammoth = mammothModule.default || mammothModule;
-    
-    const result = await mammoth.extractRawText({ arrayBuffer });
-    const text = result.value;
-
-    console.log('[Office Extract] DOCX extraction completed');
-    console.log('[Office Extract] Extracted text length:', text.length);
-    console.log('[Office Extract] Text preview (first 200 chars):', text.substring(0, 200));
-
-    return text;
-  } catch (error) {
-    console.error('[Office Extract] DOCX extraction error:', error);
-    return '';
-  }
-}
-
-// XLSX text extraction using xlsx
-async function extractXlsxText(file: File): Promise<string> {
-  console.log('[Office Extract] XLSX extraction started:', file.name, 'Size:', file.size);
-
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    // Use dynamic import for browser compatibility
-    const xlsxModule = await import('xlsx');
-    
-    // Handle different module export patterns (CommonJS vs ESM)
-    // Some environments wrap it in default, some have it twice (default.default)
-    let XLSX: any;
-    if (xlsxModule && typeof (xlsxModule as any).read === 'function') {
-      XLSX = xlsxModule;
-    } else if (xlsxModule.default && typeof (xlsxModule.default as any).read === 'function') {
-      XLSX = xlsxModule.default;
-    } else if (xlsxModule.default && (xlsxModule.default as any).default && typeof (xlsxModule.default as any).default.read === 'function') {
-      XLSX = (xlsxModule.default as any).default;
-    } else {
-      XLSX = xlsxModule;
-    }
-
-    console.log('[Office Extract] XLSX module loaded, checking for read function...');
-    if (!XLSX || typeof XLSX.read !== 'function') {
-      console.error('[Office Extract] XLSX.read is not a function:', XLSX);
-      throw new Error('XLSX library not loaded correctly');
-    }
-
-    const workbook = XLSX.read(arrayBuffer);
-
-    console.log('[Office Extract] XLSX workbook loaded, sheets:', workbook.SheetNames);
-
-    let text = '';
-
-    (workbook.SheetNames as string[]).forEach((sheetName: string) => {
-      const worksheet = workbook.Sheets[sheetName];
-      if (!XLSX.utils || typeof XLSX.utils.sheet_to_json !== 'function') {
-        console.error('[Office Extract] XLSX.utils.sheet_to_json not available');
-        return;
-      }
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as unknown[][];
-      text += `\n\n--- Sheet: ${sheetName} (${jsonData.length} rows) ---\n`;
-      jsonData.forEach((row, index) => {
-        if (index < 5) { // Log first 5 rows for debugging
-          console.log(`[Office Extract] Row ${index}:`, row);
-        }
-        text += row.join('\t') + '\n';
-      });
-    });
-
-    console.log('[Office Extract] XLSX extraction completed');
-    console.log('[Office Extract] Extracted text length:', text.length);
-    console.log('[Office Extract] Text preview (first 200 chars):', text.substring(0, 200));
-
-    return text;
-  } catch (error) {
-    console.error('[Office Extract] XLSX extraction error:', error);
-    return '';
-  }
-}
-
-// PPTX text extraction using jszip
-async function extractPptxText(file: File): Promise<string> {
-  console.log('[Office Extract] PPTX extraction started:', file.name, 'Size:', file.size);
-
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    // Use dynamic import for browser compatibility
-    const { default: JSZip } = await import('jszip');
-    const zip = await JSZip.loadAsync(arrayBuffer);
-
-    console.log('[Office Extract] PPTX zip loaded, files:', Object.keys(zip.files).length);
-
-    let text = '';
-    let slideCount = 0;
-
-    // Extract slide content
-    const slideFiles = Object.keys(zip.files).filter(name =>
-      name.startsWith('ppt/slides/slide') && name.endsWith('.xml')
-    );
-
-    console.log('[Office Extract] Found slides:', slideFiles.length, slideFiles);
-
-    for (const slideFile of slideFiles.sort()) {
-      const content = await zip.file(slideFile)?.async('string');
-      if (content) {
-        slideCount++;
-        text += `\n\n--- Slide ---\n`;
-        // Extract text content (simplified version, extracts <a:t> tag content)
-        const textMatches = content.match(/<a:t[^>]*>([^<]+)<\/a:t>/g);
-        if (textMatches) {
-          console.log(`[Office Extract] Slide ${slideCount}: found ${textMatches.length} text matches`);
-          textMatches.forEach(match => {
-            const textContent = match.replace(/<\/?a:t[^>]*>/g, '');
-            text += textContent + ' ';
-          });
-        }
-      }
-    }
-
-    console.log('[Office Extract] PPTX extraction completed');
-    console.log('[Office Extract] Processed slides:', slideCount);
-    console.log('[Office Extract] Extracted text length:', text.length);
-    console.log('[Office Extract] Text preview (first 200 chars):', text.substring(0, 200));
-
-    return text.trim();
-  } catch (error) {
-    console.error('[Office Extract] PPTX extraction error:', error);
-    return '';
-  }
-}
-
-// PDF text extraction using pdfjs-dist
-async function extractPdfText(file: File): Promise<string> {
-  console.log('[PDF Extract] PDF extraction started:', file.name, 'Size:', file.size);
-
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    console.log('[PDF Extract] ArrayBuffer size:', arrayBuffer.byteLength);
-
-    // Use dynamic import for pdfjs-dist
-    const pdfjsLib = await import('pdfjs-dist');
-
-    // Use local worker file to avoid CORS issues
-    // The worker is served from the same origin
-    const workerUrl = '/lib/pdfjs/pdf.worker.min.mjs';
-    pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
-
-    console.log('[PDF Extract] Using local worker:', workerUrl);
-
-    // Load the PDF document
-    const loadingTask = pdfjsLib.getDocument({
-      data: arrayBuffer,
-    });
-    const pdf = await loadingTask.promise;
-
-    console.log('[PDF Extract] PDF loaded, pages:', pdf.numPages);
-
-    let text = '';
-    const maxPages = 50; // Limit to 50 pages to avoid excessive processing
-    const pagesToProcess = Math.min(pdf.numPages, maxPages);
-
-    for (let i = 1; i <= pagesToProcess; i++) {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-
-      // Extract text from items
-      const pageText = textContent.items
-        .map((item: any) => item.str)
-        .filter((str: string) => str.trim())
-        .join(' ');
-
-      text += `\n\n--- Page ${i} ---\n${pageText}`;
-
-      console.log(`[PDF Extract] Page ${i}/${pagesToProcess} processed, text length:`, pageText.length);
-    }
-
-    if (pdf.numPages > maxPages) {
-      text += `\n\n... (${pdf.numPages - maxPages} more pages not extracted)`;
-    }
-
-    console.log('[PDF Extract] PDF extraction completed');
-    console.log('[PDF Extract] Total extracted text length:', text.length);
-    console.log('[PDF Extract] Text preview (first 200 chars):', text.substring(0, 200));
-
-    // Clean up the document
-    await pdf.destroy();
-
-    return text.trim();
-  } catch (error) {
-    console.error('[PDF Extract] PDF extraction error:', error);
-    return '';
-  }
+interface FileWithProgress extends MessageFile {
+  objectUrl?: string;
+  progress?: number; // 0-1 when processing, undefined when complete
 }
 
 interface MessageInputProps {
@@ -232,24 +29,43 @@ export function MessageInput({
   autoFocus = false,
 }: MessageInputProps) {
   const [message, setMessage] = useState('');
-  const [files, setFiles] = useState<MessageFile[]>([]);
+  const [files, setFiles] = useState<FileWithProgress[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const objectUrlsRef = useRef<Set<string>>(new Set());
+  const { processFiles: processFilesWithWorker, isProcessing } = useFileProcessor();
 
+  // Cleanup object URLs when component unmounts
   useEffect(() => {
-    if (!autoFocus || disabled) return;
-    const frame = window.requestAnimationFrame(() => {
-      textareaRef.current?.focus();
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [autoFocus, disabled]);
+    return () => {
+      objectUrlsRef.current.forEach(url => {
+        if (url.startsWith('blob:')) {
+          URL.revokeObjectURL(url);
+        }
+      });
+      objectUrlsRef.current.clear();
+    };
+  }, []);
 
   const handleSubmit = useCallback(() => {
     if (disabled) return;
     if (!message.trim() && files.length === 0) return;
 
-    onSend(message.trim(), files.length > 0 ? files : undefined);
+    // Only allow sending if no files are currently being processed
+    const hasProcessingFiles = files.some(f => f.progress !== undefined && f.progress < 1);
+    if (hasProcessingFiles) return;
+
+    // Clean up object URLs before sending
+    files.forEach(file => {
+      if (file.objectUrl && file.objectUrl.startsWith('blob:')) {
+        objectUrlsRef.current.delete(file.objectUrl);
+        URL.revokeObjectURL(file.objectUrl);
+      }
+    });
+
+    // Send files without objectUrl and progress properties
+    const cleanFiles: MessageFile[] = files.map(({ objectUrl, progress, ...rest }) => rest);
+    onSend(message.trim(), cleanFiles.length > 0 ? cleanFiles : undefined);
     setMessage('');
     setFiles([]);
   }, [message, files, disabled, onSend]);
@@ -261,96 +77,94 @@ export function MessageInput({
     }
   };
 
-  const handleMessageChange = (value: string) => {
-    setMessage(value);
-    if (!textareaRef.current) return;
-    textareaRef.current.style.height = 'auto';
-    // Use smaller max-height on mobile for virtual keyboard compatibility
-    const maxHeight = window.innerWidth < 640 ? 120 : 128;
-    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, maxHeight)}px`;
-  };
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = e.target.files;
-    if (!selectedFiles) return;
-
-    await processFiles(Array.from(selectedFiles));
-    e.target.value = '';
-  };
-
-  const getFileType = (file: File): 'image' | 'pdf' | 'code' | 'text' | 'office' => {
-    if (file.type.startsWith('image/')) return 'image';
-    if (file.type === 'application/pdf') return 'pdf';
-    if (file.type.startsWith('text/')) return 'text';
-    const ext = file.name.split('.').pop()?.toLowerCase();
-    if (ext && CODE_EXTENSIONS.includes(ext)) return 'code';
-    if (ext && OFFICE_EXTENSIONS.includes(ext)) return 'office';
-    return 'text';
-  };
-
   const processFiles = async (fileList: File[]) => {
     const validFiles = fileList.filter((file) => {
       const fileType = getFileType(file);
       if (fileType !== 'image' && fileType !== 'pdf' && fileType !== 'code' && fileType !== 'text' && fileType !== 'office') return false;
-      if (file.size > 10 * 1024 * 1024) return false;
+      if (file.size > FILE_SIZE_LIMITS.IMAGE) return false;
       return true;
     });
     if (validFiles.length === 0) return;
 
-    const converted = await Promise.all(
-      validFiles.map(
-        async (file): Promise<MessageFile> => {
-          const fileType = getFileType(file);
-
-          // For Office documents and PDFs, extract text content
-          let extractedText: string | undefined;
-          if (fileType === 'office') {
-            const ext = file.name.split('.').pop()?.toLowerCase();
-
-            try {
-              // Word documents
-              if (ext === 'docx') {
-                extractedText = await extractDocxText(file);
-              }
-              // PowerPoint presentations
-              else if (ext === 'pptx') {
-                extractedText = await extractPptxText(file);
-              }
-              // Spreadsheet formats (xlsx, xls, xlsm, xlsb, csv, ods) - all use xlsx library
-              else if (['xlsx', 'xls', 'xlsm', 'xlsb', 'csv', 'ods'].includes(ext || '')) {
-                extractedText = await extractXlsxText(file);
-              }
-            } catch (error) {
-              console.error('Failed to extract text from Office document:', error);
-            }
-          } else if (fileType === 'pdf') {
-            try {
-              extractedText = await extractPdfText(file);
-            } catch (error) {
-              console.error('Failed to extract text from PDF:', error);
-            }
-          }
-
-          // Convert file to data URL
-          const dataUrl = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(String(reader.result));
-            reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
-            reader.readAsDataURL(file);
-          });
-
-          return {
-            url: dataUrl,
-            fileName: file.name,
-            mimeType: file.type || 'application/octet-stream',
-            size: file.size,
-            extractedText,
-          };
-        }
-      )
+    // Convert files to data URLs
+    const filesWithDataUrls = await Promise.all(
+      validFiles.map(async (file) => ({
+        file,
+        dataUrl: await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result));
+          reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
+          reader.readAsDataURL(file);
+        }),
+      }))
     );
 
-    setFiles((prev) => [...prev, ...converted]);
+    // Create placeholder files with initial progress
+    const placeholderFiles: FileWithProgress[] = filesWithDataUrls.map(({ file, dataUrl }) => {
+      const fileType = getFileType(file);
+      let fileUrl: string;
+      let objectUrl: string | undefined;
+
+      if (fileType === 'image') {
+        fileUrl = URL.createObjectURL(file);
+        objectUrl = fileUrl;
+        objectUrlsRef.current.add(fileUrl);
+      } else {
+        fileUrl = dataUrl;
+      }
+
+      return {
+        url: fileUrl,
+        fileName: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        size: file.size,
+        objectUrl,
+        progress: 0, // Start with 0 progress
+      };
+    });
+
+    // Add placeholder files to state
+    const startIndex = files.length;
+    setFiles((prev) => [...prev, ...placeholderFiles]);
+
+    // Process files using the worker hook
+    try {
+      const processedFiles = await processFilesWithWorker(filesWithDataUrls, {
+        onProgress: (fileIndex, fileName, progress) => {
+          setFiles((prev) => {
+            const newFiles = [...prev];
+            const actualIndex = startIndex + fileIndex;
+            if (newFiles[actualIndex]) {
+              newFiles[actualIndex] = { ...newFiles[actualIndex], progress };
+            }
+            return newFiles;
+          });
+        },
+        onOverallProgress: (progress) => {
+          // Optional: could use for a global progress indicator
+          console.log('Overall progress:', progress);
+        },
+      });
+
+      // Update files with processed results (with extracted text)
+      setFiles((prev) => {
+        const newFiles = [...prev];
+        processedFiles.forEach((processedFile, i) => {
+          const actualIndex = startIndex + i;
+          const existingFile = newFiles[actualIndex];
+          newFiles[actualIndex] = {
+            ...processedFile,
+            objectUrl: existingFile?.objectUrl,
+            progress: 1, // Complete
+          };
+        });
+        return newFiles;
+      });
+    } catch (error) {
+      console.error('File processing failed:', error);
+      // Remove placeholder files on error
+      setFiles((prev) => prev.slice(0, startIndex));
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -369,33 +183,23 @@ export function MessageInput({
   };
 
   const removeFile = (index: number) => {
-    setFiles(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const getFileIcon = (file: MessageFile) => {
-    if (file.mimeType.startsWith('image/')) return null;
-    if (file.mimeType === 'application/pdf') return <FileText className="h-6 w-6 text-red-500" />;
-    const ext = file.fileName.split('.').pop()?.toLowerCase();
-    if (ext && CODE_EXTENSIONS.includes(ext)) return <FileCode className="h-6 w-6 text-blue-500" />;
-    if (ext && OFFICE_EXTENSIONS.includes(ext)) {
-      // Word documents - blue
-      if (ext === 'docx') return <FileText className="h-6 w-6 text-blue-500" />;
-      // PowerPoint - orange
-      if (ext === 'pptx') return <FileText className="h-6 w-6 text-orange-500" />;
-      // Excel spreadsheets - green
-      if (['xlsx', 'xls', 'xlsm', 'xlsb', 'csv', 'ods'].includes(ext)) {
-        return <FileText className="h-6 w-6 text-green-500" />;
-      }
-      return <FileText className="h-6 w-6 text-blue-500" />;
+    const fileToRemove = files[index];
+    // Don't allow removal while processing
+    if (fileToRemove.progress !== undefined && fileToRemove.progress < 1) {
+      return;
     }
-    return <File className="h-6 w-6 text-gray-500" />;
+
+    setFiles(prev => {
+      // Revoke object URL if it exists
+      if (fileToRemove.objectUrl && fileToRemove.objectUrl.startsWith('blob:')) {
+        objectUrlsRef.current.delete(fileToRemove.objectUrl);
+        URL.revokeObjectURL(fileToRemove.objectUrl);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
+  const hasProcessingFiles = files.some(f => f.progress !== undefined && f.progress < 1);
 
   return (
     <div
@@ -406,106 +210,56 @@ export function MessageInput({
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
+      style={{
+        // Use visual viewport for mobile to adapt to keyboard
+        maxHeight: typeof window !== 'undefined' && window.innerWidth < 768
+          ? 'var(--visual-viewport-height, 100vh)'
+          : undefined,
+      }}
     >
       {/* File previews */}
       {files.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-2">
           {files.map((file, index) => (
-            <div
+            <FilePreview
               key={index}
-              className={cn(
-                "relative group rounded-lg border border-border p-2",
-                file.mimeType.startsWith('image/') ? "w-16 h-16 overflow-hidden p-0" : "w-auto max-w-[200px]"
-              )}
-            >
-              {file.mimeType.startsWith('image/') ? (
-                <img
-                  src={file.url}
-                  alt={file.fileName}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="flex items-center gap-2">
-                  {getFileIcon(file)}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate max-w-[120px]">{file.fileName}</p>
-                    <p className="text-[10px] text-muted-foreground">{formatFileSize(file.size)}</p>
-                  </div>
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => removeFile(index)}
-                className="absolute right-1 top-1 rounded-full bg-destructive p-1 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
+              file={file}
+              index={index}
+              onRemove={removeFile}
+              progress={file.progress}
+            />
           ))}
         </div>
       )}
 
       <div className="flex items-end gap-2">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={ACCEPTED_FILE_TYPES}
-          multiple
-          className="hidden"
-          onChange={handleFileSelect}
+        <FileUploadButton
+          onFileSelect={processFiles}
+          disabled={disabled || isProcessing}
+          isDragging={isDragging}
         />
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-11 w-11 rounded-xl"
-          onClick={() => fileInputRef.current?.click()}
+        <TextInput
+          value={message}
+          onChange={setMessage}
+          onKeyDown={handleKeyDown}
           disabled={disabled}
-          title="Attach files (images, PDFs, Office docs, spreadsheets, code, text)"
-        >
-          <Paperclip className="h-5 w-5" />
-        </Button>
-
-        <div className="relative flex-1">
-          <textarea
-            ref={textareaRef}
-            value={message}
-            onChange={(e) => handleMessageChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={placeholder}
-            disabled={disabled}
-            autoFocus={autoFocus}
-            rows={1}
-            className={cn(
-              'w-full resize-none rounded-xl border border-input bg-background px-4 py-3.5 text-[15px] pr-12',
-              'focus:outline-none focus:ring-1 focus:ring-ring',
-              'placeholder:text-muted-foreground',
-              'overflow-y-auto'
-            )}
-            style={{ minHeight: '52px', maxHeight: 'min(120px, 30vh)' }}
-          />
-        </div>
+          placeholder={placeholder}
+          autoFocus={autoFocus}
+          textareaRef={textareaRef}
+        />
 
         <Button
           type="button"
           size="icon"
           className="h-11 w-11 rounded-xl"
           onClick={handleSubmit}
-          disabled={disabled || (!message.trim() && files.length === 0)}
+          disabled={disabled || (!message.trim() && files.length === 0) || hasProcessingFiles}
+          aria-label="Send message"
         >
           <Send className="h-5 w-5" />
         </Button>
       </div>
-
-      {isDragging && (
-        <div className="absolute inset-0 bg-primary/10 flex items-center justify-center pointer-events-none">
-          <div className="flex items-center gap-2 text-primary">
-            <FileText className="h-8 w-8" />
-            <span className="font-medium">Drop files here (images, PDFs, Office docs, spreadsheets, code, text)</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

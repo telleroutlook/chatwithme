@@ -1,25 +1,11 @@
 import { cn } from '~/lib/utils';
 import { Avatar, AvatarFallback } from '~/components/ui/avatar';
-import { Bot, User, Copy, Check, RefreshCw, FileText, FileCode, File } from 'lucide-react';
-import { useState, memo, Suspense, lazy, useEffect } from 'react';
+import { Bot, User, Copy, Check, RefreshCw } from 'lucide-react';
+import { useState, memo, Suspense, lazy, useEffect, useRef } from 'react';
 import { ErrorBoundary } from '~/components/error';
 import type { Message, MessageFile } from '@chatwithme/shared';
-
-const CODE_EXTENSIONS = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'go', 'rs', 'c', 'cpp', 'h', 'hpp', 'cs', 'rb', 'php', 'sh', 'json', 'yaml', 'yml', 'toml', 'md', 'txt'];
-
-function getFileIcon(file: MessageFile) {
-  if (file.mimeType.startsWith('image/')) return null;
-  if (file.mimeType === 'application/pdf') return <FileText className="h-4 w-4 text-red-400" />;
-  const ext = file.fileName.split('.').pop()?.toLowerCase();
-  if (ext && CODE_EXTENSIONS.includes(ext)) return <FileCode className="h-4 w-4 text-blue-400" />;
-  return <File className="h-4 w-4 text-gray-400" />;
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+import { useTouchGesture } from '~/hooks/useTouchGesture';
+import { getFileIcon, formatFileSize } from '~/lib/fileUtils';
 
 const LazyMarkdownRenderer = lazy(() => import('./MarkdownRenderer').then(m => ({ default: m.MarkdownRenderer })));
 
@@ -30,20 +16,47 @@ interface ChatBubbleProps {
   isLastUserMessage?: boolean;
   onRegenerate?: () => void;
   onQuickReply?: (question: string) => void;
+  onLongPress?: (messageId: string, content: string, position: { x: number; y: number }) => void;
 }
 
+// Custom comparison function to avoid unnecessary re-renders
+const arePropsEqual = (
+  prevProps: ChatBubbleProps,
+  nextProps: ChatBubbleProps
+): boolean => {
+  return (
+    prevProps.messageId === nextProps.messageId &&
+    prevProps.message.message === nextProps.message.message &&
+    prevProps.isLast === nextProps.isLast &&
+    prevProps.isLastUserMessage === nextProps.isLastUserMessage
+  );
+};
+
 export const ChatBubble = memo<ChatBubbleProps>(
-  ({ message, messageId, isLast, isLastUserMessage, onRegenerate, onQuickReply }) => {
+  ({ message, messageId, isLast, isLastUserMessage, onRegenerate, onQuickReply, onLongPress }) => {
     const isUser = message.role === 'user';
     const suggestions = 'suggestions' in message ? message.suggestions : undefined;
     const [animateEntry, setAnimateEntry] = useState(true);
+    const bubbleRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
       setAnimateEntry(false);
     }, []);
 
+    // Long press gesture for message actions menu
+    useTouchGesture(bubbleRef, {
+      onLongPress: onLongPress && messageId
+        ? (e) => {
+            const touch = e.touches[0] || e.changedTouches[0];
+            onLongPress(messageId, message.message, { x: touch.clientX, y: touch.clientY });
+          }
+        : undefined,
+      enabled: !!onLongPress && !!messageId,
+    });
+
     return (
       <div
+        ref={bubbleRef}
         data-message-id={messageId}
         className={cn(
           'flex gap-2 p-3 sm:gap-3 sm:p-4',
@@ -141,6 +154,7 @@ export const ChatBubble = memo<ChatBubbleProps>(
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground active:bg-muted/80'
                   )}
                   title="Regenerate response"
+                  aria-label="Regenerate response"
                 >
                   <RefreshCw className="h-4 w-4" />
                 </button>
@@ -149,7 +163,8 @@ export const ChatBubble = memo<ChatBubbleProps>(
         </div>
       </div>
     );
-  }
+  },
+  arePropsEqual
 );
 ChatBubble.displayName = 'ChatBubble';
 
@@ -180,7 +195,8 @@ const CopyMessageButton = memo<CopyMessageButtonProps>(({ text, isUser = false }
           ? 'text-primary-foreground/80 hover:bg-primary-foreground/10 hover:text-primary-foreground active:bg-primary-foreground/20'
           : 'text-muted-foreground hover:bg-muted hover:text-foreground active:bg-muted/80'
       )}
-      title="Copy text"
+      title="Copy message to clipboard"
+      aria-label={copied ? 'Copied to clipboard' : 'Copy message to clipboard'}
     >
       {copied ? (
         <Check className="h-4 w-4 text-green-500" />

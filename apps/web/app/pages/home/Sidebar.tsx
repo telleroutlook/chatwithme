@@ -40,7 +40,7 @@ export function Sidebar({
       {/* Mobile-only header */}
       <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3 lg:hidden">
         <h1 className="text-base font-semibold">ChatWithMe</h1>
-        <Button variant="ghost" size="icon" onClick={onClose}>
+        <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close sidebar">
           <X className="h-5 w-5" />
         </Button>
       </div>

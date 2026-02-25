@@ -1,5 +1,6 @@
 import { useAuthStore } from './stores/auth';
 import type { ApiResponse } from '@chatwithme/shared';
+import { retryWithBackoff } from './lib/apiRetry';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -44,10 +45,32 @@ class ApiClient {
       }
     }
 
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      ...fetchOptions,
-      headers,
-    });
+    // Wrap fetch with retry mechanism
+    const { data: response, attempts } = await retryWithBackoff(
+      async () => {
+        const res = await fetch(`${this.baseUrl}${endpoint}`, {
+          ...fetchOptions,
+          headers,
+        });
+
+        // Throw error for retryable status codes to trigger retry
+        if (!res.ok && [408, 429, 500, 502, 503, 504].includes(res.status)) {
+          const error = new Error(`HTTP ${res.status}: ${res.statusText}`) as Error & {
+            response: { status: number };
+          };
+          error.response = { status: res.status };
+          throw error;
+        }
+
+        return res;
+      },
+      { maxRetries: 3, initialDelay: 1000 }
+    );
+
+    // Log retry attempts if any occurred
+    if (attempts > 1) {
+      console.log(`API request to ${endpoint} completed after ${attempts} attempt(s)`);
+    }
 
     const contentType = response.headers.get('content-type') || '';
     const data: ApiResponse<T> = contentType.includes('application/json')
@@ -78,11 +101,33 @@ class ApiClient {
 
   private async refreshToken(refreshToken: string): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseUrl}/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
-      });
+      // Wrap refresh token request with retry mechanism
+      const { data: response, attempts } = await retryWithBackoff(
+        async () => {
+          const res = await fetch(`${this.baseUrl}/auth/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken }),
+          });
+
+          // Throw error for retryable status codes to trigger retry
+          if (!res.ok && [408, 429, 500, 502, 503, 504].includes(res.status)) {
+            const error = new Error(`HTTP ${res.status}: ${res.statusText}`) as Error & {
+              response: { status: number };
+            };
+            error.response = { status: res.status };
+            throw error;
+          }
+
+          return res;
+        },
+        { maxRetries: 3, initialDelay: 1000 }
+      );
+
+      // Log retry attempts if any occurred
+      if (attempts > 1) {
+        console.log(`Token refresh completed after ${attempts} attempt(s)`);
+      }
 
       const data = (await response.json()) as ApiResponse<{ accessToken: string; expiresIn: number }>;
       if (data.success && data.data) {

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuthStore } from '~/stores/auth';
 import { useChatStore } from '~/stores/chat';
@@ -8,7 +8,12 @@ import { Header } from './Header';
 import { MessageList } from './MessageList';
 import { Sidebar } from './Sidebar';
 import { useChatActions } from './hooks';
+import { useConversations } from '~/hooks/useConversations';
+import { useMessages } from '~/hooks/useMessages';
 import { cn } from '~/lib/utils';
+import { useEdgeSwipe, useTouchGesture } from '~/hooks/useTouchGesture';
+import { useMessageActions } from '~/components/chat/MessageActions';
+import { MessageActions } from '~/components/chat/MessageActions';
 
 const SIDEBAR_WIDTH_KEY = 'chatwithme-sidebar-width';
 const SIDEBAR_COLLAPSED_KEY = 'chatwithme-sidebar-collapsed';
@@ -20,7 +25,8 @@ const CONFIG = {
 
 export function Home() {
   const navigate = useNavigate();
-  
+  const mainContainerRef = useRef<HTMLDivElement>(null);
+
   // Sidebar State
   const [sidebarWidth, setSidebarWidth] = useState(CONFIG.DEFAULT_WIDTH);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -28,21 +34,36 @@ export function Home() {
   const [isResizing, setIsResizing] = useState(false);
   const [deletingConversationId, setDeletingConversationId] = useState<string | null>(null);
 
+  // Message actions menu state
+  const { activeMenu, showMenu, hideMenu } = useMessageActions();
+
   const { isAuthenticated, hasHydrated, user } = useAuthStore();
   const { mode: themeMode, setMode: setThemeMode } = useThemeStore();
-  const { conversations, activeConversationId, messages, isLoading } = useChatStore();
-  
+  const { conversations: storeConversations, activeConversationId, messages, isLoading } = useChatStore();
+
+  // React Query hooks for data fetching with caching
+  const { data: conversationsData = [] } = useConversations();
+  const { data: messagesData = [] } = useMessages(activeConversationId);
+
+  // Use React Query data when available, otherwise fall back to store data
+  const conversations = conversationsData.length > 0 ? conversationsData : storeConversations;
+  // For messages, we use a hybrid approach: React Query for initial load, store for real-time updates
+  const currentMessages = useMemo(() => {
+    // If we have messages in the store (from send/regenerate), use those
+    const storedMessages = activeConversationId ? messages[activeConversationId] || [] : [];
+    // If React Query has data and we don't have store updates, use React Query data
+    if (storedMessages.length === 0 && messagesData.length > 0) {
+      return messagesData;
+    }
+    return storedMessages;
+  }, [activeConversationId, messages, messagesData]);
+
   const {
     loadConversations, loadMessages, handleCreateConversation,
     handleSelectConversation, handleDeleteConversation,
     handleRenameConversation, handleSendMessage,
     handleRegenerate, handleQuickReply, handleExportChat, handleLogout,
   } = useChatActions();
-
-  const currentMessages = useMemo(() => 
-    activeConversationId ? messages[activeConversationId] || [] : [], 
-    [activeConversationId, messages]
-  );
 
   // Persistence & Initial Load
   useEffect(() => {
@@ -89,11 +110,25 @@ export function Home() {
     else loadConversations();
   }, [hasHydrated, isAuthenticated, navigate, loadConversations]);
 
+  // Visual Viewport API for mobile keyboard adaptation
   useEffect(() => {
-    if (activeConversationId && !messages[activeConversationId]) {
-      loadMessages(activeConversationId);
-    }
-  }, [activeConversationId, messages, loadMessages]);
+    if (typeof window === 'undefined' || !('visualViewport' in window)) return;
+
+    const viewport = window.visualViewport!;
+    const handleResize = () => {
+      // Set CSS custom property for visual viewport height
+      document.documentElement.style.setProperty('--visual-viewport-height', `${viewport.height}px`);
+    };
+
+    // Initial set
+    handleResize();
+
+    viewport.addEventListener('resize', handleResize);
+    return () => viewport.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Note: React Query's useMessages hook automatically fetches when activeConversationId changes
+  // No need for manual loadMessages effect here
 
   const onSidebarToggle = useCallback(() => {
     if (window.innerWidth >= 1024) {
@@ -120,15 +155,42 @@ export function Home() {
     }
   }, [deletingConversationId, handleDeleteConversation]);
 
+  // Edge swipe: swipe from left edge to open sidebar on mobile
+  useEdgeSwipe({
+    onSwipeRight: () => {
+      if (window.innerWidth < 1024 && !sidebarOpen) {
+        setSidebarOpen(true);
+      }
+    },
+    enabled: !sidebarOpen,
+  });
+
   if (!hasHydrated || !isAuthenticated) return null;
 
   const currentTitle = conversations.find((c) => c.id === activeConversationId)?.title || 'New Chat';
 
   return (
-    <div className={cn(
-      "flex h-dvh w-full overflow-hidden bg-background font-sans selection:bg-primary/10",
-      isResizing && "cursor-col-resize select-none"
-    )}>
+    <>
+      {/* Message actions menu (rendered at root level) */}
+      {activeMenu && (
+        <MessageActions
+          messageId={activeMenu.messageId}
+          content={activeMenu.content}
+          position={activeMenu.position}
+          onClose={hideMenu}
+          onCopy={() => {
+            // Copy is handled inside the component
+          }}
+        />
+      )}
+
+      <div
+        ref={mainContainerRef}
+        className={cn(
+          "flex h-dvh w-full overflow-hidden bg-background font-sans selection:bg-primary/10",
+          isResizing && "cursor-col-resize select-none"
+        )}
+      >
       {/* Mobile Overlay */}
       {sidebarOpen && (
         <div 
@@ -191,6 +253,7 @@ export function Home() {
             activeConversationId={activeConversationId}
             onRegenerate={() => handleRegenerate(currentMessages)}
             onQuickReply={(q) => handleQuickReply(q, isLoading)}
+            onShowMessageMenu={showMenu}
           />
         </div>
 
@@ -209,6 +272,7 @@ export function Home() {
         </footer>
       </main>
     </div>
+    </>
   );
 }
 

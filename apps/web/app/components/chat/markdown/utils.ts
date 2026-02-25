@@ -13,18 +13,44 @@ export const extractText = (node: React.ReactNode): string => {
 const FULL_HTML_DOC_PATTERN =
   /^\s*(?:<!DOCTYPE\s+html[^>]*>\s*)?<html[\s\S]*<\/html>\s*$/i;
 
+// LRU cache for normalized markdown content
+const normalizeCache = new Map<string, string>();
+const MAX_CACHE_SIZE = 100;
+
 export const normalizeMarkdownContent = (content: string): string => {
+  // Check cache first
+  if (normalizeCache.has(content)) {
+    const cached = normalizeCache.get(content);
+    return cached ?? content;
+  }
+
   const trimmed = content.trim();
   if (!trimmed) return content;
 
   const alreadyCodeBlock = /^```[\w-]*\n[\s\S]*\n```\s*$/m.test(trimmed);
-  if (alreadyCodeBlock) return content;
+  let result: string;
 
-  if (FULL_HTML_DOC_PATTERN.test(trimmed)) {
-    return `\`\`\`html\n${trimmed}\n\`\`\``;
+  if (alreadyCodeBlock) {
+    result = content;
+  } else if (FULL_HTML_DOC_PATTERN.test(trimmed)) {
+    result = `\`\`\`html\n${trimmed}\n\`\`\``;
+  } else {
+    result = content;
   }
 
-  return content;
+  // Cache the result (only cache if content is substantial enough)
+  if (content.length > 50) {
+    if (normalizeCache.size >= MAX_CACHE_SIZE) {
+      // Remove oldest entry (first key)
+      const firstKey = normalizeCache.keys().next().value;
+      if (firstKey) {
+        normalizeCache.delete(firstKey);
+      }
+    }
+    normalizeCache.set(content, result);
+  }
+
+  return result;
 };
 
 export const VOID_TAGS = new Set([

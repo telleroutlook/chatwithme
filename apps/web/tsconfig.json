@@ -10,7 +10,7 @@
     "paths": {
       "~/*": ["./app/*"]
     },
-    "types": ["@cloudflare/workers-types/2023-07-01", "vite/client"]
+    "types": ["@cloudflare/workers-types/2023-07-01", "vite/client", "vitest/globals"]
   },
-  "include": ["app", "worker-configuration.d.ts"]
+  "include": ["app", "worker-configuration.d.ts", "app/vitest.d.ts"]
 }

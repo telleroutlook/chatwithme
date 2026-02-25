@@ -1,9 +1,11 @@
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '~/stores/auth';
 import { useChatStore } from '~/stores/chat';
 import { api } from '~/client';
 import { ensureConversationId } from '~/lib/chatFlow';
+import { queryKeys } from '~/lib/queryKeys';
 import type { Message, MessageFile, Conversation } from '@chatwithme/shared';
 
 const ACTIVE_CONVERSATION_STORAGE_KEY = 'chatwithme-active-conversation-id';
@@ -24,6 +26,7 @@ export interface UseChatActionsReturn {
 
 export function useChatActions(): UseChatActionsReturn {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user, tokens, logout } = useAuthStore();
   const {
     conversations,
@@ -41,19 +44,27 @@ export function useChatActions(): UseChatActionsReturn {
   } = useChatStore();
 
   const loadConversations = useCallback(async () => {
-    const response = await api.get<{ conversations: Conversation[] }>('/chat/conversations');
-    if (response.success && response.data) {
-      const loadedConversations = response.data.conversations;
-      setConversations(loadedConversations);
-      const savedActiveConversationId = window.localStorage.getItem(
-        ACTIVE_CONVERSATION_STORAGE_KEY
-      );
+    // Invalidate and refetch conversations using React Query
+    await queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
 
-      const hasCurrentActiveConversation = loadedConversations.some(
+    // React Query will fetch the data, and the component will receive it via the hook
+    // We still keep the sync logic for localStorage
+    const savedActiveConversationId = window.localStorage.getItem(
+      ACTIVE_CONVERSATION_STORAGE_KEY
+    );
+
+    // Get fresh data from React Query cache after invalidation
+    const conversationsData = queryClient.getQueryData<Conversation[]>(queryKeys.conversations);
+
+    if (conversationsData) {
+      // Sync to store for backward compatibility
+      setConversations(conversationsData);
+
+      const hasCurrentActiveConversation = conversationsData.some(
         (conversation) => conversation.id === activeConversationId
       );
       const hasSavedActiveConversation = savedActiveConversationId
-        ? loadedConversations.some((conversation) => conversation.id === savedActiveConversationId)
+        ? conversationsData.some((conversation) => conversation.id === savedActiveConversationId)
         : false;
 
       if (hasCurrentActiveConversation) {
@@ -65,20 +76,23 @@ export function useChatActions(): UseChatActionsReturn {
         return;
       }
 
-      setActiveConversation(loadedConversations[0]?.id ?? null);
+      setActiveConversation(conversationsData[0]?.id ?? null);
     }
-  }, [activeConversationId, setConversations, setActiveConversation]);
+  }, [activeConversationId, setConversations, setActiveConversation, queryClient]);
 
   const loadMessages = useCallback(async (conversationId: string) => {
     setLoading(true);
-    const response = await api.get<{ messages: Message[] }>(
-      `/chat/conversations/${conversationId}/messages`
-    );
-    if (response.success && response.data) {
-      setMessages(conversationId, response.data.messages);
+    // Invalidate and refetch messages using React Query
+    await queryClient.invalidateQueries({ queryKey: queryKeys.messages(conversationId) });
+
+    // Sync React Query data to store for backward compatibility
+    const messagesData = queryClient.getQueryData<Message[]>(queryKeys.messages(conversationId));
+    if (messagesData) {
+      setMessages(conversationId, messagesData);
     }
+
     setLoading(false);
-  }, [setLoading, setMessages]);
+  }, [setLoading, setMessages, queryClient]);
 
   const handleCreateConversation = useCallback(async () => {
     const response = await api.post<{ conversation: Conversation }>(
@@ -87,8 +101,10 @@ export function useChatActions(): UseChatActionsReturn {
     );
     if (response.success && response.data) {
       addConversation(response.data.conversation);
+      // Invalidate conversations query to reflect the new conversation
+      await queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
     }
-  }, [addConversation]);
+  }, [addConversation, queryClient]);
 
   const handleSelectConversation = useCallback((id: string) => {
     setActiveConversation(id);
@@ -98,15 +114,21 @@ export function useChatActions(): UseChatActionsReturn {
     const response = await api.delete(`/chat/conversations/${id}`);
     if (response.success) {
       removeConversation(id);
+      // Invalidate conversations query to reflect the deletion
+      await queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
+      // Invalidate messages query for this conversation
+      queryClient.removeQueries({ queryKey: queryKeys.messages(id) });
     }
-  }, [removeConversation]);
+  }, [removeConversation, queryClient]);
 
   const handleRenameConversation = useCallback(async (id: string, title: string) => {
     const response = await api.patch(`/chat/conversations/${id}`, { title });
     if (response.success) {
       updateConversation(id, { title });
+      // Invalidate conversations query to reflect the rename
+      await queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
     }
-  }, [updateConversation]);
+  }, [updateConversation, queryClient]);
 
   const ensureConversation = useCallback(async (): Promise<string | null> =>
     ensureConversationId({
@@ -121,8 +143,12 @@ export function useChatActions(): UseChatActionsReturn {
         }
         return response.data.conversation;
       },
-      onConversationCreated: addConversation,
-    }), [activeConversationId, addConversation]);
+      onConversationCreated: (conversation) => {
+        addConversation(conversation);
+        // Invalidate conversations query to reflect the new conversation
+        queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
+      },
+    }), [activeConversationId, addConversation, queryClient]);
 
   const handleSendMessage = useCallback(async (message: string, files?: MessageFile[]) => {
     const conversationId = await ensureConversation();
@@ -200,8 +226,10 @@ export function useChatActions(): UseChatActionsReturn {
       addMessage(conversationId, errorMessage);
     } finally {
       setPendingConversation(null);
+      // Invalidate messages query to keep React Query in sync
+      queryClient.invalidateQueries({ queryKey: queryKeys.messages(conversationId) });
     }
-  }, [ensureConversation, user, addMessage, setPendingConversation]);
+  }, [ensureConversation, user, addMessage, setPendingConversation, queryClient]);
 
   const handleRegenerate = useCallback(async (currentMessages: Message[]) => {
     if (!activeConversationId || currentMessages.length === 0) return;
@@ -270,8 +298,10 @@ export function useChatActions(): UseChatActionsReturn {
       addMessage(activeConversationId, errorMessage);
     } finally {
       setPendingConversation(null);
+      // Invalidate messages query to keep React Query in sync
+      queryClient.invalidateQueries({ queryKey: queryKeys.messages(activeConversationId) });
     }
-  }, [activeConversationId, user, setMessages, addMessage, setPendingConversation]);
+  }, [activeConversationId, user, setMessages, addMessage, setPendingConversation, queryClient]);
 
   const handleQuickReply = useCallback(async (question: string, isLoading: boolean) => {
     if (!question.trim() || isLoading) return;

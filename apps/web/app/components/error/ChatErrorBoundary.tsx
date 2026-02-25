@@ -7,6 +7,7 @@ export interface ChatErrorBoundaryProps {
   children: React.ReactNode;
   onError?: (error: Error, errorInfo: React.ErrorInfo) => void;
   className?: string;
+  enableErrorTracking?: boolean;
 }
 
 /**
@@ -72,11 +73,12 @@ function ChatErrorFallback({
  * the chat experience even when individual messages fail to render.
  */
 export const ChatErrorBoundary = React.memo<ChatErrorBoundaryProps>(
-  ({ children, onError, className }) => {
+  ({ children, onError, className, enableErrorTracking }) => {
     return (
       <ErrorBoundary
         fallback={(props) => <ChatErrorFallback {...props} className={className} />}
         onError={onError}
+        enableErrorTracking={enableErrorTracking}
       >
         {children}
       </ErrorBoundary>

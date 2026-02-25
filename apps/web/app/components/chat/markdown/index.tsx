@@ -2,7 +2,7 @@ import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, memo } from 'react';
 import 'katex/dist/katex.min.css';
 import { cn } from '~/lib/utils';
 import { extractText, normalizeMarkdownContent } from './utils';
@@ -15,7 +15,7 @@ const LazyMermaidRenderer = lazy(() =>
   import('./MermaidBlock').then((m) => ({ default: m.MermaidRenderer }))
 );
 
-export function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
+export const MarkdownRenderer = memo<MarkdownRendererProps>(({ content, className }) => {
   const normalizedContent = normalizeMarkdownContent(content);
 
   return (
@@ -74,4 +74,6 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
       </ReactMarkdown>
     </div>
   );
-}
+});
+
+MarkdownRenderer.displayName = 'MarkdownRenderer';

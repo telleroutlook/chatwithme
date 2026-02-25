@@ -6,6 +6,12 @@ import { authMiddleware, getAuthInfo } from '../middleware/auth';
 import { ERROR_CODES } from '../constants/error-codes';
 import { generateId } from '../utils/crypto';
 import { errorResponse, validationErrorHook } from '../utils/response';
+import {
+  validateUploadedFile,
+  sanitizeFileName,
+  getFileExtension,
+} from '../utils/fileValidation';
+import { MAX_FILE_SIZE, ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS } from '../constants/fileValidation';
 import type { MessageFile, UploadResponse } from '../types';
 
 const file = new Hono<AppBindings>();
@@ -52,11 +58,27 @@ file.post('/upload', zValidator('form', fileUploadSchema, validationErrorHook), 
   try {
     const { file: uploadedFile } = c.req.valid('form');
 
-    if (uploadedFile.size > 10 * 1024 * 1024) {
-      return errorResponse(c, 400, ERROR_CODES.FILE_TOO_LARGE, 'File size exceeds 10MB limit');
+    // Validate file comprehensively
+    const validationResult = await validateUploadedFile(
+      uploadedFile,
+      MAX_FILE_SIZE,
+      ALLOWED_MIME_TYPES,
+      ALLOWED_EXTENSIONS
+    );
+
+    if (!validationResult.valid) {
+      const errorCode = validationResult.error?.code as keyof typeof ERROR_CODES;
+      return errorResponse(
+        c,
+        400,
+        ERROR_CODES[errorCode] || ERROR_CODES.VALIDATION_ERROR,
+        validationResult.error?.message || 'File validation failed'
+      );
     }
 
-    const ext = uploadedFile.name.split('.').pop() || '';
+    // Sanitize filename
+    const sanitizedName = sanitizeFileName(uploadedFile.name);
+    const ext = getFileExtension(sanitizedName);
     const key = `uploads/${userId}/${generateId()}.${ext}`;
 
     await c.env.BUCKET.put(key, await uploadedFile.arrayBuffer(), {
@@ -70,7 +92,7 @@ file.post('/upload', zValidator('form', fileUploadSchema, validationErrorHook), 
     const downloadUrl = `${url.origin}/file/download/${key}`;
     const fileInfo: MessageFile = {
       url: downloadUrl,
-      fileName: uploadedFile.name,
+      fileName: sanitizedName,
       mimeType: uploadedFile.type,
       size: uploadedFile.size,
     };

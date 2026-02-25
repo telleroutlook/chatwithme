@@ -33,17 +33,17 @@ export function useChatScroll({
       const viewport = messageScrollRef.current?.querySelector<HTMLElement>(
         '[data-radix-scroll-area-viewport]'
       );
-      if (viewport) {
-        const lastUserMessage = [...currentMessages].reverse().find((message) => message.role === 'user');
-        const targetMessage = lastUserMessage ?? currentMessages[0];
-        const targetElement = viewport.querySelector<HTMLElement>(
-          `[data-message-id="${targetMessage.id}"]`
-        );
+      if (!viewport) return;
 
-        if (targetElement) {
-          skipNextAutoScrollRef.current = true;
-          targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
+      const lastUserMessage = [...currentMessages].reverse().find((message) => message.role === 'user');
+      const targetMessage = lastUserMessage ?? currentMessages[0];
+      const targetElement = viewport.querySelector<HTMLElement>(
+        `[data-message-id="${targetMessage.id}"]`
+      );
+
+      if (targetElement) {
+        skipNextAutoScrollRef.current = true;
+        targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }, 100);
 

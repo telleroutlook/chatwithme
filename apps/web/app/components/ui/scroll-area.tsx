@@ -43,4 +43,30 @@ const ScrollBar = React.forwardRef<
 ));
 ScrollBar.displayName = ScrollAreaPrimitive.ScrollAreaScrollbar.displayName;
 
+// Mobile-optimized ScrollArea with momentum scrolling
+export const MobileScrollArea = React.forwardRef<
+  React.ElementRef<typeof ScrollAreaPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root>
+>(({ className, children, ...props }, ref) => (
+  <ScrollAreaPrimitive.Root
+    ref={ref}
+    className={cn('relative overflow-hidden', className)}
+    {...props}
+  >
+    <ScrollAreaPrimitive.Viewport
+      data-radix-scroll-area-viewport=""
+      className="h-full w-full rounded-[inherit] overscroll-contain"
+      style={{
+        WebkitOverflowScrolling: 'touch', // Momentum scrolling on iOS
+      }}
+    >
+      {children}
+    </ScrollAreaPrimitive.Viewport>
+    <ScrollBar />
+    <ScrollAreaPrimitive.Corner />
+  </ScrollAreaPrimitive.Root>
+));
+MobileScrollArea.displayName = 'MobileScrollArea';
+ScrollBar.displayName = ScrollAreaPrimitive.ScrollAreaScrollbar.displayName;
+
 export { ScrollArea, ScrollBar };

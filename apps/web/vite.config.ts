@@ -13,6 +13,9 @@ export default defineConfig({
   ssr: {
     noExternal: ['lucide-react'],
   },
+  worker: {
+    format: 'es',
+  },
   build: {
     rollupOptions: {
       output: {
