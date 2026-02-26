@@ -69,7 +69,7 @@ export const ChatBubble = memo<ChatBubbleProps>(
         data-message-id={messageId}
         className={cn(
           'flex min-w-0 gap-2 p-3 sm:gap-3 sm:p-4',
-          isUser ? 'flex-row-reverse' : 'flex-row',
+          isUser ? 'flex-row-reverse ml-8 sm:ml-16' : 'flex-row mr-8 sm:mr-16',
           animateEntry ? 'message-enter' : ''
         )}
       >
