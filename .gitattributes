@@ -1,0 +1,13 @@
+# Mark third-party libraries as vendored to exclude from language statistics
+public/lib/** linguist-vendored
+apps/web/public/lib/** linguist-vendored
+
+# Mark generated files as vendored
+drizzle/** linguist-vendored
+apps/api/drizzle/** linguist-vendored
+
+# Mark build artifacts as vendored
+build/** linguist-vendored
+apps/**/build/** linguist-vendored
+dist/** linguist-vendored
+apps/**/dist/** linguist-vendored
