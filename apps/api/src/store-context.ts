@@ -1,10 +1,12 @@
 import type { Db } from './db';
 import { createDb } from './db';
+import type { MCPAgent } from './agents/mcp-agent';
 
 export interface Env {
   DB: D1Database;
   BUCKET: R2Bucket;
   AI: Ai;
+  MCPAgent: DurableObjectNamespace<MCPAgent>;
   ENVIRONMENT: string;
   OPENROUTER_API_KEY: string;
   OPENROUTER_BASE_URL: string;

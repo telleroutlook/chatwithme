@@ -45,3 +45,13 @@ binding = "AI"
 [observability.logs]
 enabled = true
 invocation_logs = true
+
+# MCPAgent DurableObject binding
+[[durable_objects.bindings]]
+name = "MCPAgent"
+class_name = "MCPAgent"
+
+# Agent migrations
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["MCPAgent"]

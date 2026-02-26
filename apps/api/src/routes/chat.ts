@@ -17,7 +17,6 @@ import { ERROR_CODES } from '../constants/error-codes';
 import { errorResponse, validationErrorHook } from '../utils/response';
 import { generateFollowUpSuggestions, parseAndFinalizeSuggestions } from '../utils/suggestions';
 import OpenAI from 'openai';
-import { MCPManager } from '../mcp/manager';
 import { parseToolCalls } from '../mcp/parser';
 import type { MessageFile } from '@chatwithme/shared';
 
@@ -929,9 +928,73 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
     new Set([model, c.env.OPENROUTER_FALLBACK_MODEL?.trim()].filter((v): v is string => Boolean(v)))
   );
 
-  // Initialize MCP Manager
-  const mcpManager = new MCPManager(c.env);
-  const mcpTools = mcpManager.isConfigured() ? mcpManager.getAvailableTools() : undefined;
+  // Initialize MCPAgent
+  const agentId = c.env.MCPAgent.idFromName('global-mcp');
+  const mcpAgentStub = c.env.MCPAgent.get(agentId);
+
+  // Get tools if MCP is configured
+  // The Agent SDK's getAITools() returns an AI SDK ToolSet (record format)
+  // We'll use the actual tool execution but keep the tool definitions static for OpenAI compatibility
+  const mcpTools =
+    mcpAgentStub && (await mcpAgentStub.isConfigured())
+      ? [
+          {
+            type: 'function' as const,
+            function: {
+              name: 'webSearchPrime',
+              description:
+                '搜索互联网以获取最新信息、新闻、实时数据。当用户询问当前事件、最新资讯、时效性问题时使用此工具。',
+              parameters: {
+                type: 'object',
+                properties: {
+                  search_query: {
+                    type: 'string',
+                    description: '搜索关键词或问题',
+                  },
+                  location: {
+                    type: 'string',
+                    description: '搜索区域 (cn/us)',
+                    default: 'cn',
+                  },
+                  search_recency_filter: {
+                    type: 'string',
+                    description: '时间过滤 (noLimit/oneDay/threeDays/oneWeek)',
+                    default: 'noLimit',
+                  },
+                  content_size: {
+                    type: 'string',
+                    description: '内容大小 (medium/high)',
+                    default: 'medium',
+                  },
+                },
+                required: ['search_query'] as string[],
+              },
+            },
+          },
+          {
+            type: 'function' as const,
+            function: {
+              name: 'webReader',
+              description: '读取指定网页的内容。当用户提供 URL 或要求分析某个网页时使用此工具。',
+              parameters: {
+                type: 'object',
+                properties: {
+                  url: {
+                    type: 'string',
+                    description: '要读取的网页 URL',
+                  },
+                  return_format: {
+                    type: 'string',
+                    description: '返回格式 (markdown/text)',
+                    default: 'markdown',
+                  },
+                },
+                required: ['url'] as string[],
+              },
+            },
+          },
+        ]
+      : undefined;
 
   let activeModel = candidates[0] || model;
   let answerText = '';
@@ -940,7 +1003,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
   const attemptLogs: Array<{ model: string; error?: ModelErrorDetail }> = [];
 
   // Build messages for LLM call
-  const hasMcpTools = mcpManager.isConfigured();
+  const hasMcpTools = mcpAgentStub && (await mcpAgentStub.isConfigured());
 
   // Detect if current message contains images
   const hasImages = historyForModelDetection.some(
@@ -989,9 +1052,20 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
       // Check for tool calls
       const toolCalls = parseToolCalls(completion);
 
-      if (toolCalls.length > 0 && mcpManager.isConfigured()) {
-        // Execute tools
-        const toolResult = await mcpManager.executeToolCalls(toolCalls);
+      if (toolCalls.length > 0 && mcpAgentStub && (await mcpAgentStub.isConfigured())) {
+        // Execute tools via Agent
+        const results: string[] = [];
+        for (const toolCall of toolCalls) {
+          const { name, arguments: args } = toolCall.function;
+          const params = JSON.parse(args);
+          const result = await mcpAgentStub.callTool(name, params);
+          results.push(`【${name}】\n${result}`);
+        }
+
+        const toolResult = {
+          success: true,
+          results: results.join('\n\n'),
+        };
 
         // Add assistant message with tool calls
         enhancedMessages.push({

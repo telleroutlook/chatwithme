@@ -6,6 +6,7 @@ import fileRoutes from './routes/file';
 import type { AppBindings, Env } from './store-context';
 import { ERROR_CODES } from './constants/error-codes';
 import { errorResponse } from './utils/response';
+import { MCPAgent } from './agents/mcp-agent';
 
 // Extend Env type to include ASSETS binding
 interface ExtendedEnv extends Env {
@@ -76,6 +77,9 @@ export default {
     return env.ASSETS.fetch(request);
   },
 };
+
+// Export Durable Objects for Wrangler
+export { MCPAgent };
 
 // Export type for Hono client
 export type AppType = typeof app;
