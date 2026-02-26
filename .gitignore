@@ -11,6 +11,8 @@ build
 
 # Test files
 test-attachments/
+test*.png
+*.png.test
 
 # Environment files
 .env
