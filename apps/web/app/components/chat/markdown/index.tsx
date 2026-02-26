@@ -52,8 +52,10 @@ export const MarkdownRenderer = memo<MarkdownRendererProps>(({ content, classNam
             }
 
             if (isBlock) {
+              // For future context inference, we could pass preceding text here
+              // Currently using empty string as default
               return (
-                <CodeBlockWithPreview className={className} language={language}>
+                <CodeBlockWithPreview className={className} language={language} context="">
                   {children}
                 </CodeBlockWithPreview>
               );

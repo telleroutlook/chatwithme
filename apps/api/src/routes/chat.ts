@@ -243,36 +243,67 @@ function parseCompletionText(completion: unknown): string {
   return '';
 }
 
-function parseJsonObjectFromText(raw: string): Record<string, unknown> | null {
+interface JsonObjectFromTextResult {
+  json: Record<string, unknown>;
+  remaining: string;
+}
+
+function parseJsonObjectFromText(raw: string): JsonObjectFromTextResult | null {
   const cleaned = raw.trim();
   if (!cleaned) return null;
 
-  const candidates = [
-    cleaned,
-    cleaned
-      .replace(/^```(?:json)?/i, '')
-      .replace(/```$/i, '')
-      .trim(),
-  ];
+  // Try parsing the entire string first
+  try {
+    const parsed = JSON.parse(cleaned) as unknown;
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+      return { json: parsed as Record<string, unknown>, remaining: '' };
+    }
+  } catch {
+    // Continue to other strategies
+  }
 
-  for (const candidate of candidates) {
+  // Try removing ```json markdown code blocks
+  const withoutCodeBlock = cleaned
+    .replace(/^```(?:json)?\s*\n/i, '')
+    .replace(/\n```\s*$/i, '')
+    .trim();
+  if (withoutCodeBlock !== cleaned) {
     try {
-      const parsed = JSON.parse(candidate) as unknown;
+      const parsed = JSON.parse(withoutCodeBlock) as unknown;
       if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-        return parsed as Record<string, unknown>;
+        // Extract remaining content after the closing ```
+        const lastCodeBlockEnd = cleaned.lastIndexOf('\n```');
+        const remaining = lastCodeBlockEnd > 0
+          ? cleaned.slice(lastCodeBlockEnd + 4).trim()
+          : '';
+        return { json: parsed as Record<string, unknown>, remaining };
       }
     } catch {
-      // ignore
+      // Continue to other strategies
     }
   }
 
+  // Find the first complete JSON object by brace matching
   const start = cleaned.indexOf('{');
-  const end = cleaned.lastIndexOf('}');
+  let braceCount = 0;
+  let end = -1;
+
+  for (let i = start; i < cleaned.length; i++) {
+    if (cleaned[i] === '{') braceCount++;
+    if (cleaned[i] === '}') braceCount--;
+    if (braceCount === 0 && i > start) {
+      end = i;
+      break;
+    }
+  }
+
   if (start !== -1 && end > start) {
     try {
-      const parsed = JSON.parse(cleaned.slice(start, end + 1)) as unknown;
+      const jsonStr = cleaned.slice(start, end + 1);
+      const parsed = JSON.parse(jsonStr) as unknown;
       if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-        return parsed as Record<string, unknown>;
+        const remaining = cleaned.slice(end + 1).trim();
+        return { json: parsed as Record<string, unknown>, remaining };
       }
     } catch {
       // ignore
@@ -283,28 +314,35 @@ function parseJsonObjectFromText(raw: string): Record<string, unknown> | null {
 }
 
 function parseStructuredReply(raw: string): StructuredReply | null {
-  const parsed = parseJsonObjectFromText(raw);
-  if (!parsed) return null;
+  const result = parseJsonObjectFromText(raw);
+  if (!result) return null;
+
+  const { json, remaining } = result;
 
   const message =
-    typeof parsed.message === 'string'
-      ? parsed.message.trim()
-      : typeof parsed.answer === 'string'
-        ? parsed.answer.trim()
+    typeof json.message === 'string'
+      ? json.message.trim()
+      : typeof json.answer === 'string'
+        ? json.answer.trim()
         : '';
   if (!message) return null;
 
+  // Append remaining content (e.g., code blocks after JSON) to the message
+  const finalMessage = remaining
+    ? `${message}\n\n${remaining}`
+    : message;
+
   let suggestionsRaw = '';
-  if (Array.isArray(parsed.suggestions)) {
-    suggestionsRaw = JSON.stringify(parsed.suggestions);
-  } else if (typeof parsed.suggestions === 'string') {
-    suggestionsRaw = parsed.suggestions;
+  if (Array.isArray(json.suggestions)) {
+    suggestionsRaw = JSON.stringify(json.suggestions);
+  } else if (typeof json.suggestions === 'string') {
+    suggestionsRaw = json.suggestions;
   }
 
   // Parse imageAnalyses
   const imageAnalyses: ImageAnalysis[] = [];
-  if (Array.isArray(parsed.imageAnalyses)) {
-    for (const item of parsed.imageAnalyses) {
+  if (Array.isArray(json.imageAnalyses)) {
+    for (const item of json.imageAnalyses) {
       if (typeof item === 'object' && item !== null) {
         const analysis = item as Record<string, unknown>;
         if (typeof analysis.fileName === 'string' && typeof analysis.analysis === 'string') {
@@ -318,8 +356,8 @@ function parseStructuredReply(raw: string): StructuredReply | null {
   }
 
   return {
-    message,
-    suggestions: parseAndFinalizeSuggestions(suggestionsRaw, message),
+    message: finalMessage,
+    suggestions: parseAndFinalizeSuggestions(suggestionsRaw, finalMessage),
     imageAnalyses,
   };
 }

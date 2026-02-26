@@ -128,22 +128,22 @@ export const ChatBubble = memo<ChatBubbleProps>(
             </ErrorBoundary>
           )}
 
+          {!isUser && 'imageAnalyses' in message && message.imageAnalyses && message.imageAnalyses.length > 0 && (
+            <ImageAnalysisCard analyses={message.imageAnalyses} />
+          )}
+
           {!isUser && suggestions && suggestions.length > 0 && onQuickReply && (
             <div className="mt-3 flex flex-wrap gap-2">
               {suggestions.map((suggestion, index) => (
                 <button
                   key={`${suggestion}-${index}`}
                   onClick={() => onQuickReply(suggestion)}
-                  className="rounded-full border border-border bg-muted/40 px-3 py-2.5 text-xs text-foreground transition-colors hover:bg-muted active:bg-muted/80"
+                  className="rounded-full border border-border/50 bg-muted/30 px-3 py-2.5 text-xs text-foreground/90 transition-all hover:border-accent-foreground/80 hover:bg-accent hover:text-foreground active:scale-95"
                 >
                   {suggestion}
                 </button>
               ))}
             </div>
-          )}
-
-          {!isUser && 'imageAnalyses' in message && message.imageAnalyses && message.imageAnalyses.length > 0 && (
-            <ImageAnalysisCard analyses={message.imageAnalyses} />
           )}
 
           <div className="mt-3 flex items-center gap-1">
