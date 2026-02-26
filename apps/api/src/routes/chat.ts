@@ -563,10 +563,9 @@ ${truncateText(languageHint, 200)}`;
     systemInstruction += `
 
 Available Tools:
-- webSearchPrime: Search the internet for latest news, current events, and real-time information. Use this when users ask about news, recent events, or time-sensitive topics.
-- webReader: Read and analyze web page content. Use this when users provide a URL or ask about a specific website.
+You have access to web search and page reading tools. When users ask for news, current events, or real-time information, you MUST use the available search tools to fetch accurate, up-to-date information. Do not claim you cannot access the internet.
 
-IMPORTANT: When users ask for news, current events, or real-time information, you MUST use the webSearchPrime tool to fetch accurate, up-to-date information. Do not claim you cannot access the internet.`;
+IMPORTANT: Always use the provided tools when users ask for current events, news, or specific web page content.`;
   }
 
   const normalized = messages.flatMap(
@@ -1033,68 +1032,55 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
   const mcpAgentStub = c.env.MCPAgent.get(agentId);
 
   // Get tools if MCP is configured
-  // The Agent SDK's getAITools() returns an AI SDK ToolSet (record format)
-  // We'll use the actual tool execution but keep the tool definitions static for OpenAI compatibility
-  const mcpTools =
-    mcpAgentStub && (await mcpAgentStub.isConfigured())
-      ? [
-          {
+  // Dynamically fetch tool definitions from MCP server to ensure names match
+  let mcpTools:
+    | Array<{
+        type: 'function';
+        function: {
+          name: string;
+          description: string;
+          parameters: Record<string, unknown>;
+        };
+      }>
+    | undefined = undefined;
+
+  if (mcpAgentStub && (await mcpAgentStub.isConfigured())) {
+    try {
+      const rawTools = await mcpAgentStub.getAITools();
+
+      // Convert Agent SDK tool format to OpenAI function calling format
+      // Agent SDK returns: Record<string, {description: string, inputSchema: object}>
+      if (rawTools && typeof rawTools === 'object') {
+        mcpTools = Object.entries(rawTools).map(([name, toolDef]) => {
+          const def = toolDef as { description?: string; inputSchema?: unknown } | undefined;
+          return {
             type: 'function' as const,
             function: {
-              name: 'webSearchPrime',
-              description:
-                '搜索互联网以获取最新信息、新闻、实时数据。当用户询问当前事件、最新资讯、时效性问题时使用此工具。',
-              parameters: {
+              name,
+              description: def?.description || `Tool: ${name}`,
+              parameters: (def?.inputSchema as Record<string, unknown>) || {
                 type: 'object',
-                properties: {
-                  search_query: {
-                    type: 'string',
-                    description: '搜索关键词或问题',
-                  },
-                  location: {
-                    type: 'string',
-                    description: '搜索区域 (cn/us)',
-                    default: 'cn',
-                  },
-                  search_recency_filter: {
-                    type: 'string',
-                    description: '时间过滤 (noLimit/oneDay/threeDays/oneWeek)',
-                    default: 'noLimit',
-                  },
-                  content_size: {
-                    type: 'string',
-                    description: '内容大小 (medium/high)',
-                    default: 'medium',
-                  },
-                },
-                required: ['search_query'] as string[],
+                properties: {},
               },
             },
-          },
-          {
-            type: 'function' as const,
-            function: {
-              name: 'webReader',
-              description: '读取指定网页的内容。当用户提供 URL 或要求分析某个网页时使用此工具。',
-              parameters: {
-                type: 'object',
-                properties: {
-                  url: {
-                    type: 'string',
-                    description: '要读取的网页 URL',
-                  },
-                  return_format: {
-                    type: 'string',
-                    description: '返回格式 (markdown/text)',
-                    default: 'markdown',
-                  },
-                },
-                required: ['url'] as string[],
-              },
-            },
-          },
-        ]
-      : undefined;
+          };
+        });
+
+        console.warn('MCP tools loaded', {
+          traceId,
+          toolCount: mcpTools.length,
+          toolNames: mcpTools.map((t) => t.function.name),
+        });
+      }
+    } catch (mcpToolsError) {
+      console.error('Failed to load MCP tools', {
+        traceId,
+        error: mcpToolsError instanceof Error ? mcpToolsError.message : 'Unknown error',
+      });
+      // Continue without tools
+      mcpTools = undefined;
+    }
+  }
 
   let activeModel = modelCandidates[0]?.model || 'unknown';
   let activeBaseUrl = modelCandidates[0]?.baseUrl || 'unknown';
@@ -1161,11 +1147,52 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
       if (toolCalls.length > 0 && mcpAgentStub && (await mcpAgentStub.isConfigured())) {
         // Execute tools via Agent
         const results: string[] = [];
+
         for (const toolCall of toolCalls) {
           const { name, arguments: args } = toolCall.function;
-          const params = JSON.parse(args);
-          const result = await mcpAgentStub.callTool(name, params);
-          results.push(`【${name}】\n${result}`);
+          let params: Record<string, unknown>;
+
+          // Parse tool arguments with error handling
+          try {
+            params = JSON.parse(args);
+          } catch (parseError) {
+            console.error('MCP tool JSON parse error', {
+              traceId,
+              toolCallId: toolCall.id,
+              toolName: name,
+              args,
+              error: parseError instanceof Error ? parseError.message : 'Unknown error',
+            });
+            results.push(`【${name}】\n工具参数解析失败，请重试。`);
+            continue;
+          }
+
+          // Execute tool with error handling
+          try {
+            console.warn('MCP tool execution started', {
+              traceId,
+              toolName: name,
+            });
+            const result = await mcpAgentStub.callTool(name, params);
+            results.push(`【${name}】\n${result}`);
+            console.warn('MCP tool execution succeeded', {
+              traceId,
+              toolName: name,
+              resultLength: result.length,
+            });
+          } catch (toolError) {
+            console.error('MCP tool execution failed', {
+              traceId,
+              toolName: name,
+              error: {
+                message: toolError instanceof Error ? toolError.message : 'Unknown error',
+                stack: toolError instanceof Error ? toolError.stack : undefined,
+              },
+            });
+            results.push(
+              `【${name}】\n工具执行失败：${toolError instanceof Error ? toolError.message : '未知错误'}`
+            );
+          }
         }
 
         const toolResult = {

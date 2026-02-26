@@ -128,10 +128,39 @@ export class MCPAgent extends Agent<Env, MCPAgentState> {
 
     // Find which server has the tool
     const tools = this.mcp.listTools();
-    const tool = tools.find((t) => t.name === toolName);
+
+    // Log available tools for debugging
+    // eslint-disable-next-line no-console -- Tool name debugging for MCP
+    console.log('MCPAgent: Looking for tool', {
+      requestedName: toolName,
+      availableTools: tools.map((t) => ({ name: t.name, serverId: t.serverId })),
+    });
+
+    // Try exact match first
+    let tool = tools.find((t) => t.name === toolName);
+
+    // If not found, try case-insensitive match
+    if (!tool) {
+      tool = tools.find((t) => t.name.toLowerCase() === toolName.toLowerCase());
+    }
+
+    // If still not found, try partial match (for names like mcp__web_search_prime__webSearchPrime)
+    if (!tool) {
+      tool = tools.find(
+        (t) =>
+          t.name.toLowerCase().includes(toolName.toLowerCase()) ||
+          toolName.toLowerCase().includes(t.name.toLowerCase().replace(/_/g, ''))
+      );
+    }
 
     if (!tool) {
-      throw new Error(`Tool not found: ${toolName}`);
+      const availableNames = tools.map((t) => t.name).join(', ');
+
+      console.error('MCPAgent: Tool not found', {
+        requestedName: toolName,
+        availableNames,
+      });
+      throw new Error(`Tool not found: ${toolName}. Available tools: ${availableNames}`);
     }
 
     // Update last used time for the connection
