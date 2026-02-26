@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react';
 import { useThemeStore } from '~/stores/theme';
 
 const THEME_STYLESHEETS = {
-  light: '/node_modules/highlight.js/styles/github-light.css',
-  dark: '/node_modules/highlight.js/styles/github-dark.css',
+  light: '/lib/highlightjs/github-light.css',
+  dark: '/lib/highlightjs/github-dark.css',
 };
 
 export function CodeHighlightTheme() {

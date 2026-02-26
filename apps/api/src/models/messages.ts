@@ -19,6 +19,9 @@ export const messages = sqliteTable('messages', {
   searchResults: text('search_results', { mode: 'json' }).$type<
     Array<{ title: string; url: string; snippet: string }>
   >(),
+  imageAnalyses: text('image_analyses', { mode: 'json' }).$type<
+    Array<{ fileName: string; analysis: string }>
+  >(),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 });
 

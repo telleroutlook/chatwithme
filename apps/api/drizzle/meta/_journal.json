@@ -1,0 +1,18 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "when": 1739992800000,
+      "tag": "0000_initial_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "when": 1740559200000,
+      "tag": "0001_add_image_analyses",
+      "breakpoints": false
+    }
+  ]
+}

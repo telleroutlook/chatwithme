@@ -35,6 +35,11 @@ export interface SearchResult {
   snippet: string;
 }
 
+export interface ImageAnalysis {
+  fileName: string;
+  analysis: string;
+}
+
 export interface Message {
   id: string;
   userId: string;
@@ -45,6 +50,7 @@ export interface Message {
   generatedImageUrls: string[];
   searchResults: SearchResult[];
   suggestions?: string[];
+  imageAnalyses?: ImageAnalysis[];
   createdAt: Date;
 }
 
@@ -100,4 +106,13 @@ export interface PaginatedResponse<T> {
 // File upload types
 export interface UploadResponse {
   file: MessageFile;
+}
+
+// Chat response types
+export interface ChatResponseData {
+  message: string;
+  suggestions: string[];
+  model: string;
+  traceId: string;
+  imageAnalyses?: ImageAnalysis[];
 }

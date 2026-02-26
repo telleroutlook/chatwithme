@@ -104,9 +104,16 @@ const MODEL_CALL_TIMEOUT_MS = 90000;
 const MODEL_HEALTH_CACHE_TTL_MS = 60_000;
 const MODEL_HEALTH_PROBE_TIMEOUT_MS = 8_000;
 type ResponseFormat = 'text' | 'json_object';
+
+type ImageAnalysis = {
+  fileName: string;
+  analysis: string;
+};
+
 type StructuredReply = {
   message: string;
   suggestions: string[];
+  imageAnalyses?: ImageAnalysis[];
 };
 
 type ModelHealthProbeResult = {
@@ -294,23 +301,69 @@ function parseStructuredReply(raw: string): StructuredReply | null {
     suggestionsRaw = parsed.suggestions;
   }
 
+  // Parse imageAnalyses
+  const imageAnalyses: ImageAnalysis[] = [];
+  if (Array.isArray(parsed.imageAnalyses)) {
+    for (const item of parsed.imageAnalyses) {
+      if (typeof item === 'object' && item !== null) {
+        const analysis = item as Record<string, unknown>;
+        if (typeof analysis.fileName === 'string' && typeof analysis.analysis === 'string') {
+          imageAnalyses.push({
+            fileName: analysis.fileName,
+            analysis: analysis.analysis,
+          });
+        }
+      }
+    }
+  }
+
   return {
     message,
     suggestions: parseAndFinalizeSuggestions(suggestionsRaw, message),
+    imageAnalyses,
   };
 }
 
-function buildStructuredReplyMessages(messages: Array<{ role: string; content: string | Array<unknown> }>, hasTools: boolean = false): Array<{
+function buildStructuredReplyMessages(
+  messages: Array<{ role: string; content: string | Array<unknown> }>,
+  hasTools: boolean = false,
+  hasImages: boolean = false
+): Array<{
   role: 'system' | 'user' | 'assistant';
   content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
 }> {
   let systemInstruction = `You are a helpful assistant.
-Return only a JSON object with this schema:
-{"message":"<assistant reply>","suggestions":["<q1>","<q2>","<q3>"]}
+
+IMPORTANT: You must respond with a valid JSON object only. No markdown, no code blocks, no additional text.
+
+JSON format:`;
+
+  if (hasImages) {
+    systemInstruction += `
+{
+  "message": "Your response to the user",
+  "suggestions": ["question 1", "question 2", "question 3"],
+  "imageAnalyses": [
+    {"fileName": "ACTUAL_FILENAME_FROM_USER_MESSAGE", "analysis": "Detailed analysis of the image"}
+  ]
+}
+
+CRITICAL: When images are provided, you MUST include imageAnalyses array with analysis for EACH image.
+Use the EXACT file names from the user's message (look for "[Image files: ...]").`;
+  } else {
+    systemInstruction += `
+{
+  "message": "Your response to the user",
+  "suggestions": ["question 1", "question 2", "question 3"]
+}`;
+  }
+
+  systemInstruction += `
+
 Rules:
-- suggestions must contain exactly 3 concise follow-up questions.
-- suggestions must be relevant to the message.
-- no markdown code fences.`;
+- Return ONLY the JSON object, nothing else
+- suggestions: exactly 3 relevant follow-up questions
+- imageAnalyses: required when images are present, must use exact filenames from user message`;
 
   if (hasTools) {
     systemInstruction += `
@@ -676,8 +729,13 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
         const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
           { type: 'text', text: msg.message },
         ];
+
+        // Collect image file names for the model to reference
+        const imageFileNames: string[] = [];
+
         for (const file of msg.files) {
           if (file.mimeType.startsWith('image/')) {
+            imageFileNames.push(file.fileName);
             content.push({ type: 'image_url', image_url: { url: file.url } });
           } else if (file.mimeType === 'application/pdf') {
             // PDF: always use extracted text (browser-side parsing)
@@ -702,12 +760,32 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
             }
           }
         }
+
+        // Add image file names to the text message so the model knows what to reference
+        if (imageFileNames.length > 0) {
+          content[0].text += `\n\n[Image files: ${imageFileNames.join(', ')}]`;
+        }
+
         openAiMessages.push({ role: 'user', content });
       } else {
         openAiMessages.push({ role: 'user', content: msg.message });
       }
     } else {
-      openAiMessages.push({ role: 'assistant', content: msg.message });
+      // Assistant message
+      let assistantContent = msg.message;
+
+      // If the assistant message has imageAnalyses, inject them into the content for future context
+      if ((msg as Record<string, unknown>).imageAnalyses && Array.isArray((msg as Record<string, unknown>).imageAnalyses)) {
+        const imageAnalyses = (msg as Record<string, unknown>).imageAnalyses as ImageAnalysis[];
+        if (imageAnalyses.length > 0) {
+          const analysisText = imageAnalyses
+            .map(a => `\n--- Image Analysis: ${a.fileName} ---\n${a.analysis}`)
+            .join('\n');
+          assistantContent += `\n\n${analysisText}`;
+        }
+      }
+
+      openAiMessages.push({ role: 'assistant', content: assistantContent });
     }
   }
 
@@ -726,16 +804,28 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
   let activeModel = candidates[0] || model;
   let answerText = '';
   let bundledSuggestions: string[] = [];
+  let parsedImageAnalyses: ImageAnalysis[] = [];
   const attemptLogs: Array<{ model: string; error?: ModelErrorDetail }> = [];
 
   // Build messages for LLM call
   const hasMcpTools = mcpManager.isConfigured();
-  const llmMessages = buildStructuredReplyMessages(openAiMessages, hasMcpTools);
+
+  // Detect if current message contains images
+  const hasImages = historyForModelDetection.some(msg =>
+    msg.role === 'user' && msg.files?.some(f => f.mimeType.startsWith('image/'))
+  );
+
+  // Vision model doesn't support json_object format
+  const isVisionModel = model.includes('vision') || model.includes('v');
+  const responseFormat: ResponseFormat = (hasImages || isVisionModel || mcpTools) ? 'text' : 'json_object';
+
+  const llmMessages = buildStructuredReplyMessages(openAiMessages, hasMcpTools, hasImages);
   let enhancedMessages: Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content?: string | Array<{ type: string; text?: string; image_url?: { url: string } }>; tool_call_id?: string; tool_calls?: OpenAI.Chat.ChatCompletionMessageToolCall[] }> = [...llmMessages];
 
   // First LLM call: Check if tools are needed
   // Note: When tools are present, we use 'text' format to allow function calling
   // GLM-4.7 cannot simultaneously return both tool_calls and json_object format
+  // Vision models also don't support json_object format
   for (const candidate of candidates) {
     try {
       const completion = await withModelTimeout(
@@ -744,7 +834,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
             buildNonStreamingChatCompletionParams({
               model: candidate,
               messages: enhancedMessages as Array<{ role: 'system' | 'user' | 'assistant'; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }>,
-              responseFormat: mcpTools ? 'text' : 'json_object',
+              responseFormat,
               tools: mcpTools,
               tool_choice: mcpTools ? 'auto' : undefined,
             })
@@ -792,6 +882,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
         if (structured) {
           answerText = structured.message;
           bundledSuggestions = structured.suggestions;
+          parsedImageAnalyses = structured.imageAnalyses || [];
           activeModel = candidate;
           break;
         }
@@ -817,6 +908,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
           // Structured reply (no tools were configured)
           answerText = structured.message;
           bundledSuggestions = structured.suggestions;
+          parsedImageAnalyses = structured.imageAnalyses || [];
           activeModel = candidate;
           break;
         }
@@ -868,6 +960,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
     files: null,
     generatedImageUrls: null,
     searchResults: null,
+    imageAnalyses: parsedImageAnalyses.length > 0 ? parsedImageAnalyses : null,
     createdAt: new Date(),
   });
 
@@ -884,6 +977,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
       suggestions: bundledSuggestions,
       model: activeModel,
       traceId,
+      imageAnalyses: parsedImageAnalyses,
     },
   });
 });

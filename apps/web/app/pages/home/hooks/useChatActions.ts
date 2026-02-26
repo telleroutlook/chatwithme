@@ -6,7 +6,7 @@ import { useChatStore } from '~/stores/chat';
 import { api } from '~/client';
 import { ensureConversationId } from '~/lib/chatFlow';
 import { queryKeys } from '~/lib/queryKeys';
-import type { Message, MessageFile, Conversation } from '@chatwithme/shared';
+import type { Message, MessageFile, Conversation, ChatResponseData } from '@chatwithme/shared';
 
 const ACTIVE_CONVERSATION_STORAGE_KEY = 'chatwithme-active-conversation-id';
 
@@ -184,7 +184,7 @@ export function useChatActions(): UseChatActionsReturn {
     }
 
     try {
-      const response = await api.post<{ message: string; suggestions: string[] }>(
+      const response = await api.post<ChatResponseData>(
         '/chat/respond',
         {
           conversationId,
@@ -207,6 +207,7 @@ export function useChatActions(): UseChatActionsReturn {
         generatedImageUrls: [],
         searchResults: [],
         suggestions: response.data.suggestions ?? [],
+        imageAnalyses: response.data.imageAnalyses,
         createdAt: new Date(),
       };
       addMessage(conversationId, assistantMessage);
@@ -256,7 +257,7 @@ export function useChatActions(): UseChatActionsReturn {
     setPendingConversation(activeConversationId);
 
     try {
-      const response = await api.post<{ message: string; suggestions: string[] }>(
+      const response = await api.post<ChatResponseData>(
         '/chat/respond',
         {
           conversationId: activeConversationId,
@@ -279,6 +280,7 @@ export function useChatActions(): UseChatActionsReturn {
         generatedImageUrls: [],
         searchResults: [],
         suggestions: response.data.suggestions ?? [],
+        imageAnalyses: response.data.imageAnalyses,
         createdAt: new Date(),
       };
       addMessage(activeConversationId, assistantMessage);

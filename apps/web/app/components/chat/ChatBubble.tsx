@@ -1,9 +1,9 @@
 import { cn } from '~/lib/utils';
 import { Avatar, AvatarFallback } from '~/components/ui/avatar';
-import { Bot, User, Copy, Check, RefreshCw } from 'lucide-react';
+import { Bot, User, Copy, Check, RefreshCw, ChevronDown, ChevronRight, FileImage } from 'lucide-react';
 import { useState, memo, Suspense, lazy, useEffect, useRef } from 'react';
 import { ErrorBoundary } from '~/components/error';
-import type { Message, MessageFile } from '@chatwithme/shared';
+import type { Message, MessageFile, ImageAnalysis } from '@chatwithme/shared';
 import { useTouchGesture } from '~/hooks/useTouchGesture';
 import { getFileIcon, formatFileSize } from '~/lib/fileUtils';
 
@@ -142,6 +142,10 @@ export const ChatBubble = memo<ChatBubbleProps>(
             </div>
           )}
 
+          {!isUser && 'imageAnalyses' in message && message.imageAnalyses && message.imageAnalyses.length > 0 && (
+            <ImageAnalysisCard analyses={message.imageAnalyses} />
+          )}
+
           <div className="mt-3 flex items-center gap-1">
               <CopyMessageButton text={message.message} isUser={isUser} />
               {((!isUser && isLast) || (isUser && isLastUserMessage)) && onRegenerate && (
@@ -207,3 +211,50 @@ const CopyMessageButton = memo<CopyMessageButtonProps>(({ text, isUser = false }
   );
 });
 CopyMessageButton.displayName = 'CopyMessageButton';
+
+interface ImageAnalysisCardProps {
+  analyses: ImageAnalysis[];
+}
+
+const ImageAnalysisCard = memo<ImageAnalysisCardProps>(({ analyses }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  if (analyses.length === 0) return null;
+
+  return (
+    <div className="mt-3 border border-border rounded-lg overflow-hidden bg-muted/30">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between px-3 py-2 bg-muted/50 hover:bg-muted/70 transition-colors"
+        aria-expanded={isExpanded}
+      >
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <FileImage className="h-4 w-4" />
+          <span>图片解析 {analyses.length > 1 ? `(${analyses.length})` : ''}</span>
+        </div>
+        {isExpanded ? (
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        )}
+      </button>
+
+      {isExpanded && (
+        <div className="px-3 py-2 space-y-3 border-t border-border bg-background/50">
+          {analyses.map((item, index) => (
+            <div key={index} className="space-y-1">
+              <div className="flex items-center gap-2 text-xs font-medium text-foreground">
+                <FileImage className="h-3 w-3 text-muted-foreground" />
+                <span>{item.fileName}</span>
+              </div>
+              <p className="text-sm text-muted-foreground pl-5 leading-relaxed">
+                {item.analysis}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+ImageAnalysisCard.displayName = 'ImageAnalysisCard';

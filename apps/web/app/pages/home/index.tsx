@@ -200,12 +200,13 @@ export function Home() {
       )}
 
       {/* Sidebar - Desktop Resizable Container */}
-      <aside 
+      <aside
         style={{ width: sidebarCollapsed ? 0 : `${sidebarWidth}px` }}
         className={cn(
           "relative shrink-0 overflow-hidden border-r border-border bg-card flex flex-col h-full z-30",
           !isResizing && "transition-[width] duration-300 ease-in-out",
-          sidebarCollapsed && "lg:w-0 lg:border-r-0"
+          sidebarCollapsed && "lg:w-0 lg:border-r-0",
+          "hidden lg:flex"
         )}
       >
         <Sidebar
