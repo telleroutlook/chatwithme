@@ -37,13 +37,14 @@ export const MessageInput = memo(function MessageInput({
 
   // Cleanup object URLs when component unmounts
   useEffect(() => {
+    const currentUrls = objectUrlsRef.current;
     return () => {
-      objectUrlsRef.current.forEach(url => {
+      currentUrls.forEach((url) => {
         if (url.startsWith('blob:')) {
           URL.revokeObjectURL(url);
         }
       });
-      objectUrlsRef.current.clear();
+      currentUrls.clear();
     };
   }, []);
 
@@ -52,11 +53,11 @@ export const MessageInput = memo(function MessageInput({
     if (!message.trim() && files.length === 0) return;
 
     // Only allow sending if no files are currently being processed
-    const hasProcessingFiles = files.some(f => f.progress !== undefined && f.progress < 1);
+    const hasProcessingFiles = files.some((f) => f.progress !== undefined && f.progress < 1);
     if (hasProcessingFiles) return;
 
     // Clean up object URLs before sending
-    files.forEach(file => {
+    files.forEach((file) => {
       if (file.objectUrl && file.objectUrl.startsWith('blob:')) {
         objectUrlsRef.current.delete(file.objectUrl);
         URL.revokeObjectURL(file.objectUrl);
@@ -64,7 +65,9 @@ export const MessageInput = memo(function MessageInput({
     });
 
     // Send files without objectUrl and progress properties
-    const cleanFiles: MessageFile[] = files.map(({ objectUrl, progress, ...rest }) => rest);
+    const cleanFiles: MessageFile[] = files.map(
+      ({ objectUrl: _objectUrl, progress: _progress, ...rest }) => rest
+    );
     onSend(message.trim(), cleanFiles.length > 0 ? cleanFiles : undefined);
     setMessage('');
     setFiles([]);
@@ -80,7 +83,14 @@ export const MessageInput = memo(function MessageInput({
   const processFiles = async (fileList: File[]) => {
     const validFiles = fileList.filter((file) => {
       const fileType = getFileType(file);
-      if (fileType !== 'image' && fileType !== 'pdf' && fileType !== 'code' && fileType !== 'text' && fileType !== 'office') return false;
+      if (
+        fileType !== 'image' &&
+        fileType !== 'pdf' &&
+        fileType !== 'code' &&
+        fileType !== 'text' &&
+        fileType !== 'office'
+      )
+        return false;
       if (file.size > FILE_SIZE_LIMITS.IMAGE) return false;
       return true;
     });
@@ -189,7 +199,7 @@ export const MessageInput = memo(function MessageInput({
       return;
     }
 
-    setFiles(prev => {
+    setFiles((prev) => {
       // Revoke object URL if it exists
       if (fileToRemove.objectUrl && fileToRemove.objectUrl.startsWith('blob:')) {
         objectUrlsRef.current.delete(fileToRemove.objectUrl);
@@ -199,7 +209,7 @@ export const MessageInput = memo(function MessageInput({
     });
   };
 
-  const hasProcessingFiles = files.some(f => f.progress !== undefined && f.progress < 1);
+  const hasProcessingFiles = files.some((f) => f.progress !== undefined && f.progress < 1);
 
   return (
     <div
@@ -212,9 +222,10 @@ export const MessageInput = memo(function MessageInput({
       onDragLeave={handleDragLeave}
       style={{
         // Use visual viewport for mobile to adapt to keyboard
-        maxHeight: typeof window !== 'undefined' && window.innerWidth < 768
-          ? 'var(--visual-viewport-height, 100vh)'
-          : undefined,
+        maxHeight:
+          typeof window !== 'undefined' && window.innerWidth < 768
+            ? 'var(--visual-viewport-height, 100vh)'
+            : undefined,
       }}
     >
       {/* File previews */}

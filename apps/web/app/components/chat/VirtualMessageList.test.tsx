@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { VirtualMessageList } from './VirtualMessageList';
 import type { Message } from '@chatwithme/shared';
@@ -6,7 +6,7 @@ import type { Message } from '@chatwithme/shared';
 // Mock react-virtuoso
 let mockAtBottomState = true;
 vi.mock('react-virtuoso', () => ({
-  Virtuoso: ({ data, itemContent, components, atBottomStateChange, initialTopMostItemIndex, className, style }: any) => {
+  Virtuoso: ({ data, itemContent, components, atBottomStateChange, className, style }: any) => {
     // Call atBottomStateChange with mock state
     if (atBottomStateChange) {
       atBottomStateChange(mockAtBottomState);
@@ -28,11 +28,7 @@ vi.mock('react-virtuoso', () => ({
   },
 }));
 
-const createMockMessage = (
-  id: string,
-  role: 'user' | 'assistant',
-  content: string
-): Message => ({
+const createMockMessage = (id: string, role: 'user' | 'assistant', content: string): Message => ({
   id,
   userId: 'user-1',
   conversationId: 'conv-1',
@@ -56,27 +52,15 @@ describe('VirtualMessageList', () => {
       <div data-testid={`msg-${message.id}`}>{message.message}</div>
     ));
 
-    render(
-      <VirtualMessageList
-        messages={mockMessages}
-        renderMessage={renderMessage}
-      />
-    );
+    render(<VirtualMessageList messages={mockMessages} renderMessage={renderMessage} />);
 
     expect(renderMessage).toHaveBeenCalledTimes(3);
   });
 
   it('calls renderMessage with correct message and index', () => {
-    const renderMessage = vi.fn((message: Message) => (
-      <div>{message.message}</div>
-    ));
+    const renderMessage = vi.fn((message: Message) => <div>{message.message}</div>);
 
-    render(
-      <VirtualMessageList
-        messages={mockMessages}
-        renderMessage={renderMessage}
-      />
-    );
+    render(<VirtualMessageList messages={mockMessages} renderMessage={renderMessage} />);
 
     expect(renderMessage).toHaveBeenNthCalledWith(1, mockMessages[0], 0);
     expect(renderMessage).toHaveBeenNthCalledWith(2, mockMessages[1], 1);
@@ -122,12 +106,7 @@ describe('VirtualMessageList', () => {
   it('renders empty list when no messages', () => {
     const renderMessage = vi.fn((message: Message) => <div>{message.message}</div>);
 
-    render(
-      <VirtualMessageList
-        messages={[]}
-        renderMessage={renderMessage}
-      />
-    );
+    render(<VirtualMessageList messages={[]} renderMessage={renderMessage} />);
 
     expect(renderMessage).not.toHaveBeenCalled();
   });
@@ -150,12 +129,7 @@ describe('VirtualMessageList', () => {
   it('uses custom list component with correct attributes', () => {
     const renderMessage = vi.fn((message: Message) => <div>{message.message}</div>);
 
-    render(
-      <VirtualMessageList
-        messages={mockMessages}
-        renderMessage={renderMessage}
-      />
-    );
+    render(<VirtualMessageList messages={mockMessages} renderMessage={renderMessage} />);
 
     const list = screen.getByTestId('virtuoso-list');
     expect(list).toHaveAttribute('role', 'log');
@@ -166,12 +140,7 @@ describe('VirtualMessageList', () => {
   it('applies correct container styles', () => {
     const renderMessage = vi.fn((message: Message) => <div>{message.message}</div>);
 
-    const { container } = render(
-      <VirtualMessageList
-        messages={mockMessages}
-        renderMessage={renderMessage}
-      />
-    );
+    render(<VirtualMessageList messages={mockMessages} renderMessage={renderMessage} />);
 
     const virtuosoContainer = screen.getByTestId('virtuoso-container');
     expect(virtuosoContainer).toHaveClass('h-full');
@@ -196,12 +165,7 @@ describe('VirtualMessageList', () => {
     const singleMessage = [createMockMessage('1', 'user', 'Single message')];
     const renderMessage = vi.fn((message: Message) => <div>{message.message}</div>);
 
-    render(
-      <VirtualMessageList
-        messages={singleMessage}
-        renderMessage={renderMessage}
-      />
-    );
+    render(<VirtualMessageList messages={singleMessage} renderMessage={renderMessage} />);
 
     expect(renderMessage).toHaveBeenCalledTimes(1);
     expect(renderMessage).toHaveBeenCalledWith(singleMessage[0], 0);
@@ -214,12 +178,7 @@ describe('VirtualMessageList', () => {
 
     const renderMessage = vi.fn((message: Message) => <div>{message.message}</div>);
 
-    render(
-      <VirtualMessageList
-        messages={largeMessageList}
-        renderMessage={renderMessage}
-      />
-    );
+    render(<VirtualMessageList messages={largeMessageList} renderMessage={renderMessage} />);
 
     // Should render all messages (in real Virtuoso, only visible ones would render)
     expect(renderMessage).toHaveBeenCalledTimes(1000);
@@ -229,22 +188,14 @@ describe('VirtualMessageList', () => {
     const renderMessage = vi.fn((message: Message) => <div>{message.message}</div>);
 
     const { rerender } = render(
-      <VirtualMessageList
-        messages={mockMessages}
-        renderMessage={renderMessage}
-      />
+      <VirtualMessageList messages={mockMessages} renderMessage={renderMessage} />
     );
 
     expect(renderMessage).toHaveBeenCalledTimes(3);
 
     const newMessages = [...mockMessages, createMockMessage('4', 'assistant', 'New message')];
 
-    rerender(
-      <VirtualMessageList
-        messages={newMessages}
-        renderMessage={renderMessage}
-      />
-    );
+    rerender(<VirtualMessageList messages={newMessages} renderMessage={renderMessage} />);
 
     expect(renderMessage).toHaveBeenCalledTimes(7); // 3 + 4
   });
@@ -253,19 +204,11 @@ describe('VirtualMessageList', () => {
     const renderMessage = vi.fn((message: Message) => <div>{message.message}</div>);
 
     const { rerender } = render(
-      <VirtualMessageList
-        messages={mockMessages}
-        renderMessage={renderMessage}
-      />
+      <VirtualMessageList messages={mockMessages} renderMessage={renderMessage} />
     );
 
     // Should render without errors when no external ref is provided
-    rerender(
-      <VirtualMessageList
-        messages={mockMessages}
-        renderMessage={renderMessage}
-      />
-    );
+    rerender(<VirtualMessageList messages={mockMessages} renderMessage={renderMessage} />);
 
     expect(screen.getByTestId('virtuoso-container')).toBeInTheDocument();
   });
@@ -273,12 +216,7 @@ describe('VirtualMessageList', () => {
   it('applies contain strict style for performance', () => {
     const renderMessage = vi.fn((message: Message) => <div>{message.message}</div>);
 
-    render(
-      <VirtualMessageList
-        messages={mockMessages}
-        renderMessage={renderMessage}
-      />
-    );
+    render(<VirtualMessageList messages={mockMessages} renderMessage={renderMessage} />);
 
     const container = screen.getByTestId('virtuoso-container');
     expect(container).toHaveStyle({ contain: 'strict' });

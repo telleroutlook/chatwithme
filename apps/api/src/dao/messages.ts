@@ -1,4 +1,4 @@
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import type { Db } from '../db';
 import { messages, type Message, type NewMessage } from '../models';
 

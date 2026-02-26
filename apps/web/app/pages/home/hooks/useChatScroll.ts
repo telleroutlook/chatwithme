@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import type { Message } from '@chatwithme/shared';
 
 export interface UseChatScrollOptions {
@@ -35,7 +35,9 @@ export function useChatScroll({
       );
       if (!viewport) return;
 
-      const lastUserMessage = [...currentMessages].reverse().find((message) => message.role === 'user');
+      const lastUserMessage = [...currentMessages]
+        .reverse()
+        .find((message) => message.role === 'user');
       const targetMessage = lastUserMessage ?? currentMessages[0];
       const targetElement = viewport.querySelector<HTMLElement>(
         `[data-message-id="${targetMessage.id}"]`

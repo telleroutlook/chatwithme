@@ -5,10 +5,34 @@
 
 // Import constants from shared utilities
 // Note: Workers use a different import path resolution
-import { FILE_SIZE_LIMITS, PROCESSING_LIMITS } from '../lib/constants';
+import { PROCESSING_LIMITS } from '../lib/constants';
 
 // Code and Office extensions - duplicated here since workers can't easily import from TSX files
-const CODE_EXTENSIONS = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'go', 'rs', 'c', 'cpp', 'h', 'hpp', 'cs', 'rb', 'php', 'sh', 'json', 'yaml', 'yml', 'toml', 'md', 'txt', 'csv'];
+const CODE_EXTENSIONS = [
+  'js',
+  'ts',
+  'jsx',
+  'tsx',
+  'py',
+  'java',
+  'go',
+  'rs',
+  'c',
+  'cpp',
+  'h',
+  'hpp',
+  'cs',
+  'rb',
+  'php',
+  'sh',
+  'json',
+  'yaml',
+  'yml',
+  'toml',
+  'md',
+  'txt',
+  'csv',
+];
 const OFFICE_EXTENSIONS = ['pptx', 'xlsx', 'xls', 'xlsm', 'xlsb', 'docx', 'ods'];
 
 interface ProcessFileRequest {
@@ -40,12 +64,15 @@ interface ProgressMessage {
 }
 
 // DOCX text extraction
-async function extractDocxText(file: File, onProgress?: (progress: number) => void): Promise<string> {
+async function extractDocxText(
+  file: File,
+  onProgress?: (progress: number) => void
+): Promise<string> {
   try {
     if (onProgress) onProgress(0.3);
     const arrayBuffer = await file.arrayBuffer();
     if (onProgress) onProgress(0.6);
-    // @ts-ignore - mammoth dynamic import
+    // @ts-expect-error - mammoth dynamic import
     const mammothModule = await import('mammoth/mammoth.browser.js');
     const mammoth = mammothModule.default || mammothModule;
     if (onProgress) onProgress(0.8);
@@ -59,39 +86,65 @@ async function extractDocxText(file: File, onProgress?: (progress: number) => vo
 }
 
 // XLSX text extraction
-async function extractXlsxText(file: File, onProgress?: (progress: number) => void): Promise<string> {
+async function extractXlsxText(
+  file: File,
+  onProgress?: (progress: number) => void
+): Promise<string> {
   try {
     if (onProgress) onProgress(0.2);
     const arrayBuffer = await file.arrayBuffer();
     if (onProgress) onProgress(0.4);
     const xlsxModule = await import('xlsx');
 
-    let XLSX: any;
-    if (xlsxModule && typeof (xlsxModule as any).read === 'function') {
+    type XLSXType = {
+      read: (data: unknown) => {
+        SheetNames: string[];
+        Sheets: Record<string, unknown>;
+      };
+      utils: {
+        sheet_to_json: (sheet: unknown, options: unknown) => unknown[][];
+      };
+    };
+
+    let XLSX: XLSXType | unknown;
+    if (xlsxModule && typeof (xlsxModule as { read?: unknown }).read === 'function') {
       XLSX = xlsxModule;
-    } else if (xlsxModule.default && typeof (xlsxModule.default as any).read === 'function') {
+    } else if (
+      xlsxModule.default &&
+      typeof (xlsxModule.default as { read?: unknown }).read === 'function'
+    ) {
       XLSX = xlsxModule.default;
-    } else if (xlsxModule.default && (xlsxModule.default as any).default && typeof (xlsxModule.default as any).default.read === 'function') {
-      XLSX = (xlsxModule.default as any).default;
+    } else if (
+      xlsxModule.default &&
+      (xlsxModule.default as { default?: { read?: unknown } }).default &&
+      typeof (xlsxModule.default as unknown as { default: { read?: unknown } }).default.read ===
+        'function'
+    ) {
+      XLSX = (xlsxModule.default as unknown as { default: { read?: unknown } }).default;
     } else {
       XLSX = xlsxModule;
     }
 
-    if (!XLSX || typeof XLSX.read !== 'function') {
+    if (!XLSX || typeof (XLSX as XLSXType).read !== 'function') {
       throw new Error('XLSX library not loaded correctly');
     }
 
     if (onProgress) onProgress(0.6);
-    const workbook = XLSX.read(arrayBuffer);
+    const workbook = (XLSX as XLSXType).read(arrayBuffer);
     let text = '';
     const totalSheets = workbook.SheetNames.length;
 
     (workbook.SheetNames as string[]).forEach((sheetName: string, index: number) => {
       const worksheet = workbook.Sheets[sheetName];
-      if (!XLSX.utils || typeof XLSX.utils.sheet_to_json !== 'function') {
+      if (
+        !(XLSX as XLSXType).utils ||
+        typeof (XLSX as XLSXType).utils.sheet_to_json !== 'function'
+      ) {
         return;
       }
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as unknown[][];
+      const jsonData = (XLSX as XLSXType).utils.sheet_to_json(worksheet, {
+        header: 1,
+      }) as unknown[][];
       text += `\n\n--- Sheet: ${sheetName} (${jsonData.length} rows) ---\n`;
       jsonData.forEach((row) => {
         text += row.join('\t') + '\n';
@@ -99,7 +152,7 @@ async function extractXlsxText(file: File, onProgress?: (progress: number) => vo
 
       // Update progress based on sheets processed
       if (onProgress) {
-        const progress = 0.6 + (0.4 * (index + 1) / totalSheets);
+        const progress = 0.6 + (0.4 * (index + 1)) / totalSheets;
         onProgress(Math.min(progress, 0.95));
       }
     });
@@ -113,7 +166,10 @@ async function extractXlsxText(file: File, onProgress?: (progress: number) => vo
 }
 
 // PPTX text extraction
-async function extractPptxText(file: File, onProgress?: (progress: number) => void): Promise<string> {
+async function extractPptxText(
+  file: File,
+  onProgress?: (progress: number) => void
+): Promise<string> {
   try {
     if (onProgress) onProgress(0.2);
     const arrayBuffer = await file.arrayBuffer();
@@ -122,8 +178,8 @@ async function extractPptxText(file: File, onProgress?: (progress: number) => vo
     const zip = await JSZip.loadAsync(arrayBuffer);
 
     let text = '';
-    const slideFiles = Object.keys(zip.files).filter(name =>
-      name.startsWith('ppt/slides/slide') && name.endsWith('.xml')
+    const slideFiles = Object.keys(zip.files).filter(
+      (name) => name.startsWith('ppt/slides/slide') && name.endsWith('.xml')
     );
     const totalSlides = slideFiles.length;
 
@@ -134,7 +190,7 @@ async function extractPptxText(file: File, onProgress?: (progress: number) => vo
         text += `\n\n--- Slide ---\n`;
         const textMatches = content.match(/<a:t[^>]*>([^<]+)<\/a:t>/g);
         if (textMatches) {
-          textMatches.forEach(match => {
+          textMatches.forEach((match) => {
             const textContent = match.replace(/<\/?a:t[^>]*>/g, '');
             text += textContent + ' ';
           });
@@ -143,7 +199,7 @@ async function extractPptxText(file: File, onProgress?: (progress: number) => vo
 
       // Update progress based on slides processed
       if (onProgress && totalSlides > 0) {
-        const progress = 0.4 + (0.6 * (i + 1) / totalSlides);
+        const progress = 0.4 + (0.6 * (i + 1)) / totalSlides;
         onProgress(Math.min(progress, 0.95));
       }
     }
@@ -157,7 +213,11 @@ async function extractPptxText(file: File, onProgress?: (progress: number) => vo
 }
 
 // PDF text extraction
-async function extractPdfText(file: File, fileIndex: number, onProgress?: (progress: number) => void): Promise<string> {
+async function extractPdfText(
+  file: File,
+  fileIndex: number,
+  onProgress?: (progress: number) => void
+): Promise<string> {
   try {
     const arrayBuffer = await file.arrayBuffer();
     const pdfjsLib = await import('pdfjs-dist');
@@ -177,7 +237,7 @@ async function extractPdfText(file: File, fileIndex: number, onProgress?: (progr
       const textContent = await page.getTextContent();
 
       const pageText = textContent.items
-        .map((item: any) => item.str)
+        .map((item: unknown) => (item as { str: string }).str)
         .filter((str: string) => str.trim())
         .join(' ');
 

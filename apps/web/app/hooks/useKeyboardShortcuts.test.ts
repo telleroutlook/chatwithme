@@ -185,12 +185,9 @@ describe('useKeyboardShortcuts', () => {
     const newChat1 = vi.fn();
     const newChat2 = vi.fn();
 
-    const { rerender } = renderHook(
-      ({ shortcuts }) => useKeyboardShortcuts(shortcuts),
-      {
-        initialProps: { shortcuts: { newChat: newChat1 } },
-      }
-    );
+    const { rerender } = renderHook(({ shortcuts }) => useKeyboardShortcuts(shortcuts), {
+      initialProps: { shortcuts: { newChat: newChat1 } },
+    });
 
     const event = new KeyboardEvent('keydown', { key: 'k', ctrlKey: true });
 

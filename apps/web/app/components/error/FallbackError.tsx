@@ -49,14 +49,10 @@ export const FallbackError = React.memo<FallbackErrorProps>(
 
           <h3 className="text-lg font-semibold text-foreground">{title}</h3>
 
-          {description && (
-            <p className="mt-2 text-sm text-muted-foreground">{description}</p>
-          )}
+          {description && <p className="mt-2 text-sm text-muted-foreground">{description}</p>}
 
           {error.message && !isExpanded && (
-            <p className="mt-3 max-w-md text-sm text-muted-foreground">
-              {error.message}
-            </p>
+            <p className="mt-3 max-w-md text-sm text-muted-foreground">{error.message}</p>
           )}
 
           <div className="mt-5 flex flex-wrap items-center justify-center gap-3">

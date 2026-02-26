@@ -53,14 +53,7 @@ describe('TextInput', () => {
     const onChange = vi.fn();
     const onKeyDown = vi.fn();
 
-    render(
-      <TextInput
-        value=""
-        onChange={onChange}
-        onKeyDown={onKeyDown}
-        textareaRef={mockRef}
-      />
-    );
+    render(<TextInput value="" onChange={onChange} onKeyDown={onKeyDown} textareaRef={mockRef} />);
 
     expect(screen.getByPlaceholderText('Type a message...')).toBeInTheDocument();
   });
@@ -69,14 +62,7 @@ describe('TextInput', () => {
     const onChange = vi.fn();
     const onKeyDown = vi.fn();
 
-    render(
-      <TextInput
-        value=""
-        onChange={onChange}
-        onKeyDown={onKeyDown}
-        textareaRef={mockRef}
-      />
-    );
+    render(<TextInput value="" onChange={onChange} onKeyDown={onKeyDown} textareaRef={mockRef} />);
 
     const textarea = screen.getByRole('textbox');
     fireEvent.change(textarea, { target: { value: 'hello' } });
@@ -89,12 +75,7 @@ describe('TextInput', () => {
     const onKeyDown = vi.fn();
 
     render(
-      <TextInput
-        value="test"
-        onChange={onChange}
-        onKeyDown={onKeyDown}
-        textareaRef={mockRef}
-      />
+      <TextInput value="test" onChange={onChange} onKeyDown={onKeyDown} textareaRef={mockRef} />
     );
 
     const textarea = screen.getByRole('textbox');
@@ -160,14 +141,7 @@ describe('TextInput', () => {
     const onChange = vi.fn();
     const onKeyDown = vi.fn();
 
-    const { container } = render(
-      <TextInput
-        value=""
-        onChange={onChange}
-        onKeyDown={onKeyDown}
-        textareaRef={mockRef}
-      />
-    );
+    render(<TextInput value="" onChange={onChange} onKeyDown={onKeyDown} textareaRef={mockRef} />);
 
     const textarea = screen.getByRole('textbox');
     expect(textarea).toHaveClass('w-full');
@@ -180,24 +154,14 @@ describe('TextInput', () => {
     const onKeyDown = vi.fn();
 
     const { rerender } = render(
-      <TextInput
-        value="initial"
-        onChange={onChange}
-        onKeyDown={onKeyDown}
-        textareaRef={mockRef}
-      />
+      <TextInput value="initial" onChange={onChange} onKeyDown={onKeyDown} textareaRef={mockRef} />
     );
 
     const textarea = screen.getByRole('textbox');
     expect(textarea).toHaveValue('initial');
 
     rerender(
-      <TextInput
-        value="updated"
-        onChange={onChange}
-        onKeyDown={onKeyDown}
-        textareaRef={mockRef}
-      />
+      <TextInput value="updated" onChange={onChange} onKeyDown={onKeyDown} textareaRef={mockRef} />
     );
 
     expect(textarea).toHaveValue('updated');
@@ -207,14 +171,7 @@ describe('TextInput', () => {
     const onChange = vi.fn();
     const onKeyDown = vi.fn();
 
-    render(
-      <TextInput
-        value=""
-        onChange={onChange}
-        onKeyDown={onKeyDown}
-        textareaRef={mockRef}
-      />
-    );
+    render(<TextInput value="" onChange={onChange} onKeyDown={onKeyDown} textareaRef={mockRef} />);
 
     const textarea = screen.getByRole('textbox');
     expect(textarea).toHaveAttribute('rows', '1');

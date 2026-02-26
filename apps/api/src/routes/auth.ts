@@ -45,7 +45,12 @@ auth.post('/signup', zValidator('json', signUpSchema, validationErrorHook), asyn
 
     const existingEmail = await getUserByEmail(db, email);
     if (existingEmail) {
-      return errorResponse(c, 409, ERROR_CODES.EMAIL_ALREADY_REGISTERED, 'Email already registered');
+      return errorResponse(
+        c,
+        409,
+        ERROR_CODES.EMAIL_ALREADY_REGISTERED,
+        'Email already registered'
+      );
     }
 
     const existingUsername = await getUserByUsername(db, username);

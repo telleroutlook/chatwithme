@@ -15,6 +15,21 @@
     "lint": {
       "dependsOn": ["^lint"]
     },
+    "lint:fix": {
+      "dependsOn": ["^lint:fix"]
+    },
+    "typecheck": {
+      "dependsOn": ["^typecheck"]
+    },
+    "format": {
+      "dependsOn": ["^format"]
+    },
+    "format:fix": {
+      "dependsOn": ["^format:fix"]
+    },
+    "test": {
+      "dependsOn": ["^test"]
+    },
     "deploy": {
       "dependsOn": ["build"],
       "cache": false

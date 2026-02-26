@@ -60,7 +60,9 @@ export default function SignUp() {
       <Card className="relative w-full max-w-md border-border/90 bg-card/95">
         <CardHeader className="space-y-2 pb-4 text-center">
           <CardTitle className="text-2xl sm:text-[1.9rem]">Create Account</CardTitle>
-          <CardDescription className="text-sm sm:text-base">Sign up to start chatting with AI</CardDescription>
+          <CardDescription className="text-sm sm:text-base">
+            Sign up to start chatting with AI
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -130,7 +132,11 @@ export default function SignUp() {
               />
             </div>
 
-            <Button type="submit" className="h-11 w-full rounded-xl text-sm font-semibold" disabled={loading}>
+            <Button
+              type="submit"
+              className="h-11 w-full rounded-xl text-sm font-semibold"
+              disabled={loading}
+            >
               {loading ? 'Creating Account...' : 'Sign Up'}
             </Button>
 

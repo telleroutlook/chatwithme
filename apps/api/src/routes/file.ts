@@ -6,11 +6,7 @@ import { authMiddleware, getAuthInfo } from '../middleware/auth';
 import { ERROR_CODES } from '../constants/error-codes';
 import { generateId } from '../utils/crypto';
 import { errorResponse, validationErrorHook } from '../utils/response';
-import {
-  validateUploadedFile,
-  sanitizeFileName,
-  getFileExtension,
-} from '../utils/fileValidation';
+import { validateUploadedFile, sanitizeFileName, getFileExtension } from '../utils/fileValidation';
 import { MAX_FILE_SIZE, ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS } from '../constants/fileValidation';
 import type { MessageFile, UploadResponse } from '../types';
 
@@ -27,27 +23,31 @@ const fileKeyParamSchema = z.object({
 });
 
 // Download route doesn't require auth for AI vision models to access
-file.get('/download/:key{.+}', zValidator('param', fileKeyParamSchema, validationErrorHook), async (c) => {
-  const { key } = c.req.valid('param');
+file.get(
+  '/download/:key{.+}',
+  zValidator('param', fileKeyParamSchema, validationErrorHook),
+  async (c) => {
+    const { key } = c.req.valid('param');
 
-  try {
-    const object = await c.env.BUCKET.get(key);
-    if (!object) {
-      return errorResponse(c, 404, ERROR_CODES.FILE_NOT_FOUND, 'File not found');
+    try {
+      const object = await c.env.BUCKET.get(key);
+      if (!object) {
+        return errorResponse(c, 404, ERROR_CODES.FILE_NOT_FOUND, 'File not found');
+      }
+
+      const headers = new Headers();
+      object.writeHttpMetadata(headers);
+      headers.set('etag', object.httpEtag);
+      // Add CORS headers to allow AI vision models to access
+      headers.set('Access-Control-Allow-Origin', '*');
+
+      return new Response(object.body, { headers });
+    } catch (error) {
+      console.error('Download error:', error);
+      return errorResponse(c, 500, ERROR_CODES.DOWNLOAD_FAILED, 'Download failed');
     }
-
-    const headers = new Headers();
-    object.writeHttpMetadata(headers);
-    headers.set('etag', object.httpEtag);
-    // Add CORS headers to allow AI vision models to access
-    headers.set('Access-Control-Allow-Origin', '*');
-
-    return new Response(object.body, { headers });
-  } catch (error) {
-    console.error('Download error:', error);
-    return errorResponse(c, 500, ERROR_CODES.DOWNLOAD_FAILED, 'Download failed');
   }
-});
+);
 
 // All other routes require auth
 file.use('/*', authMiddleware);
@@ -105,41 +105,49 @@ file.post('/upload', zValidator('form', fileUploadSchema, validationErrorHook), 
   }
 });
 
-file.get('/download/:key{.+}', zValidator('param', fileKeyParamSchema, validationErrorHook), async (c) => {
-  const { key } = c.req.valid('param');
+file.get(
+  '/download/:key{.+}',
+  zValidator('param', fileKeyParamSchema, validationErrorHook),
+  async (c) => {
+    const { key } = c.req.valid('param');
 
-  try {
-    const object = await c.env.BUCKET.get(key);
-    if (!object) {
-      return errorResponse(c, 404, ERROR_CODES.FILE_NOT_FOUND, 'File not found');
+    try {
+      const object = await c.env.BUCKET.get(key);
+      if (!object) {
+        return errorResponse(c, 404, ERROR_CODES.FILE_NOT_FOUND, 'File not found');
+      }
+
+      const headers = new Headers();
+      object.writeHttpMetadata(headers);
+      headers.set('etag', object.httpEtag);
+
+      return new Response(object.body, { headers });
+    } catch (error) {
+      console.error('Download error:', error);
+      return errorResponse(c, 500, ERROR_CODES.DOWNLOAD_FAILED, 'Download failed');
+    }
+  }
+);
+
+file.delete(
+  '/delete/:key{.+}',
+  zValidator('param', fileKeyParamSchema, validationErrorHook),
+  async (c) => {
+    const { userId } = getAuthInfo(c);
+    const { key } = c.req.valid('param');
+
+    if (!key.startsWith(`uploads/${userId}/`)) {
+      return errorResponse(c, 403, ERROR_CODES.FORBIDDEN, 'Unauthorized');
     }
 
-    const headers = new Headers();
-    object.writeHttpMetadata(headers);
-    headers.set('etag', object.httpEtag);
-
-    return new Response(object.body, { headers });
-  } catch (error) {
-    console.error('Download error:', error);
-    return errorResponse(c, 500, ERROR_CODES.DOWNLOAD_FAILED, 'Download failed');
+    try {
+      await c.env.BUCKET.delete(key);
+      return c.json({ success: true, data: { message: 'File deleted' } });
+    } catch (error) {
+      console.error('Delete error:', error);
+      return errorResponse(c, 500, ERROR_CODES.DELETE_FAILED, 'Delete failed');
+    }
   }
-});
-
-file.delete('/delete/:key{.+}', zValidator('param', fileKeyParamSchema, validationErrorHook), async (c) => {
-  const { userId } = getAuthInfo(c);
-  const { key } = c.req.valid('param');
-
-  if (!key.startsWith(`uploads/${userId}/`)) {
-    return errorResponse(c, 403, ERROR_CODES.FORBIDDEN, 'Unauthorized');
-  }
-
-  try {
-    await c.env.BUCKET.delete(key);
-    return c.json({ success: true, data: { message: 'File deleted' } });
-  } catch (error) {
-    console.error('Delete error:', error);
-    return errorResponse(c, 500, ERROR_CODES.DELETE_FAILED, 'Delete failed');
-  }
-});
+);
 
 export default file;

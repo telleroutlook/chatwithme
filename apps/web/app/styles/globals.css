@@ -231,8 +231,12 @@ aside ::-webkit-scrollbar-thumb:hover {
 
 /* Pull-to-refresh indicator */
 @keyframes rotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .pull-to-refresh-indicator {
@@ -295,7 +299,11 @@ aside ::-webkit-scrollbar-thumb:hover {
 @media (max-width: 768px) {
   /* Fixed bottom elements adapt to visual viewport */
   .safe-area-bottom {
-    padding-bottom: max(0.75rem, env(safe-area-inset-bottom), calc(100vh - var(--visual-viewport-height)));
+    padding-bottom: max(
+      0.75rem,
+      env(safe-area-inset-bottom),
+      calc(100vh - var(--visual-viewport-height))
+    );
   }
 
   /* Smooth transition for keyboard appearance */
@@ -338,8 +346,12 @@ aside ::-webkit-scrollbar-thumb:hover {
 }
 
 @keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes scale-in {
@@ -365,13 +377,19 @@ aside ::-webkit-scrollbar-thumb:hover {
 }
 
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 /* Typing indicator animation */
 @keyframes typing-bounce {
-  0%, 60%, 100% {
+  0%,
+  60%,
+  100% {
     transform: translateY(0);
   }
   30% {

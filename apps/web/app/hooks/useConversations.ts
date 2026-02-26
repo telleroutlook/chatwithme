@@ -1,9 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
 import { api } from '~/client';
 import { queryKeys } from '~/lib/queryKeys';
 import type { Conversation } from '@chatwithme/shared';
+import { useQuery } from '@tanstack/react-query';
 
-export function useConversations() {
+export function useConversations(enabled = true) {
   return useQuery({
     queryKey: queryKeys.conversations,
     queryFn: async () => {
@@ -11,5 +11,6 @@ export function useConversations() {
       if (!response.success || !response.data) throw new Error('Failed to load conversations');
       return response.data.conversations;
     },
+    enabled,
   });
 }

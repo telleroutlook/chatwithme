@@ -17,43 +17,50 @@ export function usePullToRefresh(options: PullToRefreshOptions) {
   const touchStartRef = useRef<{ y: number; scrollTop: number } | null>(null);
   const containerRef = useRef<HTMLElement | null>(null);
 
-  const handleTouchStart = useCallback((e: TouchEvent) => {
-    if (disabled) return;
+  const handleTouchStart = useCallback(
+    (e: TouchEvent) => {
+      if (disabled) return;
 
-    const target = e.target as HTMLElement;
-    const scrollContainer = containerRef.current?.closest('[data-radix-scroll-area-viewport]') as HTMLElement;
-    const scrollTop = scrollContainer?.scrollTop ?? 0;
+      const scrollContainer = containerRef.current?.closest(
+        '[data-radix-scroll-area-viewport]'
+      ) as HTMLElement;
+      const scrollTop = scrollContainer?.scrollTop ?? 0;
 
-    // Only trigger if at the top of the scroll
-    if (scrollTop <= 0) {
-      touchStartRef.current = {
-        y: e.touches[0].clientY,
-        scrollTop,
-      };
-      setCanRefresh(true);
-    }
-  }, [disabled]);
+      // Only trigger if at the top of the scroll
+      if (scrollTop <= 0) {
+        touchStartRef.current = {
+          y: e.touches[0].clientY,
+          scrollTop,
+        };
+        setCanRefresh(true);
+      }
+    },
+    [disabled]
+  );
 
-  const handleTouchMove = useCallback((e: TouchEvent) => {
-    if (disabled || !touchStartRef.current || !canRefresh) return;
+  const handleTouchMove = useCallback(
+    (e: TouchEvent) => {
+      if (disabled || !touchStartRef.current || !canRefresh) return;
 
-    const currentY = e.touches[0].clientY;
-    const deltaY = currentY - touchStartRef.current.y;
+      const currentY = e.touches[0].clientY;
+      const deltaY = currentY - touchStartRef.current.y;
 
-    // Only pull down (positive delta)
-    if (deltaY > 0) {
-      e.preventDefault();
-      setIsPulling(true);
+      // Only pull down (positive delta)
+      if (deltaY > 0) {
+        e.preventDefault();
+        setIsPulling(true);
 
-      // Use resistance formula for smoother feel
-      const resistance = 0.4;
-      const distance = Math.min(deltaY * resistance, threshold * 1.5);
-      setPullDistance(distance);
-    } else {
-      setIsPulling(false);
-      setPullDistance(0);
-    }
-  }, [disabled, canRefresh, threshold]);
+        // Use resistance formula for smoother feel
+        const resistance = 0.4;
+        const distance = Math.min(deltaY * resistance, threshold * 1.5);
+        setPullDistance(distance);
+      } else {
+        setIsPulling(false);
+        setPullDistance(0);
+      }
+    },
+    [disabled, canRefresh, threshold]
+  );
 
   const handleTouchEnd = useCallback(async () => {
     if (!touchStartRef.current) return;

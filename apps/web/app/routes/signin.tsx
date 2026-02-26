@@ -47,7 +47,9 @@ export default function SignIn() {
       <Card className="relative w-full max-w-md border-border/90 bg-card/95">
         <CardHeader className="space-y-2 pb-4 text-center">
           <CardTitle className="text-2xl sm:text-[1.9rem]">Welcome Back</CardTitle>
-          <CardDescription className="text-sm sm:text-base">Sign in to your account to continue</CardDescription>
+          <CardDescription className="text-sm sm:text-base">
+            Sign in to your account to continue
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -87,7 +89,11 @@ export default function SignIn() {
               />
             </div>
 
-            <Button type="submit" className="h-11 w-full rounded-xl text-sm font-semibold" disabled={loading}>
+            <Button
+              type="submit"
+              className="h-11 w-full rounded-xl text-sm font-semibold"
+              disabled={loading}
+            >
               {loading ? 'Signing in...' : 'Sign In'}
             </Button>
 

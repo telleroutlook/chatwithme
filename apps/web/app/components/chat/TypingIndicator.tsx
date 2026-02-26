@@ -9,7 +9,12 @@ interface TypingIndicatorProps {
 
 export const TypingIndicator = memo<TypingIndicatorProps>(({ className }) => {
   return (
-    <div className={cn('flex gap-2 p-3 sm:gap-3 sm:p-4', className)} role="status" aria-live="polite" aria-label="Assistant is typing">
+    <div
+      className={cn('flex gap-2 p-3 sm:gap-3 sm:p-4', className)}
+      role="status"
+      aria-live="polite"
+      aria-label="Assistant is typing"
+    >
       <Avatar className="h-8 w-8 shrink-0 sm:h-9 sm:w-9" aria-hidden="true">
         <AvatarFallback className="bg-muted">
           <Bot className="h-4 w-4" />

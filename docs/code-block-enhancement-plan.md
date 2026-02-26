@@ -3,17 +3,20 @@
 ## 目标与范围
 
 ### 目标
+
 1. 长代码默认折叠，减少滚动负担
 2. 预览内容优先展示渲染结果，提高可读性
 3. 下载能力可扩展，覆盖源文件与渲染结果
 4. 预览失败可恢复，避免卡死或空白
 
 ### 非目标（本期不做）
+
 1. 代码块编辑与在线运行
 2. 复杂格式导出（如 PDF、PPT）
 3. 新增数据类预览（JSON/CSV）
 
 ### 成功标准（可验证）
+
 1. 典型对话中长代码块滚动长度下降
 2. 预览型内容点击率高于 Code 视图
 3. 预览失败时可一键回退到 Code
@@ -42,11 +45,11 @@
 └─────────────────────────────────────────────────────┘
 ```
 
-| 视图 | 用途 | 显示内容 |
-|------|------|---------|
-| **Title** | 卡片式概览 | 文件名、语言类型、行数、可选首行摘要 |
-| **Code** | 源码显示 | 语法高亮的代码 |
-| **Preview** | 渲染预览 | HTML/SVG/Markdown 的渲染结果 |
+| 视图        | 用途       | 显示内容                             |
+| ----------- | ---------- | ------------------------------------ |
+| **Title**   | 卡片式概览 | 文件名、语言类型、行数、可选首行摘要 |
+| **Code**    | 源码显示   | 语法高亮的代码                       |
+| **Preview** | 渲染预览   | HTML/SVG/Markdown 的渲染结果         |
 
 Title 视图保持轻量，首行摘要为可选项，避免引入额外解析复杂度。
 
@@ -56,12 +59,12 @@ Title 视图保持轻量，首行摘要为可选项，避免引入额外解析�
 
 ### 语言分类配置
 
-| 分类 | 语言 | 默认视图 | 说明 |
-|------|------|---------|------|
-| **可预览** | html, svg, xml(svg), markdown, md | `Preview` | 优先展示渲染结果 |
-| **纯文本** | txt, text, plain | `Code` | 直接显示内容 |
-| **编程语言** | js, ts, py, java, go, rust, cpp, c, 等 | `Title` | 折叠状态，减少滚动 |
-| **Mermaid** | mermaid | 独立渲染 | 保持现有逻辑 |
+| 分类         | 语言                                   | 默认视图  | 说明               |
+| ------------ | -------------------------------------- | --------- | ------------------ |
+| **可预览**   | html, svg, xml(svg), markdown, md      | `Preview` | 优先展示渲染结果   |
+| **纯文本**   | txt, text, plain                       | `Code`    | 直接显示内容       |
+| **编程语言** | js, ts, py, java, go, rust, cpp, c, 等 | `Title`   | 折叠状态，减少滚动 |
+| **Mermaid**  | mermaid                                | 独立渲染  | 保持现有逻辑       |
 
 ### 优先级规则（从上到下匹配）
 
@@ -102,7 +105,7 @@ Title 视图保持轻量，首行摘要为可选项，避免引入额外解析�
 支持的 AI 回复格式：
 
 ````markdown
-```typescript:utils.ts          // 格式1: language:filename.ext
+```typescript:utils.ts // 格式1: language:filename.ext
 function hello() {}
 ```
 ````
@@ -120,11 +123,13 @@ print("Hello")
 ````
 
 **上下文推断（备用）**：
+
 - 解析代码块前的文本
 - 匹配模式：`Create file: xxx.ext`, `File: xxx.ext`
 - 默认命名：`code_snippet.{ext}`
 
 **文件名清理**：
+
 - 复用后端的 `sanitizeFileName` 逻辑
 - 移除危险字符：`< > : " | ? *`
 - 限制长度：最大 255 字符
@@ -171,19 +176,21 @@ print("Hello")
 
 ### 支持的下载格式
 
-| 语言 | 源文件 | 渲染结果 |
-|------|--------|---------|
-| SVG | `.svg` | `.png` |
-| HTML | `.html` | `.png`（懒加载 html2canvas） |
-| Markdown | `.md` | -（本期不做） |
-| 其他 | `{ext}` | - |
+| 语言     | 源文件  | 渲染结果                     |
+| -------- | ------- | ---------------------------- |
+| SVG      | `.svg`  | `.png`                       |
+| HTML     | `.html` | `.png`（懒加载 html2canvas） |
+| Markdown | `.md`   | -（本期不做）                |
+| 其他     | `{ext}` | -                            |
 
 **实现策略**：
+
 1. 源文件下载（已有）
 2. SVG → PNG（已有）
 3. HTML → PNG（新增，按需加载依赖）
 
 **命名策略**：
+
 - 多个代码块同名时追加序号后缀 `-2`, `-3`
 - 下载时统一走 `sanitizeFileName`
 
@@ -192,10 +199,12 @@ print("Hello")
 ## 六、实现步骤（更可执行）
 
 ### Phase 0: 现状梳理
+
 1. 确认现有 Code/Preview 的默认行为与状态管理方式
 2. 盘点现有下载逻辑与依赖
 
 ### Phase 1: 基础设施
+
 1. 创建 `languageConfig.ts`
    - 语言分类配置
    - 导出 `getLanguageConfig()`
@@ -215,6 +224,7 @@ print("Hello")
    - `DownloadOption`
 
 ### Phase 2: 新组件
+
 1. `TitleView.tsx`
    - 卡片式 UI
    - 点击切换到 Code
@@ -228,6 +238,7 @@ print("Hello")
    - 点击外部关闭
 
 ### Phase 3: 核心重构
+
 1. `DownloadButton.tsx`
    - 支持多格式
    - 下拉菜单逻辑
@@ -245,6 +256,7 @@ print("Hello")
    - 放在 `apps/web/app/lib/`
 
 ### Phase 4: 测试与优化
+
 1. 单元测试
    - `titleParser.test.ts`
    - `tabSelector.test.ts`
@@ -266,56 +278,64 @@ print("Hello")
 
 ### 需要修改的文件
 
-| 文件路径 | 改动类型 | 说明 |
-|---------|---------|------|
-| `apps/web/app/components/chat/markdown/CodeBlock.tsx` | 重构 | 集成三个 Tab |
-| `apps/web/app/components/chat/markdown/types.ts` | 扩展 | 新类型定义 |
-| `apps/web/app/components/chat/markdown/utils.ts` | 扩展 | 标题解析等工具 |
-| `apps/web/app/components/chat/markdown/index.tsx` | 小改 | 传递上下文 |
+| 文件路径                                              | 改动类型 | 说明           |
+| ----------------------------------------------------- | -------- | -------------- |
+| `apps/web/app/components/chat/markdown/CodeBlock.tsx` | 重构     | 集成三个 Tab   |
+| `apps/web/app/components/chat/markdown/types.ts`      | 扩展     | 新类型定义     |
+| `apps/web/app/components/chat/markdown/utils.ts`      | 扩展     | 标题解析等工具 |
+| `apps/web/app/components/chat/markdown/index.tsx`     | 小改     | 传递上下文     |
 
 ### 需要新建的文件
 
-| 文件路径 | 说明 |
-|---------|------|
-| `apps/web/app/components/chat/markdown/languageConfig.ts` | 语言分类配置 |
-| `apps/web/app/components/chat/markdown/titleParser.ts` | 标题解析工具 |
-| `apps/web/app/components/chat/markdown/tabSelector.ts` | 默认 Tab 逻辑 |
-| `apps/web/app/components/chat/markdown/TitleView.tsx` | Title 视图 |
-| `apps/web/app/components/chat/markdown/PreviewErrorBoundary.tsx` | 预览错误边界 |
-| `apps/web/app/components/chat/markdown/DropdownMenu.tsx` | 下载下拉 |
-| `apps/web/app/lib/sanitizeFileName.ts` | 文件名清理 |
+| 文件路径                                                         | 说明          |
+| ---------------------------------------------------------------- | ------------- |
+| `apps/web/app/components/chat/markdown/languageConfig.ts`        | 语言分类配置  |
+| `apps/web/app/components/chat/markdown/titleParser.ts`           | 标题解析工具  |
+| `apps/web/app/components/chat/markdown/tabSelector.ts`           | 默认 Tab 逻辑 |
+| `apps/web/app/components/chat/markdown/TitleView.tsx`            | Title 视图    |
+| `apps/web/app/components/chat/markdown/PreviewErrorBoundary.tsx` | 预览错误边界  |
+| `apps/web/app/components/chat/markdown/DropdownMenu.tsx`         | 下载下拉      |
+| `apps/web/app/lib/sanitizeFileName.ts`                           | 文件名清理    |
 
 ---
 
 ## 设计决策说明（补充约束与理由）
 
 ### 决策 1: Title 视图交互方式
+
 **采用**：纯展示卡片（点击后切换到 Code，不自动折叠回）
 
 **理由**：
+
 - 状态管理简单
 - 用户意图明确
 - 视觉上更像“摘要卡片”
 
 ### 决策 2: Preview 支持范围
+
 **采用**：HTML + SVG + Markdown（Markdown 仅渲染，暂不导出）
 
 **理由**：
+
 - HTML/SVG 已有支持
 - Markdown 渲染常用且实现成本低
 - 文档导出复杂度高，后续再评估
 
 ### 决策 3: 大代码块默认行为
+
 **采用**：编程语言 > 50 行默认 Title；<= 12 行默认 Code
 
 **理由**：
+
 - 减少滚动
 - 避免短代码块多一次点击
 
 ### 决策 4: 下载功能分期
+
 **采用**：三阶段
 
 **理由**：
+
 - 已有能力优先复用
 - 依赖加载按需，控制体积
 - 复杂导出延后

@@ -16,13 +16,16 @@ export interface ParsedTitle {
  * Removes/replaces characters that are invalid in filenames
  */
 function sanitizeFilename(text: string): string {
-  return text
-    .trim()
-    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '') // Remove invalid chars
-    .replace(/\s+/g, '_')                   // Spaces to underscores
-    .replace(/_{2,}/g, '_')                 // Multiple underscores to single
-    .replace(/^_+|_+$/g, '')               // Trim leading/trailing underscores
-    .substring(0, 60);                      // Limit length
+  return (
+    text
+      .trim()
+      // eslint-disable-next-line no-control-regex
+      .replace(/[<>:"/\\|?*\x00-\x1F]/g, '') // Remove invalid chars
+      .replace(/\s+/g, '_') // Spaces to underscores
+      .replace(/_{2,}/g, '_') // Multiple underscores to single
+      .replace(/^_+|_+$/g, '') // Trim leading/trailing underscores
+      .substring(0, 60) // Limit length
+  );
 }
 
 /**
@@ -35,10 +38,11 @@ function extractSvgTitle(rawCode: string): string | null {
   // Try to extract <title> tag content
   const titleMatch = trimmedCode.match(/<title[^>]*>(.*?)<\/title>/is);
   if (titleMatch && titleMatch[1]) {
-    const title = titleMatch[1].trim()
-      .replace(/[\s\n\r]+/g, ' ')  // Normalize whitespace
+    const title = titleMatch[1]
+      .trim()
+      .replace(/[\s\n\r]+/g, ' ') // Normalize whitespace
       .replace(/[<>:"/\\|?*]/g, '') // Remove invalid filename chars
-      .substring(0, 50);             // Limit length
+      .substring(0, 50); // Limit length
     if (title.length > 2) {
       return title;
     }
@@ -47,7 +51,8 @@ function extractSvgTitle(rawCode: string): string | null {
   // Try to extract first <text> element content (often the main heading in SVG)
   const textMatch = trimmedCode.match(/<text[^>]*>(.*?)<\/text>/is);
   if (textMatch && textMatch[1]) {
-    const text = textMatch[1].trim()
+    const text = textMatch[1]
+      .trim()
       .replace(/[\s\n\r]+/g, ' ')
       .replace(/[<>:"/\\|?*]/g, '')
       .substring(0, 50);
@@ -277,7 +282,11 @@ export function inferTitleFromContext(context: string): string | null {
  * Generate a friendly title for code without explicit filename
  * @deprecated Use parseCodeBlockTitle instead, which now handles content-based inference
  */
-export function generateFriendlyTitle(language: string, fallbackIndex: number, rawCode?: string): string {
+export function generateFriendlyTitle(
+  language: string,
+  fallbackIndex: number,
+  rawCode?: string
+): string {
   const extension = getLanguageExtension(language);
 
   // If rawCode is provided, try to extract a meaningful title

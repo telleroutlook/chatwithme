@@ -129,7 +129,10 @@ class ApiClient {
         console.log(`Token refresh completed after ${attempts} attempt(s)`);
       }
 
-      const data = (await response.json()) as ApiResponse<{ accessToken: string; expiresIn: number }>;
+      const data = (await response.json()) as ApiResponse<{
+        accessToken: string;
+        expiresIn: number;
+      }>;
       if (data.success && data.data) {
         useAuthStore.getState().updateTokens(data.data.accessToken, data.data.expiresIn);
         return true;

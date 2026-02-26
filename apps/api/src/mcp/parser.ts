@@ -17,7 +17,9 @@ export interface ToolCall {
  * @param completion - The completion object from OpenAI API
  * @returns Array of tool calls, or empty array if none
  */
-export function parseToolCalls(completion: { choices: Array<{ message: { tool_calls?: ChatCompletionMessageToolCall[] | null } }> }): ToolCall[] {
+export function parseToolCalls(completion: {
+  choices: Array<{ message: { tool_calls?: ChatCompletionMessageToolCall[] | null } }>;
+}): ToolCall[] {
   const toolCalls = completion.choices[0]?.message?.tool_calls;
 
   if (!toolCalls || toolCalls.length === 0) {

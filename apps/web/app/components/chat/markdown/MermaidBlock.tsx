@@ -102,9 +102,7 @@ export const MermaidRenderer = memo<MermaidRendererProps>(({ chart }) => {
       </div>
       <div className="p-4 overflow-x-auto">
         <div ref={containerRef} className="mermaid-diagram min-h-[120px]" />
-        {isLoading && (
-          <div className="text-sm text-muted-foreground">Rendering diagram...</div>
-        )}
+        {isLoading && <div className="text-sm text-muted-foreground">Rendering diagram...</div>}
       </div>
     </div>
   );

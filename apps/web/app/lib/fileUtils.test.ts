@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { formatFileSize, getFileIcon, getFileType, CODE_EXTENSIONS, OFFICE_EXTENSIONS } from './fileUtils';
+import {
+  formatFileSize,
+  getFileIcon,
+  getFileType,
+  CODE_EXTENSIONS,
+  OFFICE_EXTENSIONS,
+} from './fileUtils';
 import type { MessageFile } from '@chatwithme/shared';
 
 // Mock file objects
@@ -83,13 +89,22 @@ describe('getFileType', () => {
   });
 
   it('returns "office" for office document extensions', () => {
-    const docxFile = createMockFile('report.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    const docxFile = createMockFile(
+      'report.docx',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    );
     expect(getFileType(docxFile)).toBe('office');
 
-    const xlsxFile = createMockFile('data.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    const xlsxFile = createMockFile(
+      'data.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
     expect(getFileType(xlsxFile)).toBe('office');
 
-    const pptxFile = createMockFile('slides.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    const pptxFile = createMockFile(
+      'slides.pptx',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    );
     expect(getFileType(pptxFile)).toBe('office');
   });
 
@@ -126,7 +141,11 @@ describe('getFileIcon', () => {
   });
 
   it('returns blue icon for Word documents (docx)', () => {
-    const docxFile = createMockMessageFile('report.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 1024);
+    const docxFile = createMockMessageFile(
+      'report.docx',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      1024
+    );
     const icon = getFileIcon(docxFile);
 
     expect(icon).not.toBeNull();
@@ -134,7 +153,11 @@ describe('getFileIcon', () => {
   });
 
   it('returns orange icon for PowerPoint presentations (pptx)', () => {
-    const pptxFile = createMockMessageFile('slides.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 1024);
+    const pptxFile = createMockMessageFile(
+      'slides.pptx',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      1024
+    );
     const icon = getFileIcon(pptxFile);
 
     expect(icon).not.toBeNull();
@@ -142,7 +165,11 @@ describe('getFileIcon', () => {
   });
 
   it('returns green icon for Excel spreadsheets', () => {
-    const xlsxFile = createMockMessageFile('data.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 1024);
+    const xlsxFile = createMockMessageFile(
+      'data.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      1024
+    );
     const icon = getFileIcon(xlsxFile);
 
     expect(icon).not.toBeNull();

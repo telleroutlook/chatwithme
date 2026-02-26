@@ -6,14 +6,26 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "lint": "turbo lint",
+    "lint:fix": "turbo lint:fix",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
     "deploy": "pnpm --filter @chatwithme/web run build && pnpm --filter @chatwithme/api run deploy",
     "db:generate": "pnpm --filter api db:generate",
     "db:migrate": "pnpm --filter api db:migrate",
     "db:studio": "pnpm --filter api db:studio"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.0.2",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
     "turbo": "^2.4.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.56.1"
   },
   "packageManager": "pnpm@9.15.0",
   "engines": {

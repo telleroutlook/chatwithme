@@ -18,24 +18,18 @@ export function FilePreview({ file, onRemove, index, progress }: FilePreviewProp
   return (
     <div
       className={cn(
-        "relative group rounded-lg border border-border p-2",
-        file.mimeType.startsWith('image/') ? "w-16 h-16 overflow-hidden p-0" : "w-auto max-w-[200px]"
+        'relative group rounded-lg border border-border p-2',
+        file.mimeType.startsWith('image/')
+          ? 'w-16 h-16 overflow-hidden p-0'
+          : 'w-auto max-w-[200px]'
       )}
     >
       {file.mimeType.startsWith('image/') ? (
         <>
-          <img
-            src={file.url}
-            alt={file.fileName}
-            className="w-full h-full object-cover"
-          />
+          <img src={file.url} alt={file.fileName} className="w-full h-full object-cover" />
           {/* Progress overlay for images */}
           {showProgressOverlay && (
-            <UploadProgress
-              progress={progress}
-              fileName={file.fileName}
-              fileSize={file.size}
-            />
+            <UploadProgress progress={progress} fileName={file.fileName} fileSize={file.size} />
           )}
         </>
       ) : (
@@ -49,11 +43,7 @@ export function FilePreview({ file, onRemove, index, progress }: FilePreviewProp
           </div>
           {/* Progress overlay for non-images */}
           {showProgressOverlay && (
-            <UploadProgress
-              progress={progress}
-              fileName={file.fileName}
-              fileSize={file.size}
-            />
+            <UploadProgress progress={progress} fileName={file.fileName} fileSize={file.size} />
           )}
         </div>
       )}

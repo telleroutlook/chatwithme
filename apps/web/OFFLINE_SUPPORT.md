@@ -5,6 +5,7 @@ This document describes the offline support implementation for the chatwithme ap
 ## Overview
 
 The offline support enables users to:
+
 - Continue viewing cached conversations and messages while offline
 - Queue API requests when offline and sync them when back online
 - See offline status indicator
@@ -17,16 +18,19 @@ The offline support enables users to:
 The service worker implements caching strategies for different types of resources:
 
 **Cache-First Strategy** (for static assets):
+
 - CSS, JavaScript, images
 - Serves from cache first, falls back to network
 - Updates cache in background
 
 **Network-First Strategy** (for API calls):
+
 - All `/api/*` endpoints
 - Tries network first, falls back to cache
 - Ensures fresh data when online
 
 **Key Features:**
+
 - Automatic cache versioning (via `CACHE_NAME`)
 - Cleanup of old caches on activation
 - Offline fallback HTML page
@@ -36,14 +40,17 @@ The service worker implements caching strategies for different types of resource
 IndexedDB stores three types of data:
 
 **Conversations Store:**
+
 - Indexed by `id`
 - Secondary indexes: `userId`, `updatedAt`
 
 **Messages Store:**
+
 - Indexed by `id`
 - Secondary indexes: `conversationId`, `createdAt`
 
 **Pending Requests Store:**
+
 - Queued API requests for retry when online
 - Indexed by `id`
 - Secondary index: `timestamp`
@@ -52,6 +59,7 @@ IndexedDB stores three types of data:
 ### 3. Service Worker Registration (`/app/lib/serviceWorker.ts`)
 
 Utilities for service worker management:
+
 - `registerSW()` - Register with update callbacks
 - `unregisterSW()` - Unregister the service worker
 - `skipWaiting()` - Force activate new version
@@ -61,12 +69,14 @@ Utilities for service worker management:
 ### 4. Offline Detection (`/app/hooks/useOnlineStatus.ts`)
 
 React hook that listens to browser online/offline events:
+
 - Returns current online status (`boolean`)
 - Updates on network state changes
 
 ### 5. Offline Sync (`/app/lib/offlineSync.ts`)
 
 Utilities for syncing offline data:
+
 - `syncPendingRequests()` - Retry queued requests
 - `hasPendingRequests()` - Check if there are queued requests
 - `getPendingRequestsCount()` - Get count of queued requests
@@ -76,6 +86,7 @@ Utilities for syncing offline data:
 ### 6. Offline Indicator (`/app/components/OfflineIndicator.tsx`)
 
 Visual banner shown when offline:
+
 - Displays "You're offline. Changes will sync when you reconnect."
 - Auto-hides when coming back online
 - Smooth slide animation
@@ -83,6 +94,7 @@ Visual banner shown when offline:
 ### 7. Chat Store Integration (`/app/stores/chat.ts`)
 
 Added offline support to the chat store:
+
 - `isOnline` - Current online status
 - `pendingRequestsCount` - Number of queued requests
 - `setOnlineStatus()` - Update online status
@@ -183,11 +195,13 @@ npm run test:run
 ## Browser Support
 
 Offline support requires:
+
 - Service Worker API
 - IndexedDB
 - Fetch API
 
 Supported browsers:
+
 - Chrome/Edge 40+
 - Firefox 34+
 - Safari 11.1+

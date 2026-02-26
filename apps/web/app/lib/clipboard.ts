@@ -26,7 +26,6 @@ export async function copyToClipboard(text: string): Promise<boolean> {
  */
 function fallbackCopyToClipboard(text: string): boolean {
   const textarea = document.createElement('textarea');
-  let success = false;
 
   try {
     // Prepare textarea for copying
@@ -48,16 +47,14 @@ function fallbackCopyToClipboard(text: string): boolean {
     textarea.select();
 
     // Execute copy command
-    success = document.execCommand('copy');
+    return document.execCommand('copy');
   } catch (error) {
     console.error('Fallback copy to clipboard failed:', error);
-    success = false;
+    return false;
   } finally {
     // Clean up
     if (document.body.contains(textarea)) {
       document.body.removeChild(textarea);
     }
   }
-
-  return success;
 }

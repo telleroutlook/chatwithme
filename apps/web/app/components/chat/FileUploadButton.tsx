@@ -1,7 +1,6 @@
 import { useRef, useEffect } from 'react';
 import { Paperclip, FileText } from 'lucide-react';
 import { Button } from '~/components/ui/button';
-import { cn } from '~/lib/utils';
 import { ACCEPTED_FILE_TYPES } from '~/lib/fileUtils';
 
 interface FileUploadButtonProps {
@@ -63,7 +62,9 @@ export function FileUploadButton({
         <div className="absolute inset-0 bg-primary/10 flex items-center justify-center pointer-events-none">
           <div className="flex items-center gap-2 text-primary">
             <FileText className="h-8 w-8" />
-            <span className="font-medium">Drop files here (images, PDFs, Office docs, spreadsheets, code, text)</span>
+            <span className="font-medium">
+              Drop files here (images, PDFs, Office docs, spreadsheets, code, text)
+            </span>
           </div>
         </div>
       )}

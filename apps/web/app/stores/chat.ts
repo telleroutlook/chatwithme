@@ -7,7 +7,7 @@ export const selectCurrentMessages = (state: ChatState, conversationId: string |
   conversationId ? state.messages[conversationId] || [] : [];
 
 export const selectActiveConversation = (state: ChatState) =>
-  state.conversations.find(c => c.id === state.activeConversationId);
+  state.conversations.find((c) => c.id === state.activeConversationId);
 
 interface ChatState {
   conversations: Conversation[];
@@ -33,7 +33,11 @@ interface ChatState {
   // Offline support
   setOnlineStatus: (isOnline: boolean) => void;
   syncOfflineData: () => Promise<void>;
-  queuePendingRequest: (method: 'POST' | 'PUT' | 'DELETE' | 'PATCH', url: string, body?: unknown) => Promise<void>;
+  queuePendingRequest: (
+    method: 'POST' | 'PUT' | 'DELETE' | 'PATCH',
+    url: string,
+    body?: unknown
+  ) => Promise<void>;
   clearPendingRequests: () => Promise<void>;
 }
 
@@ -67,11 +71,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   updateConversation: (id, data) =>
     set((state) => {
-      const updated = state.conversations.map((c) =>
-        c.id === id ? { ...c, ...data } : c
-      );
+      const updated = state.conversations.map((c) => (c.id === id ? { ...c, ...data } : c));
       // Update in IndexedDB
-      const conversation = updated.find(c => c.id === id);
+      const conversation = updated.find((c) => c.id === id);
       if (conversation) {
         indexedDBOps.saveConversation(conversation).catch(console.error);
       }
@@ -99,13 +101,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setActiveConversation: (id) => set({ activeConversationId: id }),
 
   setMessages: (conversationId, messages) =>
-    set((state) => {
+    set(() => {
       // Save to IndexedDB
       messages.forEach((msg) => {
         indexedDBOps.saveMessage(msg).catch(console.error);
       });
       return {
-        messages: { ...state.messages, [conversationId]: messages },
+        messages: { ...get().messages, [conversationId]: messages },
       };
     }),
 

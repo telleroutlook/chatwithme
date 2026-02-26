@@ -9,34 +9,31 @@ export const KatexRenderer = memo<KatexRendererProps>(({ math, inline = false })
     if (!containerRef.current) return;
 
     // Dynamic import of katex
-    import('katex').then((katex) => {
-      if (containerRef.current) {
-        try {
-          containerRef.current.textContent = '';
-          katex.render(math, containerRef.current, {
-            throwOnError: false,
-            displayMode: !inline,
-          });
-        } catch (e) {
-          console.error('KaTeX render error:', e);
-          if (containerRef.current) {
-            containerRef.current.textContent = math;
+    import('katex')
+      .then((katex) => {
+        if (containerRef.current) {
+          try {
+            containerRef.current.textContent = '';
+            katex.render(math, containerRef.current, {
+              throwOnError: false,
+              displayMode: !inline,
+            });
+          } catch (e) {
+            console.error('KaTeX render error:', e);
+            if (containerRef.current) {
+              containerRef.current.textContent = math;
+            }
           }
         }
-      }
-    }).catch((e) => {
-      console.error('Failed to load KaTeX:', e);
-      if (containerRef.current) {
-        containerRef.current.textContent = math;
-      }
-    });
+      })
+      .catch((e) => {
+        console.error('Failed to load KaTeX:', e);
+        if (containerRef.current) {
+          containerRef.current.textContent = math;
+        }
+      });
   }, [math, inline]);
 
-  return (
-    <span
-      ref={containerRef}
-      className={cn(inline ? 'inline' : 'block my-2')}
-    />
-  );
+  return <span ref={containerRef} className={cn(inline ? 'inline' : 'block my-2')} />;
 });
 KatexRenderer.displayName = 'KatexRenderer';

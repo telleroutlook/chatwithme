@@ -38,7 +38,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <html lang="en" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+        />
         <Meta />
         <Links />
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
@@ -66,11 +69,11 @@ export default function App() {
 
     // Register service worker
     registerSW({
-      onUpdate: (registration) => {
+      onUpdate: () => {
         console.log('[SW] New version available');
         // Optionally show update notification to user
       },
-      onSuccess: (registration) => {
+      onSuccess: () => {
         console.log('[SW] Service worker activated');
       },
     });

@@ -4,7 +4,7 @@
  */
 
 import { memo, useRef, useEffect, useState } from 'react';
-import { Download, FileText, Image, ChevronDown } from 'lucide-react';
+import { Download, ChevronDown } from 'lucide-react';
 import { cn } from '~/lib/utils';
 import type { DownloadOption } from './types';
 
@@ -14,11 +14,7 @@ export interface DropdownMenuProps {
   buttonClassName?: string;
 }
 
-export const DropdownMenu = memo<DropdownMenuProps>(({
-  options,
-  buttonLabel,
-  buttonClassName
-}) => {
+export const DropdownMenu = memo<DropdownMenuProps>(({ options, buttonLabel, buttonClassName }) => {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -105,10 +101,9 @@ export const DropdownMenu = memo<DropdownMenuProps>(({
       >
         <Download className="h-4 w-4" />
         {options.length > 1 && (
-          <ChevronDown className={cn(
-            'h-3 w-3 transition-transform duration-200',
-            isOpen && 'rotate-180'
-          )} />
+          <ChevronDown
+            className={cn('h-3 w-3 transition-transform duration-200', isOpen && 'rotate-180')}
+          />
         )}
       </button>
 
@@ -139,12 +134,8 @@ export const DropdownMenu = memo<DropdownMenuProps>(({
               )}
               role="menuitem"
             >
-              <span className="text-muted-foreground">
-                {option.icon}
-              </span>
-              <span>
-                {option.label}
-              </span>
+              <span className="text-muted-foreground">{option.icon}</span>
+              <span>{option.label}</span>
             </button>
           ))}
         </div>

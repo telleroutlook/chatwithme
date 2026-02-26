@@ -18,6 +18,7 @@ export function sanitizeFileName(filename: string, defaultName: string = 'file.t
   }
 
   // Remove control characters
+  // eslint-disable-next-line no-control-regex
   let sanitized = filename.replace(/[\x00-\x1f\x7f]/g, '');
 
   // Remove dangerous characters: < > : " / \ | ? *

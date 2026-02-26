@@ -45,21 +45,18 @@ export class PreviewErrorBoundary extends Component<
 
       // Default error UI
       return (
-        <div className={cn(
-          'flex flex-col items-center justify-center',
-          'p-8 gap-4',
-          'bg-destructive/5 border border-destructive/20',
-          'rounded-lg',
-          'min-h-[200px]'
-        )}>
-          <div className={cn(
-            'flex items-center gap-2',
-            'text-destructive'
-          )}>
+        <div
+          className={cn(
+            'flex flex-col items-center justify-center',
+            'p-8 gap-4',
+            'bg-destructive/5 border border-destructive/20',
+            'rounded-lg',
+            'min-h-[200px]'
+          )}
+        >
+          <div className={cn('flex items-center gap-2', 'text-destructive')}>
             <AlertCircle className="h-5 w-5" />
-            <span className="text-sm font-medium">
-              Preview failed
-            </span>
+            <span className="text-sm font-medium">Preview failed</span>
           </div>
 
           <p className="text-sm text-muted-foreground text-center max-w-md">

@@ -46,10 +46,7 @@ function calculateDelay(attempt: number, initialDelay: number): number {
  * @param retryableStatusCodes - Array of retryable status codes
  * @returns True if status code should be retried
  */
-function isRetryableStatus(
-  status: number,
-  retryableStatusCodes: readonly number[]
-): boolean {
+function isRetryableStatus(status: number, retryableStatusCodes: readonly number[]): boolean {
   return retryableStatusCodes.includes(status);
 }
 
@@ -105,10 +102,10 @@ export async function retryWithBackoff<T>(
       const delay = calculateDelay(attempt, config.initialDelay);
       console.log(
         `Request failed (attempt ${attempt + 1}/${config.maxRetries + 1}). ` +
-        `Retrying in ${Math.round(delay)}ms...`
+          `Retrying in ${Math.round(delay)}ms...`
       );
 
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 

@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeMarkdownContent, hasBalancedHtmlTags, isPreviewCodeComplete } from './utils';
 import { sanitizeFileName } from '~/lib/utils';
-import { parseCodeBlockTitle, countLines, inferTitleFromContext, generateFriendlyTitle } from './titleParser';
+import {
+  parseCodeBlockTitle,
+  countLines,
+  inferTitleFromContext,
+  generateFriendlyTitle,
+} from './titleParser';
 import { getDefaultTab } from './tabSelector';
 import { getLanguageConfig } from './languageConfig';
-import type { CodeBlockTab } from './types';
 
 describe('normalizeMarkdownContent', () => {
   it('wraps a full html document in a fenced html block', () => {
@@ -59,12 +63,18 @@ describe('isPreviewCodeComplete', () => {
 
   it('returns true for complete HTML', () => {
     // Need to meet minimum length requirements (3 lines or 100 chars)
-    const html = '<div>hello</div>\n<p>This is a longer text to meet the minimum character requirement for preview.</p>\n<span>More content here</span>';
+    const html =
+      '<div>hello</div>\n<p>This is a longer text to meet the minimum character requirement for preview.</p>\n<span>More content here</span>';
     expect(isPreviewCodeComplete(html, false)).toBe(true);
   });
 
   it('returns true for complete SVG', () => {
-    expect(isPreviewCodeComplete('<svg xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="40"/></svg>', true)).toBe(true);
+    expect(
+      isPreviewCodeComplete(
+        '<svg xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="40"/></svg>',
+        true
+      )
+    ).toBe(true);
   });
 
   it('returns false for incomplete SVG', () => {

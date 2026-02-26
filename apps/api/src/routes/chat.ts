@@ -18,10 +18,34 @@ import { errorResponse, validationErrorHook } from '../utils/response';
 import { generateFollowUpSuggestions, parseAndFinalizeSuggestions } from '../utils/suggestions';
 import OpenAI from 'openai';
 import { MCPManager } from '../mcp/manager';
-import { parseToolCalls, type ToolCall } from '../mcp/parser';
+import { parseToolCalls } from '../mcp/parser';
 import type { MessageFile } from '@chatwithme/shared';
 
-const CODE_EXTENSIONS = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'go', 'rs', 'c', 'cpp', 'h', 'hpp', 'cs', 'rb', 'php', 'sh', 'json', 'yaml', 'yml', 'toml', 'md', 'txt', 'csv'];
+const CODE_EXTENSIONS = [
+  'js',
+  'ts',
+  'jsx',
+  'tsx',
+  'py',
+  'java',
+  'go',
+  'rs',
+  'c',
+  'cpp',
+  'h',
+  'hpp',
+  'cs',
+  'rb',
+  'php',
+  'sh',
+  'json',
+  'yaml',
+  'yml',
+  'toml',
+  'md',
+  'txt',
+  'csv',
+];
 // Office documents: Word, Excel, PowerPoint, OpenDocument formats
 const OFFICE_EXTENSIONS = ['pptx', 'xlsx', 'xls', 'xlsm', 'xlsb', 'docx', 'ods'];
 
@@ -59,9 +83,8 @@ function detectVisionModel(
   const currentUserMessage = messages[messages.length - 1];
   // Only images trigger Vision model
   // PDFs always use text extraction and go to regular chat model
-  const hasVisionContent = currentUserMessage?.files?.some(f =>
-    f.mimeType.startsWith('image/')
-  ) ?? false;
+  const hasVisionContent =
+    currentUserMessage?.files?.some((f) => f.mimeType.startsWith('image/')) ?? false;
 
   if (hasVisionContent) {
     return env.OPENROUTER_VISION_MODEL || env.OPENROUTER_CHAT_MODEL || 'glm-4.6v';
@@ -211,7 +234,15 @@ function extractTextFromUnknown(value: unknown, depth = 0): string {
   }
   if (typeof value === 'object') {
     const obj = value as Record<string, unknown>;
-    const priorityKeys = ['text', 'content', 'reasoning_content', 'message', 'output_text', 'delta', 'result'];
+    const priorityKeys = [
+      'text',
+      'content',
+      'reasoning_content',
+      'message',
+      'output_text',
+      'delta',
+      'result',
+    ];
     let merged = '';
     for (const key of priorityKeys) {
       if (key in obj) {
@@ -273,9 +304,7 @@ function parseJsonObjectFromText(raw: string): JsonObjectFromTextResult | null {
       if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
         // Extract remaining content after the closing ```
         const lastCodeBlockEnd = cleaned.lastIndexOf('\n```');
-        const remaining = lastCodeBlockEnd > 0
-          ? cleaned.slice(lastCodeBlockEnd + 4).trim()
-          : '';
+        const remaining = lastCodeBlockEnd > 0 ? cleaned.slice(lastCodeBlockEnd + 4).trim() : '';
         return { json: parsed as Record<string, unknown>, remaining };
       }
     } catch {
@@ -328,9 +357,7 @@ function parseStructuredReply(raw: string): StructuredReply | null {
   if (!message) return null;
 
   // Append remaining content (e.g., code blocks after JSON) to the message
-  const finalMessage = remaining
-    ? `${message}\n\n${remaining}`
-    : message;
+  const finalMessage = remaining ? `${message}\n\n${remaining}` : message;
 
   let suggestionsRaw = '';
   if (Array.isArray(json.suggestions)) {
@@ -417,24 +444,36 @@ Available Tools:
 IMPORTANT: When users ask for news, current events, or real-time information, you MUST use the webSearchPrime tool to fetch accurate, up-to-date information. Do not claim you cannot access the internet.`;
   }
 
-  const normalized = messages.flatMap((item): Array<{
-    role: 'system' | 'user' | 'assistant';
-    content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
-  }> => {
-    const role =
-      item.role === 'assistant' || item.role === 'system' ? item.role : 'user';
+  const normalized = messages.flatMap(
+    (
+      item
+    ): Array<{
+      role: 'system' | 'user' | 'assistant';
+      content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+    }> => {
+      const role = item.role === 'assistant' || item.role === 'system' ? item.role : 'user';
 
-    // Preserve array content format (for images), convert others to string
-    if (Array.isArray(item.content)) {
-      // Keep array format for images
-      if (!item.content || item.content.length === 0) return [];
-      return [{ role, content: item.content as Array<{ type: string; text?: string; image_url?: { url: string } }> }];
-    } else {
-      const content = item.content?.trim();
-      if (!content) return [];
-      return [{ role, content }];
+      // Preserve array content format (for images), convert others to string
+      if (Array.isArray(item.content)) {
+        // Keep array format for images
+        if (!item.content || item.content.length === 0) return [];
+        return [
+          {
+            role,
+            content: item.content as Array<{
+              type: string;
+              text?: string;
+              image_url?: { url: string };
+            }>,
+          },
+        ];
+      } else {
+        const content = item.content?.trim();
+        if (!content) return [];
+        return [{ role, content }];
+      }
     }
-  });
+  );
 
   return [{ role: 'system', content: systemInstruction }, ...normalized];
 }
@@ -452,17 +491,22 @@ function summarizeCompletionPayload(completion: unknown): Record<string, unknown
     choice0Keys: choice0 ? Object.keys(choice0) : [],
     choice0MessageKeys: message0 ? Object.keys(message0) : [],
     choice0MessageContentPreview: truncateText(extractTextFromUnknown(message0?.content), 200),
-    choice0ReasoningContentPreview: truncateText(extractTextFromUnknown(message0?.reasoning_content), 200),
+    choice0ReasoningContentPreview: truncateText(
+      extractTextFromUnknown(message0?.reasoning_content),
+      200
+    ),
     choice0TextPreview: truncateText(extractTextFromUnknown(choice0?.text), 200),
     outputTextPreview: truncateText(extractTextFromUnknown(payload.output_text), 200),
     outputPreview: truncateText(extractTextFromUnknown(payload.output), 200),
   };
 }
 
-
 function buildNonStreamingChatCompletionParams(params: {
   model: string;
-  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }>;
+  messages: Array<{
+    role: 'system' | 'user' | 'assistant';
+    content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+  }>;
   responseFormat?: ResponseFormat;
   maxTokens?: number;
   tools?: OpenAI.Chat.ChatCompletionTool[];
@@ -481,9 +525,7 @@ function buildNonStreamingChatCompletionParams(params: {
   };
 
   // Use configured max_tokens, fallback to provided maxTokens, then default
-  const configuredMaxTokens = env?.CHAT_MAX_TOKENS
-    ? parseInt(env.CHAT_MAX_TOKENS, 10)
-    : undefined;
+  const configuredMaxTokens = env?.CHAT_MAX_TOKENS ? parseInt(env.CHAT_MAX_TOKENS, 10) : undefined;
   payload.max_tokens = maxTokens ?? configuredMaxTokens ?? 65536;
 
   // Use configured temperature
@@ -498,7 +540,8 @@ function buildNonStreamingChatCompletionParams(params: {
 
   // Configure thinking parameter (GLM-5 specific)
   if (env?.CHAT_THINKING_ENABLED !== undefined) {
-    const thinkingEnabled = env.CHAT_THINKING_ENABLED === 'true' || env.CHAT_THINKING_ENABLED === '1';
+    const thinkingEnabled =
+      env.CHAT_THINKING_ENABLED === 'true' || env.CHAT_THINKING_ENABLED === '1';
     payload.thinking = { type: thinkingEnabled ? 'enabled' : 'disabled' };
   }
 
@@ -516,7 +559,7 @@ function buildNonStreamingChatCompletionParams(params: {
   return payload as unknown as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming;
 }
 
-async function probeModelHealth(
+async function _probeModelHealth(
   openai: OpenAI,
   modelName: string,
   traceId: string,
@@ -613,23 +656,27 @@ chat.post('/conversations', async (c) => {
   return c.json({ success: true, data: { conversation } });
 });
 
-chat.get('/conversations/:id', zValidator('param', conversationIdParamSchema, validationErrorHook), async (c) => {
-  const { userId } = getAuthInfo(c);
-  const { id } = c.req.valid('param');
-  const db = createDb(c.env.DB);
+chat.get(
+  '/conversations/:id',
+  zValidator('param', conversationIdParamSchema, validationErrorHook),
+  async (c) => {
+    const { userId } = getAuthInfo(c);
+    const { id } = c.req.valid('param');
+    const db = createDb(c.env.DB);
 
-  const conversation = await getConversationById(db, id);
-  if (!conversation) {
-    return errorResponse(c, 404, ERROR_CODES.CONVERSATION_NOT_FOUND, 'Conversation not found');
+    const conversation = await getConversationById(db, id);
+    if (!conversation) {
+      return errorResponse(c, 404, ERROR_CODES.CONVERSATION_NOT_FOUND, 'Conversation not found');
+    }
+
+    if (conversation.userId !== userId) {
+      return errorResponse(c, 403, ERROR_CODES.FORBIDDEN, 'Unauthorized');
+    }
+
+    const messages = await getRecentMessages(db, id, 100);
+    return c.json({ success: true, data: { conversation, messages } });
   }
-
-  if (conversation.userId !== userId) {
-    return errorResponse(c, 403, ERROR_CODES.FORBIDDEN, 'Unauthorized');
-  }
-
-  const messages = await getRecentMessages(db, id, 100);
-  return c.json({ success: true, data: { conversation, messages } });
-});
+);
 
 chat.patch(
   '/conversations/:id',
@@ -659,36 +706,34 @@ chat.patch(
   }
 );
 
-chat.delete('/conversations/:id', zValidator('param', conversationIdParamSchema, validationErrorHook), async (c) => {
-  const { userId } = getAuthInfo(c);
-  const { id } = c.req.valid('param');
-  const db = createDb(c.env.DB);
+chat.delete(
+  '/conversations/:id',
+  zValidator('param', conversationIdParamSchema, validationErrorHook),
+  async (c) => {
+    const { userId } = getAuthInfo(c);
+    const { id } = c.req.valid('param');
+    const db = createDb(c.env.DB);
 
-  const conversation = await getConversationById(db, id);
-  if (!conversation) {
-    return errorResponse(c, 404, ERROR_CODES.CONVERSATION_NOT_FOUND, 'Conversation not found');
+    const conversation = await getConversationById(db, id);
+    if (!conversation) {
+      return errorResponse(c, 404, ERROR_CODES.CONVERSATION_NOT_FOUND, 'Conversation not found');
+    }
+
+    if (conversation.userId !== userId) {
+      return errorResponse(c, 403, ERROR_CODES.FORBIDDEN, 'Unauthorized');
+    }
+
+    await deleteConversation(db, id);
+    return c.json({ success: true, data: { message: 'Conversation deleted' } });
   }
-
-  if (conversation.userId !== userId) {
-    return errorResponse(c, 403, ERROR_CODES.FORBIDDEN, 'Unauthorized');
-  }
-
-  await deleteConversation(db, id);
-  return c.json({ success: true, data: { message: 'Conversation deleted' } });
-});
-
+);
 
 chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook), async (c) => {
   const traceId = generateId();
   c.header('X-Trace-Id', traceId);
 
   const { userId } = getAuthInfo(c);
-  const {
-    conversationId,
-    message,
-    files,
-    model: requestedModel,
-  } = c.req.valid('json');
+  const { conversationId, message, files, model: requestedModel } = c.req.valid('json');
   const db = createDb(c.env.DB);
 
   // Debug: Log extracted text from Office documents
@@ -698,7 +743,10 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
       console.log('[Backend] File:', file.fileName, 'Type:', file.mimeType, 'Size:', file.size);
       if ('extractedText' in file && file.extractedText) {
         console.log('[Backend] Has extractedText, length:', file.extractedText.length);
-        console.log('[Backend] Extracted text preview (first 200 chars):', file.extractedText.substring(0, 200));
+        console.log(
+          '[Backend] Extracted text preview (first 200 chars):',
+          file.extractedText.substring(0, 200)
+        );
       } else {
         console.log('[Backend] No extractedText found for file:', file.fileName);
       }
@@ -717,64 +765,75 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
   // Fetch history for model detection
   const historyForModelDetection = await getRecentMessages(db, conversationId, 20);
 
-  const model = requestedModel || detectVisionModel(
-    [...historyForModelDetection.map(msg => ({
-      role: msg.role,
-      content: msg.message,
-      files: msg.files || undefined
-    })), { role: 'user', content: message, files }],
-    c.env
-  ) || c.env.OPENROUTER_CHAT_MODEL || 'gpt-5.3-codex';
+  const model =
+    requestedModel ||
+    detectVisionModel(
+      [
+        ...historyForModelDetection.map((msg) => ({
+          role: msg.role,
+          content: msg.message,
+          files: msg.files || undefined,
+        })),
+        { role: 'user', content: message, files },
+      ],
+      c.env
+    ) ||
+    c.env.OPENROUTER_CHAT_MODEL ||
+    'gpt-5.3-codex';
 
   // Process files: upload image dataURLs to R2 and get API URLs
   // PDFs and Office documents are NOT uploaded to R2 - their extracted text is used instead
   let processedFiles = files;
   if (files && files.length > 0) {
-    processedFiles = await Promise.all(files.map(async (file) => {
-      // Only upload images to R2 (for vision model)
-      // PDFs always use browser-side text extraction, no R2 upload needed
-      if (file.mimeType.startsWith('image/') && file.url.startsWith('data:')) {
-        try {
-          // Parse dataURL
-          const matches = file.url.match(/^data:([^;]+);base64,(.+)$/);
-          if (matches) {
-            const mimeType = matches[1];
-            const base64Data = matches[2];
-            const buffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+    processedFiles = await Promise.all(
+      files.map(async (file) => {
+        // Only upload images to R2 (for vision model)
+        // PDFs always use browser-side text extraction, no R2 upload needed
+        if (file.mimeType.startsWith('image/') && file.url.startsWith('data:')) {
+          try {
+            // Parse dataURL
+            const matches = file.url.match(/^data:([^;]+);base64,(.+)$/);
+            if (matches) {
+              const mimeType = matches[1];
+              const base64Data = matches[2];
+              const buffer = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
 
-            // Generate file key and upload to R2
-            let ext = 'bin';
-            if (mimeType === 'image/jpeg') ext = 'jpg';
-            else if (mimeType === 'image/png') ext = 'png';
-            else if (mimeType === 'image/gif') ext = 'gif';
-            else if (mimeType === 'image/webp') ext = 'webp';
+              // Generate file key and upload to R2
+              let ext = 'bin';
+              if (mimeType === 'image/jpeg') ext = 'jpg';
+              else if (mimeType === 'image/png') ext = 'png';
+              else if (mimeType === 'image/gif') ext = 'gif';
+              else if (mimeType === 'image/webp') ext = 'webp';
 
-            const key = `uploads/${userId}/${generateId()}.${ext}`;
+              const key = `uploads/${userId}/${generateId()}.${ext}`;
 
-            console.log(`Uploading file to R2: ${key}, size: ${buffer.length} bytes, mimeType: ${mimeType}`);
-            await c.env.BUCKET.put(key, buffer, {
-              httpMetadata: { contentType: mimeType },
-            });
-            console.log(`Upload successful: ${key}`);
+              console.log(
+                `Uploading file to R2: ${key}, size: ${buffer.length} bytes, mimeType: ${mimeType}`
+              );
+              await c.env.BUCKET.put(key, buffer, {
+                httpMetadata: { contentType: mimeType },
+              });
+              console.log(`Upload successful: ${key}`);
 
-            // Construct download URL
-            const url = new URL(c.req.url);
-            const downloadUrl = `${url.origin}/file/download/${key}`;
-            console.log(`Download URL: ${downloadUrl}`);
+              // Construct download URL
+              const url = new URL(c.req.url);
+              const downloadUrl = `${url.origin}/file/download/${key}`;
+              console.log(`Download URL: ${downloadUrl}`);
 
-            return {
-              ...file,
-              url: downloadUrl
-            };
+              return {
+                ...file,
+                url: downloadUrl,
+              };
+            }
+          } catch (error) {
+            console.error('Failed to upload file to R2:', error);
+            // Fall back to original dataURL if upload fails
           }
-        } catch (error) {
-          console.error('Failed to upload file to R2:', error);
-          // Fall back to original dataURL if upload fails
         }
-      }
-      // PDFs, Office documents and other files keep original URL (dataURL or existing URL)
-      return file;
-    }));
+        // PDFs, Office documents and other files keep original URL (dataURL or existing URL)
+        return file;
+      })
+    );
   }
 
   const now = new Date();
@@ -845,11 +904,14 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
       let assistantContent = msg.message;
 
       // If the assistant message has imageAnalyses, inject them into the content for future context
-      if ((msg as Record<string, unknown>).imageAnalyses && Array.isArray((msg as Record<string, unknown>).imageAnalyses)) {
+      if (
+        (msg as Record<string, unknown>).imageAnalyses &&
+        Array.isArray((msg as Record<string, unknown>).imageAnalyses)
+      ) {
         const imageAnalyses = (msg as Record<string, unknown>).imageAnalyses as ImageAnalysis[];
         if (imageAnalyses.length > 0) {
           const analysisText = imageAnalyses
-            .map(a => `\n--- Image Analysis: ${a.fileName} ---\n${a.analysis}`)
+            .map((a) => `\n--- Image Analysis: ${a.fileName} ---\n${a.analysis}`)
             .join('\n');
           assistantContent += `\n\n${analysisText}`;
         }
@@ -881,16 +943,22 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
   const hasMcpTools = mcpManager.isConfigured();
 
   // Detect if current message contains images
-  const hasImages = historyForModelDetection.some(msg =>
-    msg.role === 'user' && msg.files?.some(f => f.mimeType.startsWith('image/'))
+  const hasImages = historyForModelDetection.some(
+    (msg) => msg.role === 'user' && msg.files?.some((f) => f.mimeType.startsWith('image/'))
   );
 
   // Vision model doesn't support json_object format
   const isVisionModel = model.includes('vision') || model.includes('v');
-  const responseFormat: ResponseFormat = (hasImages || isVisionModel || mcpTools) ? 'text' : 'json_object';
+  const responseFormat: ResponseFormat =
+    hasImages || isVisionModel || mcpTools ? 'text' : 'json_object';
 
   const llmMessages = buildStructuredReplyMessages(openAiMessages, hasMcpTools, hasImages, c.env);
-  let enhancedMessages: Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content?: string | Array<{ type: string; text?: string; image_url?: { url: string } }>; tool_call_id?: string; tool_calls?: OpenAI.Chat.ChatCompletionMessageToolCall[] }> = [...llmMessages];
+  const enhancedMessages: Array<{
+    role: 'system' | 'user' | 'assistant' | 'tool';
+    content?: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+    tool_call_id?: string;
+    tool_calls?: OpenAI.Chat.ChatCompletionMessageToolCall[];
+  }> = [...llmMessages];
 
   // First LLM call: Check if tools are needed
   // Note: When tools are present, we use 'text' format to allow function calling
@@ -903,7 +971,12 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
           openai.chat.completions.create(
             buildNonStreamingChatCompletionParams({
               model: candidate,
-              messages: enhancedMessages as Array<{ role: 'system' | 'user' | 'assistant'; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }>,
+              messages: enhancedMessages as Array<{
+                role: 'system' | 'user' | 'assistant';
+                content:
+                  | string
+                  | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+              }>,
               responseFormat,
               tools: mcpTools,
               tool_choice: mcpTools ? 'auto' : undefined,
@@ -925,7 +998,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
           role: 'assistant',
           content: completion.choices[0]?.message?.content || undefined,
           tool_calls: completion.choices[0]?.message?.tool_calls || undefined,
-        } as typeof enhancedMessages[number]);
+        } as (typeof enhancedMessages)[number]);
 
         // Add tool results
         enhancedMessages.push({
@@ -941,7 +1014,12 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
             openai.chat.completions.create(
               buildNonStreamingChatCompletionParams({
                 model: candidate,
-                messages: enhancedMessages as Array<{ role: 'system' | 'user' | 'assistant'; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }>,
+                messages: enhancedMessages as Array<{
+                  role: 'system' | 'user' | 'assistant';
+                  content:
+                    | string
+                    | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+                }>,
                 responseFormat: 'json_object',
                 env: c.env,
               })
@@ -1022,7 +1100,12 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
       model,
       attempts: attemptLogs,
     });
-    return errorResponse(c, 500, ERROR_CODES.MODEL_REQUEST_FAILED, `Model request failed. traceId=${traceId}`);
+    return errorResponse(
+      c,
+      500,
+      ERROR_CODES.MODEL_REQUEST_FAILED,
+      `Model request failed. traceId=${traceId}`
+    );
   }
 
   await createMessage(db, {
@@ -1055,7 +1138,6 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
     },
   });
 });
-
 
 chat.get(
   '/conversations/:id/messages',

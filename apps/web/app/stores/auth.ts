@@ -28,9 +28,7 @@ export const useAuthStore = create<AuthState>()(
         }),
       updateTokens: (accessToken, expiresIn) =>
         set((state) => ({
-          tokens: state.tokens
-            ? { ...state.tokens, accessToken, expiresIn }
-            : null,
+          tokens: state.tokens ? { ...state.tokens, accessToken, expiresIn } : null,
         })),
       logout: () =>
         set({

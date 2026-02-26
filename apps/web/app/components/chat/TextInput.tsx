@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { cn } from '~/lib/utils';
 
 interface TextInputProps {
@@ -63,11 +63,12 @@ export function TextInput({
 
   const handleMessageChange = (newValue: string) => {
     onChange(newValue);
-    if (!textareaRef.current) return;
-    textareaRef.current.style.height = 'auto';
+    const ref = textareaRef.current;
+    if (!ref) return;
+    ref.style.height = 'auto';
     // Use smaller max-height on mobile for virtual keyboard compatibility
     const maxHeight = window.innerWidth < 640 ? 120 : 128;
-    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, maxHeight)}px`;
+    ref.style.height = `${Math.min(ref.scrollHeight, maxHeight)}px`;
   };
 
   return (

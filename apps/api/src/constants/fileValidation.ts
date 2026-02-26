@@ -21,28 +21,28 @@ export const MAX_FILE_SIZE = 10 * 1024 * 1024;
  */
 export const MAGIC_NUMBERS = {
   // Images
-  'image/jpeg': [0xFF, 0xD8, 0xFF],
-  'image/png': [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
+  'image/jpeg': [0xff, 0xd8, 0xff],
+  'image/png': [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
   'image/gif': [0x47, 0x49, 0x46, 0x38],
   'image/webp': [0x52, 0x49, 0x46, 0x46], // RIFF, needs additional validation
-  'image/bmp': [0x42, 0x4D],
-  'image/tiff': [0x49, 0x49, 0x2A, 0x00], // Little-endian TIFF
-  'image/svg+xml': [0x3C, 0x73, 0x76, 0x67], // <svg
+  'image/bmp': [0x42, 0x4d],
+  'image/tiff': [0x49, 0x49, 0x2a, 0x00], // Little-endian TIFF
+  'image/svg+xml': [0x3c, 0x73, 0x76, 0x67], // <svg
 
   // Documents
   'application/pdf': [0x25, 0x50, 0x44, 0x46], // %PDF
 
   // Audio
-  'audio/mpeg': [0xFF, 0xFB], // MP3
+  'audio/mpeg': [0xff, 0xfb], // MP3
   'audio/wav': [0x52, 0x49, 0x46, 0x46], // RIFF (same as WebP, need additional checks)
-  'audio/ogg': [0x4F, 0x67, 0x67, 0x53], // OggS
+  'audio/ogg': [0x4f, 0x67, 0x67, 0x53], // OggS
 
   // Video
   'video/mp4': [0x00, 0x00, 0x00], // ftyp (needs offset check)
-  'video/webm': [0x1A, 0x45, 0xDF, 0xA3], // EBML
+  'video/webm': [0x1a, 0x45, 0xdf, 0xa3], // EBML
 
   // Archives
-  'application/zip': [0x50, 0x4B, 0x03, 0x04], // PK..
+  'application/zip': [0x50, 0x4b, 0x03, 0x04], // PK..
   'application/x-tar': [0x75, 0x73, 0x74, 0x61, 0x72], // ustar
 
   // Text
@@ -168,22 +168,33 @@ export const ALLOWED_MIME_TYPES = new Set<string>([
  */
 export const ALLOWED_EXTENSIONS = new Set<string>([
   // Images
-  'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg',
+  'jpg',
+  'jpeg',
+  'png',
+  'gif',
+  'webp',
+  'svg',
 
   // Documents
   'pdf',
 
   // Audio
-  'mp3', 'wav', 'ogg',
+  'mp3',
+  'wav',
+  'ogg',
 
   // Video
-  'mp4', 'webm',
+  'mp4',
+  'webm',
 
   // Archives
   'zip',
 
   // Text
-  'txt', 'csv', 'json', 'md',
+  'txt',
+  'csv',
+  'json',
+  'md',
 ]);
 
 /**
@@ -212,10 +223,10 @@ export const MAX_FILENAME_LENGTH = 255;
  * Dangerous filename patterns to reject
  */
 export const DANGEROUS_FILENAME_PATTERNS = [
-  /\.\./,           // Path traversal
-  /^\//,            // Absolute path
-  /\0/,             // Null byte
-  /[<>:"|?*]/,      // Windows reserved characters
+  /\.\./, // Path traversal
+  /^\//, // Absolute path
+  /\0/, // Null byte
+  /[<>:"|?*]/, // Windows reserved characters
   /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i, // Windows reserved names
 ];
 
@@ -223,8 +234,22 @@ export const DANGEROUS_FILENAME_PATTERNS = [
  * File type categories for grouping
  */
 export const FILE_CATEGORIES = {
-  image: new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp', 'image/tiff']),
-  document: new Set(['application/pdf', 'text/plain', 'text/csv', 'application/json', 'text/markdown']),
+  image: new Set([
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'image/svg+xml',
+    'image/bmp',
+    'image/tiff',
+  ]),
+  document: new Set([
+    'application/pdf',
+    'text/plain',
+    'text/csv',
+    'application/json',
+    'text/markdown',
+  ]),
   audio: new Set(['audio/mpeg', 'audio/wav', 'audio/ogg']),
   video: new Set(['video/mp4', 'video/webm']),
   archive: new Set(['application/zip', 'application/x-tar']),

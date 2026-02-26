@@ -30,28 +30,30 @@ export const TitleView = memo<TitleViewProps>(({ meta, onSwitchToCode }) => {
     >
       <div className="flex items-center gap-3">
         {/* File icon */}
-        <div className={cn(
-          'flex items-center justify-center',
-          'w-10 h-10 rounded-md',
-          'bg-primary/10 text-primary',
-          'group-hover:bg-primary/20',
-          'transition-colors duration-200'
-        )}>
+        <div
+          className={cn(
+            'flex items-center justify-center',
+            'w-10 h-10 rounded-md',
+            'bg-primary/10 text-primary',
+            'group-hover:bg-primary/20',
+            'transition-colors duration-200'
+          )}
+        >
           <FileText className="h-5 w-5" />
         </div>
 
         {/* File info */}
         <div className="text-left">
-          <div className={cn(
-            'text-sm font-medium text-foreground',
-            'group-hover:text-primary',
-            'transition-colors duration-200'
-          )}>
+          <div
+            className={cn(
+              'text-sm font-medium text-foreground',
+              'group-hover:text-primary',
+              'transition-colors duration-200'
+            )}
+          >
             {filename}
           </div>
-          <div className="text-xs text-muted-foreground">
-            {displayName}
-          </div>
+          <div className="text-xs text-muted-foreground">{displayName}</div>
         </div>
       </div>
 
@@ -60,12 +62,14 @@ export const TitleView = memo<TitleViewProps>(({ meta, onSwitchToCode }) => {
         <div className="text-xs text-muted-foreground">
           {lineCount} {lineCount === 1 ? 'line' : 'lines'}
         </div>
-        <ChevronRight className={cn(
-          'h-4 w-4 text-muted-foreground',
-          'group-hover:text-foreground',
-          'group-hover:translate-x-0.5',
-          'transition-all duration-200'
-        )} />
+        <ChevronRight
+          className={cn(
+            'h-4 w-4 text-muted-foreground',
+            'group-hover:text-foreground',
+            'group-hover:translate-x-0.5',
+            'transition-all duration-200'
+          )}
+        />
       </div>
     </button>
   );

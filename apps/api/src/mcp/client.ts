@@ -31,7 +31,7 @@ export class MCPHttpClient {
       });
       this.serverId = connected.id;
     } catch (error) {
-      throw new Error(`MCP connection failed to ${this.url}: ${error}`);
+      throw new Error(`MCP connection failed to ${this.url}: ${error}`, { cause: error });
     }
   }
 
@@ -51,11 +51,11 @@ export class MCPHttpClient {
           arguments: params as Record<string, unknown>,
         },
         undefined, // resultSchema - optional
-        undefined  // options - optional
+        undefined // options - optional
       );
       return result;
     } catch (error) {
-      throw new Error(`MCP tool call failed for ${toolName}: ${error}`);
+      throw new Error(`MCP tool call failed for ${toolName}: ${error}`, { cause: error });
     }
   }
 
@@ -70,10 +70,12 @@ export class MCPHttpClient {
       // listTools() returns tools across all connections
       const allTools = await this.manager.listTools();
       // Filter tools for this server only
-      const serverTools = allTools.filter((t: { serverId: string }) => t.serverId === this.serverId);
+      const serverTools = allTools.filter(
+        (t: { serverId: string }) => t.serverId === this.serverId
+      );
       return serverTools;
     } catch (error) {
-      throw new Error(`MCP list tools failed: ${error}`);
+      throw new Error(`MCP list tools failed: ${error}`, { cause: error });
     }
   }
 }

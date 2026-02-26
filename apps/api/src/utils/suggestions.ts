@@ -21,8 +21,7 @@ function extractContextKeywords(context: string): string[] {
   const normalized = context.replace(/\s+/g, ' ').trim();
   if (!normalized) return [];
 
-  const matches =
-    normalized.match(/[\u4e00-\u9fff]{2,10}|[A-Za-z][A-Za-z0-9_-]{2,}/g) ?? [];
+  const matches = normalized.match(/[\u4e00-\u9fff]{2,10}|[A-Za-z][A-Za-z0-9_-]{2,}/g) ?? [];
   const stopwords = new Set([
     '这个',
     '那个',
@@ -100,7 +99,7 @@ function parseJsonSuggestions(raw: string): string[] {
     // ignore
   }
 
-  const start = cleaned.search(/[\[{]/);
+  const start = cleaned.search(/[{[]/);
   const end = Math.max(cleaned.lastIndexOf(']'), cleaned.lastIndexOf('}'));
   if (start !== -1 && end > start) {
     try {
@@ -162,7 +161,8 @@ export async function generateFollowUpSuggestions(params: {
   openai: OpenAI;
   model: string;
   answerText: string;
-  env?: { // Add env parameter for configuration
+  env?: {
+    // Add env parameter for configuration
     CHAT_TEMPERATURE?: string;
     CHAT_MAX_TOKENS?: string;
     CHAT_TOP_P?: string;
@@ -220,7 +220,8 @@ ${context}`;
 
     // Use configured thinking parameter
     if (params.env?.CHAT_THINKING_ENABLED !== undefined) {
-      const thinkingEnabled = params.env.CHAT_THINKING_ENABLED === 'true' || params.env.CHAT_THINKING_ENABLED === '1';
+      const thinkingEnabled =
+        params.env.CHAT_THINKING_ENABLED === 'true' || params.env.CHAT_THINKING_ENABLED === '1';
       payload.thinking = { type: thinkingEnabled ? 'enabled' : 'disabled' };
     } else {
       payload.thinking = { type: 'disabled' };

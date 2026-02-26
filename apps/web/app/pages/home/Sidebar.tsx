@@ -21,7 +21,7 @@ export interface SidebarProps {
 // Simplified Sidebar - Content provider, layout handled by Home
 export const Sidebar = memo(function Sidebar({
   isOpen,
-  isCollapsed,
+  isCollapsed: _isCollapsed,
   conversations,
   activeId,
   deletingId,
@@ -30,7 +30,7 @@ export const Sidebar = memo(function Sidebar({
   onSelect,
   onCreate,
   onDelete,
-  onRename,
+  onRename: _onRename,
 }: SidebarProps) {
   return (
     <aside

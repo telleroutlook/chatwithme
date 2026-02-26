@@ -1,12 +1,8 @@
-import { memo, useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { memo, useState, useEffect, useMemo, useCallback } from 'react';
 import { Copy, Check, Eye, Code, FileText, Image as ImageIcon } from 'lucide-react';
 import { cn } from '~/lib/utils';
 import { sanitizeFileName } from '~/lib/utils';
-import {
-  downloadSvgElementAsPng,
-  extractText,
-  isPreviewCodeComplete,
-} from './utils';
+import { downloadSvgElementAsPng, extractText, isPreviewCodeComplete } from './utils';
 import { parseCodeBlockTitle, countLines } from './titleParser';
 import { getLanguageConfig, isPreviewableLanguage } from './languageConfig';
 import { getDefaultTab } from './tabSelector';
@@ -103,11 +99,11 @@ export const DownloadButton = memo<DownloadButtonProps>(
 DownloadButton.displayName = 'DownloadButton';
 
 export const CodeBlockWithPreview = memo<CodeBlockWithPreviewProps>(
-  ({ children, className, language, context = '' }) => {
+  ({ children, className, language }) => {
     const rawCode = useMemo(() => extractText(children).replace(/\n$/, ''), [children]);
 
     // Parse title and metadata
-    const { filename, displayName, isExplicit } = useMemo(
+    const { filename, displayName } = useMemo(
       () => parseCodeBlockTitle(language, rawCode),
       [language, rawCode]
     );

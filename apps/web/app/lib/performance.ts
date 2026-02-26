@@ -27,18 +27,13 @@ function logMetric(metric: Metric): void {
   const rating = getRating(metric);
   const emoji = rating === 'good' ? '✅' : rating === 'needs-improvement' ? '⚠️' : '❌';
 
-  console.log(
-    `[Web Vitals] ${emoji} ${metric.name}:`,
-    metric.value.toFixed(2),
-    `(${rating})`,
-    {
-      name: metric.name,
-      value: metric.value,
-      rating,
-      id: metric.id,
-      navigationType: metric.navigationType,
-    }
-  );
+  console.log(`[Web Vitals] ${emoji} ${metric.name}:`, metric.value.toFixed(2), `(${rating})`, {
+    name: metric.name,
+    value: metric.value,
+    rating,
+    id: metric.id,
+    navigationType: metric.navigationType,
+  });
 }
 
 // Store metric for analytics
@@ -107,10 +102,42 @@ export function resetMetrics(): void {
 // Log performance summary
 export function logPerformanceSummary(): void {
   console.table({
-    CLS: { value: metrics.cls, rating: metrics.cls !== null && metrics.cls < 0.1 ? 'good' : metrics.cls !== null && metrics.cls < 0.25 ? 'needs-improvement' : 'poor' },
-    LCP: { value: metrics.lcp, rating: metrics.lcp !== null && metrics.lcp < 2500 ? 'good' : metrics.lcp !== null && metrics.lcp < 4000 ? 'needs-improvement' : 'poor' },
-    INP: { value: metrics.inp, rating: metrics.inp !== null && metrics.inp < 200 ? 'good' : metrics.inp !== null && metrics.inp < 500 ? 'needs-improvement' : 'poor' },
-    TTFB: { value: metrics.ttfb, rating: metrics.ttfb !== null && metrics.ttfb < 800 ? 'good' : metrics.ttfb !== null && metrics.ttfb < 1800 ? 'needs-improvement' : 'poor' },
+    CLS: {
+      value: metrics.cls,
+      rating:
+        metrics.cls !== null && metrics.cls < 0.1
+          ? 'good'
+          : metrics.cls !== null && metrics.cls < 0.25
+            ? 'needs-improvement'
+            : 'poor',
+    },
+    LCP: {
+      value: metrics.lcp,
+      rating:
+        metrics.lcp !== null && metrics.lcp < 2500
+          ? 'good'
+          : metrics.lcp !== null && metrics.lcp < 4000
+            ? 'needs-improvement'
+            : 'poor',
+    },
+    INP: {
+      value: metrics.inp,
+      rating:
+        metrics.inp !== null && metrics.inp < 200
+          ? 'good'
+          : metrics.inp !== null && metrics.inp < 500
+            ? 'needs-improvement'
+            : 'poor',
+    },
+    TTFB: {
+      value: metrics.ttfb,
+      rating:
+        metrics.ttfb !== null && metrics.ttfb < 800
+          ? 'good'
+          : metrics.ttfb !== null && metrics.ttfb < 1800
+            ? 'needs-improvement'
+            : 'poor',
+    },
   });
 }
 

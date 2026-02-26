@@ -10,8 +10,7 @@ export const extractText = (node: React.ReactNode): string => {
   return '';
 };
 
-const FULL_HTML_DOC_PATTERN =
-  /^\s*(?:<!DOCTYPE\s+html[^>]*>\s*)?<html[\s\S]*<\/html>\s*$/i;
+const FULL_HTML_DOC_PATTERN = /^\s*(?:<!DOCTYPE\s+html[^>]*>\s*)?<html[\s\S]*<\/html>\s*$/i;
 
 // HTML entity decoder - decodes common HTML entities like &lt;, &gt;, &amp;, &quot;, etc.
 function decodeHtmlEntities(text: string): string {
@@ -69,8 +68,20 @@ export const normalizeMarkdownContent = (content: string): string => {
 };
 
 export const VOID_TAGS = new Set([
-  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
-  'link', 'meta', 'param', 'source', 'track', 'wbr',
+  'area',
+  'base',
+  'br',
+  'col',
+  'embed',
+  'hr',
+  'img',
+  'input',
+  'link',
+  'meta',
+  'param',
+  'source',
+  'track',
+  'wbr',
 ]);
 
 export const hasBalancedHtmlTags = (code: string): boolean => {

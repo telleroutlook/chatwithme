@@ -1,13 +1,24 @@
 import { cn } from '~/lib/utils';
 import { Avatar, AvatarFallback } from '~/components/ui/avatar';
-import { Bot, User, Copy, Check, RefreshCw, ChevronDown, ChevronRight, FileImage } from 'lucide-react';
+import {
+  Bot,
+  User,
+  Copy,
+  Check,
+  RefreshCw,
+  ChevronDown,
+  ChevronRight,
+  FileImage,
+} from 'lucide-react';
 import { useState, memo, Suspense, lazy, useEffect, useRef } from 'react';
 import { ErrorBoundary } from '~/components/error';
-import type { Message, MessageFile, ImageAnalysis } from '@chatwithme/shared';
+import type { Message, ImageAnalysis } from '@chatwithme/shared';
 import { useTouchGesture } from '~/hooks/useTouchGesture';
 import { getFileIcon, formatFileSize } from '~/lib/fileUtils';
 
-const LazyMarkdownRenderer = lazy(() => import('./MarkdownRenderer').then(m => ({ default: m.MarkdownRenderer })));
+const LazyMarkdownRenderer = lazy(() =>
+  import('./MarkdownRenderer').then((m) => ({ default: m.MarkdownRenderer }))
+);
 
 interface ChatBubbleProps {
   message: Message | { role: 'user' | 'assistant'; message: string };
@@ -20,10 +31,7 @@ interface ChatBubbleProps {
 }
 
 // Custom comparison function to avoid unnecessary re-renders
-const arePropsEqual = (
-  prevProps: ChatBubbleProps,
-  nextProps: ChatBubbleProps
-): boolean => {
+const arePropsEqual = (prevProps: ChatBubbleProps, nextProps: ChatBubbleProps): boolean => {
   return (
     prevProps.messageId === nextProps.messageId &&
     prevProps.message.message === nextProps.message.message &&
@@ -45,12 +53,13 @@ export const ChatBubble = memo<ChatBubbleProps>(
 
     // Long press gesture for message actions menu
     useTouchGesture(bubbleRef, {
-      onLongPress: onLongPress && messageId
-        ? (e) => {
-            const touch = e.touches[0] || e.changedTouches[0];
-            onLongPress(messageId, message.message, { x: touch.clientX, y: touch.clientY });
-          }
-        : undefined,
+      onLongPress:
+        onLongPress && messageId
+          ? (e) => {
+              const touch = e.touches[0] || e.changedTouches[0];
+              onLongPress(messageId, message.message, { x: touch.clientX, y: touch.clientY });
+            }
+          : undefined,
       enabled: !!onLongPress && !!messageId,
     });
 
@@ -66,9 +75,7 @@ export const ChatBubble = memo<ChatBubbleProps>(
       >
         <Avatar className="h-8 w-8 shrink-0 sm:h-9 sm:w-9">
           <AvatarFallback
-            className={cn(
-              isUser ? 'bg-primary text-primary-foreground' : 'bg-muted'
-            )}
+            className={cn(isUser ? 'bg-primary text-primary-foreground' : 'bg-muted')}
           >
             {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
           </AvatarFallback>
@@ -77,9 +84,7 @@ export const ChatBubble = memo<ChatBubbleProps>(
         <div
           className={cn(
             'flex-1 max-w-[88%] rounded-xl px-3.5 py-3 text-[15px] leading-relaxed sm:max-w-[82%] sm:px-4',
-            isUser
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-card border border-border'
+            isUser ? 'bg-primary text-primary-foreground' : 'bg-card border border-border'
           )}
         >
           {isUser ? (
@@ -91,8 +96,8 @@ export const ChatBubble = memo<ChatBubbleProps>(
                     <div
                       key={index}
                       className={cn(
-                        "flex items-center gap-1.5 rounded-md px-2 py-1",
-                        "bg-primary-foreground/10 border border-primary-foreground/20"
+                        'flex items-center gap-1.5 rounded-md px-2 py-1',
+                        'bg-primary-foreground/10 border border-primary-foreground/20'
                       )}
                     >
                       {file.mimeType.startsWith('image/') ? (
@@ -102,14 +107,20 @@ export const ChatBubble = memo<ChatBubbleProps>(
                             alt={file.fileName}
                             className="h-8 w-8 rounded object-cover"
                           />
-                          <span className="text-xs opacity-80 max-w-[100px] truncate">{file.fileName}</span>
+                          <span className="text-xs opacity-80 max-w-[100px] truncate">
+                            {file.fileName}
+                          </span>
                         </>
                       ) : (
                         <>
                           {getFileIcon(file)}
                           <div className="flex flex-col">
-                            <span className="text-xs font-medium opacity-90 max-w-[120px] truncate">{file.fileName}</span>
-                            <span className="text-[10px] opacity-70">{formatFileSize(file.size)}</span>
+                            <span className="text-xs font-medium opacity-90 max-w-[120px] truncate">
+                              {file.fileName}
+                            </span>
+                            <span className="text-[10px] opacity-70">
+                              {formatFileSize(file.size)}
+                            </span>
                           </div>
                         </>
                       )}
@@ -119,18 +130,23 @@ export const ChatBubble = memo<ChatBubbleProps>(
               )}
             </>
           ) : (
-            <ErrorBoundary fallback={({ error }) => (
-              <div className="text-destructive text-sm">Failed to render message</div>
-            )}>
+            <ErrorBoundary
+              fallback={() => (
+                <div className="text-destructive text-sm">Failed to render message</div>
+              )}
+            >
               <Suspense fallback={<div className="animate-pulse bg-muted rounded-lg h-20" />}>
                 <LazyMarkdownRenderer content={message.message} />
               </Suspense>
             </ErrorBoundary>
           )}
 
-          {!isUser && 'imageAnalyses' in message && message.imageAnalyses && message.imageAnalyses.length > 0 && (
-            <ImageAnalysisCard analyses={message.imageAnalyses} />
-          )}
+          {!isUser &&
+            'imageAnalyses' in message &&
+            message.imageAnalyses &&
+            message.imageAnalyses.length > 0 && (
+              <ImageAnalysisCard analyses={message.imageAnalyses} />
+            )}
 
           {!isUser && suggestions && suggestions.length > 0 && onQuickReply && (
             <div className="mt-3 flex flex-wrap gap-2">
@@ -147,23 +163,23 @@ export const ChatBubble = memo<ChatBubbleProps>(
           )}
 
           <div className="mt-3 flex items-center gap-1">
-              <CopyMessageButton text={message.message} isUser={isUser} />
-              {((!isUser && isLast) || (isUser && isLastUserMessage)) && onRegenerate && (
-                <button
-                  onClick={onRegenerate}
-                  className={cn(
-                    'h-10 w-10 rounded-lg p-2 transition-colors',
-                    isUser
-                      ? 'text-primary-foreground/80 hover:bg-primary-foreground/10 hover:text-primary-foreground active:bg-primary-foreground/20'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground active:bg-muted/80'
-                  )}
-                  title="Regenerate response"
-                  aria-label="Regenerate response"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                </button>
-              )}
-            </div>
+            <CopyMessageButton text={message.message} isUser={isUser} />
+            {((!isUser && isLast) || (isUser && isLastUserMessage)) && onRegenerate && (
+              <button
+                onClick={onRegenerate}
+                className={cn(
+                  'h-10 w-10 rounded-lg p-2 transition-colors',
+                  isUser
+                    ? 'text-primary-foreground/80 hover:bg-primary-foreground/10 hover:text-primary-foreground active:bg-primary-foreground/20'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground active:bg-muted/80'
+                )}
+                title="Regenerate response"
+                aria-label="Regenerate response"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -202,11 +218,7 @@ const CopyMessageButton = memo<CopyMessageButtonProps>(({ text, isUser = false }
       title="Copy message to clipboard"
       aria-label={copied ? 'Copied to clipboard' : 'Copy message to clipboard'}
     >
-      {copied ? (
-        <Check className="h-4 w-4 text-green-500" />
-      ) : (
-        <Copy className="h-4 w-4" />
-      )}
+      {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
     </button>
   );
 });
@@ -247,9 +259,7 @@ const ImageAnalysisCard = memo<ImageAnalysisCardProps>(({ analyses }) => {
                 <FileImage className="h-3 w-3 text-muted-foreground" />
                 <span>{item.fileName}</span>
               </div>
-              <p className="text-sm text-muted-foreground pl-5 leading-relaxed">
-                {item.analysis}
-              </p>
+              <p className="text-sm text-muted-foreground pl-5 leading-relaxed">{item.analysis}</p>
             </div>
           ))}
         </div>

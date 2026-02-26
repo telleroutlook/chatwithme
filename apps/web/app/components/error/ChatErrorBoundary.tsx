@@ -45,9 +45,7 @@ function ChatErrorFallback({
         <MessageCircle className="h-4 w-4 text-destructive" />
       </div>
 
-      <p className="text-sm font-medium text-foreground">
-        Unable to display this message
-      </p>
+      <p className="text-sm font-medium text-foreground">Unable to display this message</p>
 
       {error.message && (
         <p className="mt-1.5 max-w-[280px] text-xs text-muted-foreground line-clamp-2">

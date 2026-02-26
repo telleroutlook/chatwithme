@@ -15,21 +15,26 @@ import {
   validateFileSize,
   formatFileSize,
 } from './fileValidation';
-import { ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES, MAX_FILE_SIZE } from '../constants/fileValidation';
+import {
+  ALLOWED_EXTENSIONS,
+  ALLOWED_MIME_TYPES as _ALLOWED_MIME_TYPES,
+  MAX_FILE_SIZE,
+} from '../constants/fileValidation';
 
 describe('validateFileByMagicNumber', () => {
   it('should validate JPEG files', () => {
-    const jpegBuffer = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46]).buffer;
+    const jpegBuffer = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46])
+      .buffer;
     expect(validateFileByMagicNumber(jpegBuffer, 'image/jpeg')).toBe(true);
   });
 
   it('should validate PNG files', () => {
-    const pngBuffer = new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]).buffer;
+    const pngBuffer = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer;
     expect(validateFileByMagicNumber(pngBuffer, 'image/png')).toBe(true);
   });
 
   it('should validate PDF files', () => {
-    const pdfBuffer = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34]).buffer;
+    const pdfBuffer = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]).buffer;
     expect(validateFileByMagicNumber(pdfBuffer, 'application/pdf')).toBe(true);
   });
 
@@ -40,18 +45,36 @@ describe('validateFileByMagicNumber', () => {
 
   it('should validate WebP files with RIFF header', () => {
     const webpBuffer = new Uint8Array([
-      0x52, 0x49, 0x46, 0x46, // RIFF
-      0x00, 0x00, 0x00, 0x00, // size
-      0x57, 0x45, 0x42, 0x50, // WEBP
+      0x52,
+      0x49,
+      0x46,
+      0x46, // RIFF
+      0x00,
+      0x00,
+      0x00,
+      0x00, // size
+      0x57,
+      0x45,
+      0x42,
+      0x50, // WEBP
     ]).buffer;
     expect(validateFileByMagicNumber(webpBuffer, 'image/webp')).toBe(true);
   });
 
   it('should validate WAV files with RIFF header', () => {
     const wavBuffer = new Uint8Array([
-      0x52, 0x49, 0x46, 0x46, // RIFF
-      0x00, 0x00, 0x00, 0x00, // size
-      0x57, 0x41, 0x56, 0x45, // WAVE
+      0x52,
+      0x49,
+      0x46,
+      0x46, // RIFF
+      0x00,
+      0x00,
+      0x00,
+      0x00, // size
+      0x57,
+      0x41,
+      0x56,
+      0x45, // WAVE
     ]).buffer;
     expect(validateFileByMagicNumber(wavBuffer, 'audio/wav')).toBe(true);
   });
@@ -59,12 +82,12 @@ describe('validateFileByMagicNumber', () => {
 
 describe('detectMimeTypeFromBuffer', () => {
   it('should detect JPEG', () => {
-    const buffer = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0]).buffer;
+    const buffer = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]).buffer;
     expect(detectMimeTypeFromBuffer(buffer)).toBe('image/jpeg');
   });
 
   it('should detect PNG', () => {
-    const buffer = new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]).buffer;
+    const buffer = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer;
     expect(detectMimeTypeFromBuffer(buffer)).toBe('image/png');
   });
 

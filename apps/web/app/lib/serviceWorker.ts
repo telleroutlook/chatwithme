@@ -4,7 +4,7 @@
  * Registers the service worker for offline support and PWA capabilities.
  */
 
-const SW_URL = '/sw.js';
+const SW_URL = '/sw.ts';
 
 export interface ServiceWorkerRegisterOptions {
   onUpdate?: (registration: ServiceWorkerRegistration) => void;
@@ -21,7 +21,9 @@ export function isServiceWorkerSupported(): boolean {
 /**
  * Register the service worker
  */
-export function registerSW(options: ServiceWorkerRegisterOptions = {}): Promise<ServiceWorkerRegistration | null> {
+export function registerSW(
+  options: ServiceWorkerRegisterOptions = {}
+): Promise<ServiceWorkerRegistration | null> {
   if (!isServiceWorkerSupported()) {
     console.warn('[SW] Service workers are not supported in this browser');
     return Promise.resolve(null);

@@ -3,11 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { FilePreview } from './FilePreview';
 import type { MessageFile } from '@chatwithme/shared';
 
-const createMockFile = (
-  fileName: string,
-  mimeType: string,
-  size: number = 1024
-): MessageFile => ({
+const createMockFile = (fileName: string, mimeType: string, size: number = 1024): MessageFile => ({
   url: 'https://example.com/file',
   fileName,
   mimeType,
@@ -71,9 +67,7 @@ describe('FilePreview', () => {
     const file = createMockFile('file.pdf', 'application/pdf', 1024000);
     const onRemove = vi.fn();
 
-    render(
-      <FilePreview file={file} onRemove={onRemove} index={0} progress={0.5} />
-    );
+    render(<FilePreview file={file} onRemove={onRemove} index={0} progress={0.5} />);
 
     // Multiple "50%" elements exist (in file info and progress overlay)
     expect(screen.getAllByText('50%').length).toBeGreaterThan(0);
@@ -83,9 +77,7 @@ describe('FilePreview', () => {
     const file = createMockFile('file.txt', 'text/plain', 1024);
     const onRemove = vi.fn();
 
-    render(
-      <FilePreview file={file} onRemove={onRemove} index={0} progress={0.3} />
-    );
+    render(<FilePreview file={file} onRemove={onRemove} index={0} progress={0.3} />);
 
     const removeButton = screen.getByRole('button');
     expect(removeButton).toBeDisabled();
@@ -98,9 +90,7 @@ describe('FilePreview', () => {
     const file = createMockFile('file.pdf', 'application/pdf', 1024000);
     const onRemove = vi.fn();
 
-    render(
-      <FilePreview file={file} onRemove={onRemove} index={0} progress={1} />
-    );
+    render(<FilePreview file={file} onRemove={onRemove} index={0} progress={1} />);
 
     // Progress of 1 means complete (isProcessing = false), should show file size
     // 1024000 bytes = 1000.0 KB (not 1.0 MB because formatFileSize uses 1024*1024 for MB)
@@ -126,9 +116,7 @@ describe('FilePreview', () => {
     const file = createMockFile('file.txt', 'text/plain', 1024);
     const onRemove = vi.fn();
 
-    const { container } = render(
-      <FilePreview file={file} onRemove={onRemove} index={0} />
-    );
+    const { container } = render(<FilePreview file={file} onRemove={onRemove} index={0} />);
 
     const wrapper = container.firstChild as HTMLElement;
     expect(wrapper.className).toContain('max-w-[200px]');
@@ -139,9 +127,7 @@ describe('FilePreview', () => {
     const file = createMockFile('photo.jpg', 'image/jpeg', 1024);
     const onRemove = vi.fn();
 
-    const { container } = render(
-      <FilePreview file={file} onRemove={onRemove} index={0} />
-    );
+    const { container } = render(<FilePreview file={file} onRemove={onRemove} index={0} />);
 
     const wrapper = container.firstChild as HTMLElement;
     expect(wrapper.className).toContain('w-16');
@@ -161,9 +147,7 @@ describe('FilePreview', () => {
     const file = createMockFile('file.pdf', 'application/pdf', 1024000);
     const onRemove = vi.fn();
 
-    render(
-      <FilePreview file={file} onRemove={onRemove} index={0} progress={0.75} />
-    );
+    render(<FilePreview file={file} onRemove={onRemove} index={0} progress={0.75} />);
 
     expect(screen.getByText('Processing...')).toBeInTheDocument();
   });

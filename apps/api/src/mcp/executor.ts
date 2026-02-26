@@ -2,14 +2,14 @@
 
 import { MCPHttpClient } from './client';
 
-const MCP_TIMEOUT_MS = 10000;
+const _MCP_TIMEOUT_MS = 10000;
 
 // Map tool names to client keys
 // The tool names (webSearchPrime, webReader) come from MCP service
 // The client keys (web_search, web_reader) are internal identifiers
 const TOOL_TO_CLIENT_KEY: Record<string, string> = {
-  'webSearchPrime': 'web_search',
-  'webReader': 'web_reader',
+  webSearchPrime: 'web_search',
+  webReader: 'web_reader',
 };
 
 export async function executeToolCall(

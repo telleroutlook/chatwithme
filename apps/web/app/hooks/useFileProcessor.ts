@@ -7,7 +7,10 @@ export interface FileProcessorOptions {
 }
 
 interface FileProcessorHookReturn {
-  processFiles: (files: Array<{ file: File; dataUrl: string }>, options?: FileProcessorOptions) => Promise<MessageFile[]>;
+  processFiles: (
+    files: Array<{ file: File; dataUrl: string }>,
+    options?: FileProcessorOptions
+  ) => Promise<MessageFile[]>;
   isProcessing: boolean;
 }
 
@@ -60,7 +63,10 @@ export function useFileProcessor(): FileProcessorHookReturn {
 
             // Calculate overall progress (average of all files)
             if (options?.onOverallProgress) {
-              const totalProgress = Array.from(fileProgressMap.values()).reduce((sum, p) => sum + p, 0);
+              const totalProgress = Array.from(fileProgressMap.values()).reduce(
+                (sum, p) => sum + p,
+                0
+              );
               const overallProgress = totalProgress / files.length;
               options.onOverallProgress(overallProgress);
             }

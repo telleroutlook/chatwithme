@@ -18,12 +18,14 @@ export class MCPManager {
   private readerClient: MCPHttpClient;
   private clients: Map<string, MCPHttpClient>;
 
-  constructor(private env: {
-    BIGMODEL_API_KEY?: string;
-    OPENROUTER_API_KEY: string;
-    MCP_WEB_SEARCH_URL?: string;
-    MCP_WEB_READER_URL?: string;
-  }) {
+  constructor(
+    private env: {
+      BIGMODEL_API_KEY?: string;
+      OPENROUTER_API_KEY: string;
+      MCP_WEB_SEARCH_URL?: string;
+      MCP_WEB_READER_URL?: string;
+    }
+  ) {
     const apiKey = env.BIGMODEL_API_KEY || env.OPENROUTER_API_KEY;
 
     this.searchClient = new MCPHttpClient(

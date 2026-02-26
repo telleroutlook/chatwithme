@@ -6,12 +6,7 @@ export interface ApiErrorPayload {
   message: string;
 }
 
-export function errorResponse(
-  c: Context,
-  status: number,
-  code: ErrorCode,
-  message: string
-) {
+export function errorResponse(c: Context, status: number, code: ErrorCode, message: string) {
   return c.json(
     {
       success: false,
@@ -25,7 +20,10 @@ export function errorResponse(
 }
 
 export function validationErrorHook(
-  result: { success: boolean; error?: { issues?: Array<{ message: string; path?: Array<string | number> }> } },
+  result: {
+    success: boolean;
+    error?: { issues?: Array<{ message: string; path?: Array<string | number> }> };
+  },
   c: Context
 ) {
   if (result.success) {

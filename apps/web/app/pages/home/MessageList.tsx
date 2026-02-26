@@ -14,7 +14,11 @@ export interface MessageListProps {
   activeConversationId: string | null;
   onRegenerate: () => void;
   onQuickReply: (question: string) => void;
-  onShowMessageMenu?: (messageId: string, content: string, position: { x: number; y: number }) => void;
+  onShowMessageMenu?: (
+    messageId: string,
+    content: string,
+    position: { x: number; y: number }
+  ) => void;
 }
 
 export const MessageList = memo(function MessageList({
@@ -36,7 +40,9 @@ export const MessageList = memo(function MessageList({
 
   // Find the index of the last user message (memoized to avoid recalculation on every render)
   const actualLastUserMessageIndex = useMemo(() => {
-    const lastUserMessageIndex = [...safeMessages].reverse().findIndex((msg) => msg.role === 'user');
+    const lastUserMessageIndex = [...safeMessages]
+      .reverse()
+      .findIndex((msg) => msg.role === 'user');
     return lastUserMessageIndex === -1 ? -1 : safeMessages.length - 1 - lastUserMessageIndex;
   }, [safeMessages]);
 
@@ -63,7 +69,9 @@ export const MessageList = memo(function MessageList({
 
   return (
     <ScrollArea ref={messageScrollRef} className="h-full w-full">
-      <ChatErrorBoundary onError={(error, errorInfo) => console.error('Chat error:', error, errorInfo)}>
+      <ChatErrorBoundary
+        onError={(error, errorInfo) => console.error('Chat error:', error, errorInfo)}
+      >
         <div className="mx-auto w-full max-w-4xl divide-y divide-border/80">
           {safeMessages.map(renderMessage)}
         </div>

@@ -16,12 +16,7 @@ interface UseOfflineSyncOptions {
 }
 
 export function useOfflineSync(options: UseOfflineSyncOptions = {}) {
-  const {
-    enabled = true,
-    onSyncStart,
-    onSyncComplete,
-    onSyncError,
-  } = options;
+  const { enabled = true, onSyncStart, onSyncComplete, onSyncError } = options;
 
   const { isOnline, syncOfflineData } = useChatStore();
   const syncInProgressRef = useRef(false);

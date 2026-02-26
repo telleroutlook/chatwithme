@@ -8,33 +8,34 @@ export const WEB_SEARCH_TOOL: ChatCompletionTool = {
   type: 'function',
   function: {
     name: 'webSearchPrime',
-    description: '搜索互联网以获取最新信息、新闻、实时数据。当用户询问当前事件、最新资讯、时效性问题时使用此工具。',
+    description:
+      '搜索互联网以获取最新信息、新闻、实时数据。当用户询问当前事件、最新资讯、时效性问题时使用此工具。',
     parameters: {
       type: 'object',
       properties: {
         search_query: {
           type: 'string',
-          description: '搜索关键词或问题'
+          description: '搜索关键词或问题',
         },
         location: {
           type: 'string',
           description: '搜索区域 (cn/us)',
-          default: 'cn'
+          default: 'cn',
         },
         search_recency_filter: {
           type: 'string',
           description: '时间过滤 (noLimit/oneDay/threeDays/oneWeek)',
-          default: 'noLimit'
+          default: 'noLimit',
         },
         content_size: {
           type: 'string',
           description: '内容大小 (medium/high)',
-          default: 'medium'
-        }
+          default: 'medium',
+        },
       },
-      required: ['search_query']
-    }
-  }
+      required: ['search_query'],
+    },
+  },
 };
 
 export const WEB_READER_TOOL: ChatCompletionTool = {
@@ -47,20 +48,17 @@ export const WEB_READER_TOOL: ChatCompletionTool = {
       properties: {
         url: {
           type: 'string',
-          description: '要读取的网页 URL'
+          description: '要读取的网页 URL',
         },
         return_format: {
           type: 'string',
           description: '返回格式 (markdown/text)',
-          default: 'markdown'
-        }
+          default: 'markdown',
+        },
       },
-      required: ['url']
-    }
-  }
+      required: ['url'],
+    },
+  },
 };
 
-export const AVAILABLE_TOOLS: ChatCompletionTool[] = [
-  WEB_SEARCH_TOOL,
-  WEB_READER_TOOL
-];
+export const AVAILABLE_TOOLS: ChatCompletionTool[] = [WEB_SEARCH_TOOL, WEB_READER_TOOL];

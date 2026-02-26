@@ -45,7 +45,9 @@ export const MarkdownRenderer = memo<MarkdownRendererProps>(({ content, classNam
 
             if (isBlock && isMermaid) {
               return (
-                <Suspense fallback={<div className="text-sm text-muted-foreground">Loading Mermaid...</div>}>
+                <Suspense
+                  fallback={<div className="text-sm text-muted-foreground">Loading Mermaid...</div>}
+                >
                   <LazyMermaidRenderer chart={rawText} />
                 </Suspense>
               );
@@ -62,10 +64,7 @@ export const MarkdownRenderer = memo<MarkdownRendererProps>(({ content, classNam
             }
 
             return (
-              <code
-                className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono"
-                {...restProps}
-              >
+              <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono" {...restProps}>
                 {children}
               </code>
             );

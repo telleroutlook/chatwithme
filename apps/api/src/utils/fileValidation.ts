@@ -7,8 +7,8 @@ import {
   MAGIC_NUMBERS,
   MIME_TO_EXTENSIONS,
   EXTENSION_TO_MIME,
-  ALLOWED_MIME_TYPES,
-  ALLOWED_EXTENSIONS,
+  ALLOWED_MIME_TYPES as _ALLOWED_MIME_TYPES,
+  ALLOWED_EXTENSIONS as _ALLOWED_EXTENSIONS,
   MAGIC_NUMBER_REQUIRED,
   MAX_FILENAME_LENGTH,
   DANGEROUS_FILENAME_PATTERNS,
@@ -37,7 +37,8 @@ export function validateFileByMagicNumber(buffer: ArrayBuffer, expectedMimeType:
       // Both use RIFF, need additional validation
       if (bytes.length < 12) return false;
       // RIFF header
-      if (bytes[0] !== 0x52 || bytes[1] !== 0x49 || bytes[2] !== 0x46 || bytes[3] !== 0x46) return false;
+      if (bytes[0] !== 0x52 || bytes[1] !== 0x49 || bytes[2] !== 0x46 || bytes[3] !== 0x46)
+        return false;
       // Check type identifier at offset 8
       if (expectedMimeType === 'image/webp') {
         return bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50; // WEBP
@@ -98,12 +99,12 @@ export function detectMimeTypeFromBuffer(buffer: ArrayBuffer): string | null {
   if (bytes.length < 4) return null;
 
   // JPEG
-  if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) {
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
     return 'image/jpeg';
   }
 
   // PNG
-  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) {
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
     return 'image/png';
   }
 
@@ -118,7 +119,7 @@ export function detectMimeTypeFromBuffer(buffer: ArrayBuffer): string | null {
   }
 
   // ZIP
-  if (bytes[0] === 0x50 && bytes[1] === 0x4B && bytes[2] === 0x03 && bytes[3] === 0x04) {
+  if (bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04) {
     return 'application/zip';
   }
 
@@ -136,32 +137,32 @@ export function detectMimeTypeFromBuffer(buffer: ArrayBuffer): string | null {
   }
 
   // WebM/EBML
-  if (bytes[0] === 0x1A && bytes[1] === 0x45 && bytes[2] === 0xDF && bytes[3] === 0xA3) {
+  if (bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) {
     return 'video/webm';
   }
 
   // BMP
-  if (bytes[0] === 0x42 && bytes[1] === 0x4D) {
+  if (bytes[0] === 0x42 && bytes[1] === 0x4d) {
     return 'image/bmp';
   }
 
   // TIFF (little-endian)
-  if (bytes[0] === 0x49 && bytes[1] === 0x49 && bytes[2] === 0x2A && bytes[3] === 0x00) {
+  if (bytes[0] === 0x49 && bytes[1] === 0x49 && bytes[2] === 0x2a && bytes[3] === 0x00) {
     return 'image/tiff';
   }
 
   // TIFF (big-endian)
-  if (bytes[0] === 0x4D && bytes[1] === 0x4D && bytes[2] === 0x00 && bytes[3] === 0x2A) {
+  if (bytes[0] === 0x4d && bytes[1] === 0x4d && bytes[2] === 0x00 && bytes[3] === 0x2a) {
     return 'image/tiff';
   }
 
   // OGG
-  if (bytes[0] === 0x4F && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53) {
+  if (bytes[0] === 0x4f && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53) {
     return 'audio/ogg';
   }
 
   // MP3
-  if (bytes[0] === 0xFF && (bytes[1] & 0xE0) === 0xE0) {
+  if (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0) {
     return 'audio/mpeg';
   }
 
@@ -387,9 +388,7 @@ export async function validateUploadedFile(
       if (!validateFileByMagicNumber(buffer, file.type)) {
         // Try to detect the actual type
         const detectedType = detectMimeTypeFromBuffer(buffer);
-        const detectedMsg = detectedType
-          ? ` (detected: ${detectedType})`
-          : '';
+        const detectedMsg = detectedType ? ` (detected: ${detectedType})` : '';
 
         return {
           valid: false,
@@ -399,7 +398,7 @@ export async function validateUploadedFile(
           },
         };
       }
-    } catch (error) {
+    } catch {
       return {
         valid: false,
         error: {

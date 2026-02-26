@@ -1,12 +1,10 @@
-import { cn } from '~/lib/utils';
-
 interface UploadProgressProps {
   progress: number; // 0 to 1
-  fileName: string;
-  fileSize: number;
+  fileName?: string;
+  fileSize?: number;
 }
 
-export function UploadProgress({ progress, fileName, fileSize }: UploadProgressProps) {
+export function UploadProgress({ progress }: UploadProgressProps) {
   const percentage = Math.round(progress * 100);
 
   return (

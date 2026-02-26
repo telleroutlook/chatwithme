@@ -15,32 +15,36 @@ export function VirtualMessageList({
   messages,
   renderMessage,
   onScrollToBottom,
-  isAtBottom = true,
   virtuosoRef,
   initialScrollTop,
 }: VirtualMessageListProps) {
   const internalRef = useRef<VirtuosoHandle>(null);
   const virtuosoInstanceRef = (virtuosoRef as React.RefObject<VirtuosoHandle>) || internalRef;
 
-  const handleScrollToBottom = useCallback(() => {
+  const _handleScrollToBottom = useCallback(() => {
     virtuosoInstanceRef.current?.scrollToIndex({
       index: messages.length - 1,
       behavior: 'smooth',
     });
   }, [messages.length, virtuosoInstanceRef]);
 
-  const handleIsAtBottom = useCallback((isAtBottom: boolean) => {
-    if (isAtBottom && onScrollToBottom) {
-      onScrollToBottom();
-    }
-  }, [onScrollToBottom]);
+  const handleIsAtBottom = useCallback(
+    (_isAtBottom: boolean) => {
+      if (_isAtBottom && onScrollToBottom) {
+        onScrollToBottom();
+      }
+    },
+    [onScrollToBottom]
+  );
 
   return (
     <Virtuoso
       ref={virtuosoInstanceRef}
       data={messages}
       itemContent={(index, message) => renderMessage(message, index)}
-      initialTopMostItemIndex={initialScrollTop !== undefined ? Math.floor(initialScrollTop / 50) : undefined}
+      initialTopMostItemIndex={
+        initialScrollTop !== undefined ? Math.floor(initialScrollTop / 50) : undefined
+      }
       atBottomStateChange={handleIsAtBottom}
       atBottomThreshold={100}
       className="h-full w-full"

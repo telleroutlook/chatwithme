@@ -6,12 +6,32 @@ import type { ReactElement } from 'react';
  * Code file extensions that support syntax highlighting
  */
 export const CODE_EXTENSIONS = [
-  'js', 'ts', 'jsx', 'tsx', 'py', 'java', 'go', 'rs',
-  'c', 'cpp', 'h', 'hpp', 'cs', 'rb', 'php', 'sh',
-  'json', 'yaml', 'yml', 'toml', 'md', 'txt', 'csv'
+  'js',
+  'ts',
+  'jsx',
+  'tsx',
+  'py',
+  'java',
+  'go',
+  'rs',
+  'c',
+  'cpp',
+  'h',
+  'hpp',
+  'cs',
+  'rb',
+  'php',
+  'sh',
+  'json',
+  'yaml',
+  'yml',
+  'toml',
+  'md',
+  'txt',
+  'csv',
 ] as const;
 
-export type CodeExtension = typeof CODE_EXTENSIONS[number];
+export type CodeExtension = (typeof CODE_EXTENSIONS)[number];
 
 /**
  * Office document extensions
@@ -19,17 +39,9 @@ export type CodeExtension = typeof CODE_EXTENSIONS[number];
  * - Excel spreadsheets (xlsx, xls, xlsm, xlsb, csv, ods)
  * - PowerPoint presentations (pptx)
  */
-export const OFFICE_EXTENSIONS = [
-  'pptx',
-  'xlsx',
-  'xls',
-  'xlsm',
-  'xlsb',
-  'docx',
-  'ods'
-] as const;
+export const OFFICE_EXTENSIONS = ['pptx', 'xlsx', 'xls', 'xlsm', 'xlsb', 'docx', 'ods'] as const;
 
-export type OfficeExtension = typeof OFFICE_EXTENSIONS[number];
+export type OfficeExtension = (typeof OFFICE_EXTENSIONS)[number];
 
 /**
  * Type guard to check if a string is a code extension
@@ -52,8 +64,8 @@ function isOfficeExtension(ext: string): ext is OfficeExtension {
 export const ACCEPTED_FILE_TYPES = [
   'image/*',
   '.pdf',
-  ...CODE_EXTENSIONS.map(ext => `.${ext}`),
-  ...OFFICE_EXTENSIONS.map(ext => `.${ext}`)
+  ...CODE_EXTENSIONS.map((ext) => `.${ext}`),
+  ...OFFICE_EXTENSIONS.map((ext) => `.${ext}`),
 ].join(',');
 
 /**
@@ -73,7 +85,10 @@ export function formatFileSize(bytes: number): string {
  * @param size - Icon size class (default: "h-4 w-4")
  * @returns ReactElement with icon or null for images
  */
-export function getFileIcon(file: MessageFile, size: 'h-4 w-4' | 'h-6 w-6' = 'h-4 w-4'): ReactElement | null {
+export function getFileIcon(
+  file: MessageFile,
+  size: 'h-4 w-4' | 'h-6 w-6' = 'h-4 w-4'
+): ReactElement | null {
   // Images don't get an icon, they are displayed directly
   if (file.mimeType.startsWith('image/')) return null;
 

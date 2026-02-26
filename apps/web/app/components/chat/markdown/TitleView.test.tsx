@@ -49,9 +49,7 @@ describe('TitleView', () => {
   });
 
   it('renders file icon', () => {
-    const { container } = render(
-      <TitleView meta={mockMeta} onSwitchToCode={mockOnSwitchToCode} />
-    );
+    const { container } = render(<TitleView meta={mockMeta} onSwitchToCode={mockOnSwitchToCode} />);
     // Check for SVG element (FileText icon)
     const svg = container.querySelector('svg');
     expect(svg).toBeInTheDocument();

@@ -1,10 +1,4 @@
-import {
-  MessageCircle,
-  Sparkles,
-  Zap,
-  Shield,
-  type LucideIcon,
-} from 'lucide-react';
+import { MessageCircle, Sparkles, Zap, Shield, type LucideIcon } from 'lucide-react';
 
 interface Feature {
   icon: LucideIcon;

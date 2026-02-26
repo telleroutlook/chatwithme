@@ -1,5 +1,4 @@
-import { Copy, Trash2, RefreshCw, Check, X } from 'lucide-react';
-import { Button } from '~/components/ui/button';
+import { Copy, Trash2, RefreshCw, Check } from 'lucide-react';
 import { cn } from '~/lib/utils';
 import { useState, useEffect, useRef } from 'react';
 import { copyToClipboard } from '~/lib/clipboard';
@@ -15,7 +14,7 @@ export interface MessageActionsProps {
 }
 
 export function MessageActions({
-  messageId,
+  messageId: _messageId,
   content,
   onCopy,
   onRegenerate,
@@ -110,11 +109,7 @@ export function MessageActions({
         )}
         aria-label={copied ? 'Copied to clipboard' : 'Copy message to clipboard'}
       >
-        {copied ? (
-          <Check className="h-4 w-4 text-green-500" />
-        ) : (
-          <Copy className="h-4 w-4" />
-        )}
+        {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
         <span>{copied ? 'Copied!' : 'Copy'}</span>
       </button>
 

@@ -27,7 +27,13 @@ export const Header = memo(function Header({
   sidebarCollapsed,
 }: HeaderProps) {
   const themeIcon =
-    themeMode === 'light' ? <Sun className="h-4 w-4" /> : themeMode === 'dark' ? <Moon className="h-4 w-4" /> : <Monitor className="h-4 w-4" />;
+    themeMode === 'light' ? (
+      <Sun className="h-4 w-4" />
+    ) : themeMode === 'dark' ? (
+      <Moon className="h-4 w-4" />
+    ) : (
+      <Monitor className="h-4 w-4" />
+    );
 
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-background/80 px-3 py-2.5 backdrop-blur-xl sm:px-4 sm:py-3">
@@ -41,15 +47,11 @@ export const Header = memo(function Header({
         >
           <Menu className="h-5 w-5" />
         </Button>
-        <h1 className="truncate text-sm font-semibold sm:text-base">
-          {title}
-        </h1>
+        <h1 className="truncate text-sm font-semibold sm:text-base">{title}</h1>
       </div>
 
       <div className="flex items-center gap-1.5 sm:gap-2">
-        <span className="hidden text-sm text-muted-foreground md:block">
-          {userEmail}
-        </span>
+        <span className="hidden text-sm text-muted-foreground md:block">{userEmail}</span>
         <Button
           variant="ghost"
           size="icon"

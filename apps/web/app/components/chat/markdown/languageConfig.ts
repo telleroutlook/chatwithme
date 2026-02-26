@@ -58,20 +58,9 @@ const LANGUAGE_EXTENSIONS: Record<string, string> = {
 };
 
 // Language categories
-const PREVIEWABLE_LANGUAGES = new Set([
-  'html',
-  'htm',
-  'svg',
-  'xml',
-  'markdown',
-  'md',
-]);
+const PREVIEWABLE_LANGUAGES = new Set(['html', 'htm', 'svg', 'xml', 'markdown', 'md']);
 
-const PLAINTEXT_LANGUAGES = new Set([
-  'txt',
-  'text',
-  'plain',
-]);
+const PLAINTEXT_LANGUAGES = new Set(['txt', 'text', 'plain']);
 
 const PROGRAMMING_LANGUAGES = new Set([
   'javascript',
@@ -112,9 +101,7 @@ const PROGRAMMING_LANGUAGES = new Set([
   'svelte',
 ]);
 
-const MERMAID_LANGUAGES = new Set([
-  'mermaid',
-]);
+const MERMAID_LANGUAGES = new Set(['mermaid']);
 
 /**
  * Get language configuration for a given language

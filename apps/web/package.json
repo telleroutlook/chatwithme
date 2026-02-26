@@ -7,7 +7,11 @@
     "dev": "react-router dev",
     "build": "react-router build",
     "start": "react-router-serve ./build/server/index.js",
-    "lint": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
     "test": "vitest run",
     "deploy": "echo \"Web deploy disabled: static assets are deployed via @chatwithme/api worker\""
   },

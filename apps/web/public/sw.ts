@@ -1,22 +1,21 @@
+import './sw.d.ts';
+
 // Service Worker for offline support
 const CACHE_NAME = 'chatwithme-v2';
 const OFFLINE_CACHE = 'chatwithme-offline-v2';
 
 // Assets to cache immediately on install
-const STATIC_ASSETS = [
-  '/',
-  '/favicon.svg',
-];
+const STATIC_ASSETS: string[] = ['/', '/favicon.svg'];
 
 // API routes that should use network-first strategy
-const API_ROUTES = ['/api/'];
+const API_ROUTES: string[] = ['/api/'];
 
 // Routes that need network-first (critical resources)
-const NETWORK_FIRST_ROUTES = ['/assets/', '/build/', '/public/', '/lib/'];
+const NETWORK_FIRST_ROUTES: string[] = ['/assets/', '/build/', '/public/', '/lib/'];
 
 // Stale-While-Revalidate strategy for static assets
 // Returns cached response immediately if available, then updates cache in background
-async function staleWhileRevalidate(request) {
+async function staleWhileRevalidate(request: Request): Promise<Response> {
   const cache = await caches.open(CACHE_NAME);
   const cachedResponse = await cache.match(request);
 
@@ -37,7 +36,7 @@ async function staleWhileRevalidate(request) {
 
   // If no cache, wait for network
   try {
-    return await fetchPromise;
+    return (await fetchPromise) as Response;
   } catch (error) {
     // Return offline fallback for HTML requests
     if (request.headers.get('accept')?.includes('text/html')) {
@@ -53,7 +52,7 @@ async function staleWhileRevalidate(request) {
 
 // Network-first strategy for critical assets (JS, CSS, API calls)
 // Always tries network first, falls back to cache on error
-async function networkFirst(request) {
+async function networkFirst(request: Request): Promise<Response> {
   const cache = await caches.open(CACHE_NAME);
 
   try {
@@ -75,16 +74,16 @@ async function networkFirst(request) {
 }
 
 // Determine which strategy to use based on the request
-function getCacheStrategy(request) {
+function getCacheStrategy(request: Request): CacheStrategy {
   const url = new URL(request.url);
 
   // Use network-first for API routes
-  if (API_ROUTES.some(route => url.pathname.startsWith(route))) {
+  if (API_ROUTES.some((route) => url.pathname.startsWith(route))) {
     return 'network-first';
   }
 
   // Use network-first for critical assets (JS, CSS with hashes)
-  if (NETWORK_FIRST_ROUTES.some(route => url.pathname.startsWith(route))) {
+  if (NETWORK_FIRST_ROUTES.some((route) => url.pathname.startsWith(route))) {
     return 'network-first';
   }
 
@@ -93,7 +92,7 @@ function getCacheStrategy(request) {
 }
 
 // Install event - cache static assets
-self.addEventListener('install', (event) => {
+self.addEventListener('install', (event: ExtendableEvent) => {
   event.waitUntil(
     Promise.all([
       caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS)),
@@ -104,7 +103,7 @@ self.addEventListener('install', (event) => {
 });
 
 // Activate event - clean up old caches
-self.addEventListener('activate', (event) => {
+self.addEventListener('activate', (event: ExtendableEvent) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -120,7 +119,7 @@ self.addEventListener('activate', (event) => {
 });
 
 // Fetch event - handle requests with appropriate strategy
-self.addEventListener('fetch', (event) => {
+self.addEventListener('fetch', (event: FetchEvent) => {
   const { request } = event;
 
   // Skip non-GET requests
@@ -139,7 +138,7 @@ self.addEventListener('fetch', (event) => {
 });
 
 // Message event - handle messages from clients
-self.addEventListener('message', (event) => {
+self.addEventListener('message', (event: ExtendableMessageEvent) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
@@ -147,7 +146,7 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'CACHE_URLS') {
     event.waitUntil(
       caches.open(CACHE_NAME).then((cache) => {
-        return cache.addAll(event.data.urls);
+        return cache.addAll(event.data.urls || []);
       })
     );
   }

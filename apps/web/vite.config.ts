@@ -27,9 +27,13 @@ export default defineConfig({
               return 'react-vendor';
             }
             // Markdown 和代码高亮
-            if (id.includes('react-markdown') || id.includes('rehype-highlight') ||
-                id.includes('remark-gfm') || id.includes('remark-math') ||
-                id.includes('highlight.js')) {
+            if (
+              id.includes('react-markdown') ||
+              id.includes('rehype-highlight') ||
+              id.includes('remark-gfm') ||
+              id.includes('remark-math') ||
+              id.includes('highlight.js')
+            ) {
               return 'markdown';
             }
             // 数学公式渲染
@@ -53,8 +57,8 @@ export default defineConfig({
               return 'virtuoso';
             }
           }
-        }
-      }
-    }
-  }
+        },
+      },
+    },
+  },
 });

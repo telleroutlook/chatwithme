@@ -66,7 +66,5 @@ export function sanitizeMessage(input: unknown): Message | null {
 
 export function sanitizeMessages(input: unknown): Message[] {
   if (!Array.isArray(input)) return [];
-  return input
-    .map(sanitizeMessage)
-    .filter((item): item is Message => item !== null);
+  return input.map(sanitizeMessage).filter((item): item is Message => item !== null);
 }

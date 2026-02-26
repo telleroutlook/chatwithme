@@ -10,10 +10,7 @@ export async function createConversation(
   return result[0];
 }
 
-export async function getConversationById(
-  db: Db,
-  id: string
-): Promise<Conversation | undefined> {
+export async function getConversationById(db: Db, id: string): Promise<Conversation | undefined> {
   return db.select().from(conversations).where(eq(conversations.id, id)).get();
 }
 

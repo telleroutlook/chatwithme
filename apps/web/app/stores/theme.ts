@@ -12,7 +12,7 @@ const getSystemTheme = (): ResolvedTheme => {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 };
 
-const resolveTheme = (mode: ThemeMode, clientMode?: ThemeMode): ResolvedTheme => {
+const resolveTheme = (mode: ThemeMode): ResolvedTheme => {
   if (typeof window === 'undefined') return 'light';
   return mode === 'system' ? getSystemTheme() : mode;
 };

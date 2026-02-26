@@ -24,9 +24,7 @@ describe('useTouchGesture', () => {
     const ref = { current: mockElement };
     const onSwipeRight = vi.fn();
 
-    renderHook(() =>
-      useTouchGesture(ref, { onSwipeRight, enabled: false })
-    );
+    renderHook(() => useTouchGesture(ref, { onSwipeRight, enabled: false }));
 
     // Touch events should not trigger callbacks
     const touchStart = new TouchEvent('touchstart', {
@@ -41,9 +39,7 @@ describe('useTouchGesture', () => {
     const ref = { current: null };
     const onSwipeRight = vi.fn();
 
-    renderHook(() =>
-      useTouchGesture(ref, { onSwipeRight })
-    );
+    renderHook(() => useTouchGesture(ref, { onSwipeRight }));
 
     // Should not throw
     expect(ref.current).toBeNull();
@@ -53,9 +49,7 @@ describe('useTouchGesture', () => {
     const ref = { current: mockElement };
     const onSwipeRight = vi.fn();
 
-    renderHook(() =>
-      useTouchGesture(ref, { onSwipeRight, swipeThreshold: 50 })
-    );
+    renderHook(() => useTouchGesture(ref, { onSwipeRight, swipeThreshold: 50 }));
 
     act(() => {
       // Start touch
@@ -78,9 +72,7 @@ describe('useTouchGesture', () => {
     const ref = { current: mockElement };
     const onSwipeLeft = vi.fn();
 
-    renderHook(() =>
-      useTouchGesture(ref, { onSwipeLeft, swipeThreshold: 50 })
-    );
+    renderHook(() => useTouchGesture(ref, { onSwipeLeft, swipeThreshold: 50 }));
 
     act(() => {
       const startEvent = new TouchEvent('touchstart', {
@@ -101,9 +93,7 @@ describe('useTouchGesture', () => {
     const ref = { current: mockElement };
     const onSwipeUp = vi.fn();
 
-    renderHook(() =>
-      useTouchGesture(ref, { onSwipeUp, swipeThreshold: 50 })
-    );
+    renderHook(() => useTouchGesture(ref, { onSwipeUp, swipeThreshold: 50 }));
 
     act(() => {
       const startEvent = new TouchEvent('touchstart', {
@@ -124,9 +114,7 @@ describe('useTouchGesture', () => {
     const ref = { current: mockElement };
     const onSwipeDown = vi.fn();
 
-    renderHook(() =>
-      useTouchGesture(ref, { onSwipeDown, swipeThreshold: 50 })
-    );
+    renderHook(() => useTouchGesture(ref, { onSwipeDown, swipeThreshold: 50 }));
 
     act(() => {
       const startEvent = new TouchEvent('touchstart', {
@@ -147,9 +135,7 @@ describe('useTouchGesture', () => {
     const ref = { current: mockElement };
     const onSwipeRight = vi.fn();
 
-    renderHook(() =>
-      useTouchGesture(ref, { onSwipeRight, swipeThreshold: 50 })
-    );
+    renderHook(() => useTouchGesture(ref, { onSwipeRight, swipeThreshold: 50 }));
 
     act(() => {
       const startEvent = new TouchEvent('touchstart', {
@@ -173,9 +159,7 @@ describe('useTouchGesture', () => {
     const ref = { current: mockElement };
     const onLongPress = vi.fn();
 
-    renderHook(() =>
-      useTouchGesture(ref, { onLongPress, longPressDelay: 500 })
-    );
+    renderHook(() => useTouchGesture(ref, { onLongPress, longPressDelay: 500 }));
 
     act(() => {
       const startEvent = new TouchEvent('touchstart', {
@@ -197,9 +181,7 @@ describe('useTouchGesture', () => {
     const ref = { current: mockElement };
     const onLongPress = vi.fn();
 
-    renderHook(() =>
-      useTouchGesture(ref, { onLongPress, longPressDelay: 500 })
-    );
+    renderHook(() => useTouchGesture(ref, { onLongPress, longPressDelay: 500 }));
 
     act(() => {
       const startEvent = new TouchEvent('touchstart', {
@@ -225,9 +207,7 @@ describe('useTouchGesture', () => {
     const ref = { current: mockElement };
     const removeEventListenerSpy = vi.spyOn(mockElement, 'removeEventListener');
 
-    const { unmount } = renderHook(() =>
-      useTouchGesture(ref, { onSwipeRight: vi.fn() })
-    );
+    const { unmount } = renderHook(() => useTouchGesture(ref, { onSwipeRight: vi.fn() }));
 
     unmount();
 
@@ -266,9 +246,7 @@ describe('useTouchGesture', () => {
     const ref = { current: mockElement };
     const onSwipeRight = vi.fn();
 
-    renderHook(() =>
-      useTouchGesture(ref, { onSwipeRight, swipeThreshold: 50 })
-    );
+    renderHook(() => useTouchGesture(ref, { onSwipeRight, swipeThreshold: 50 }));
 
     act(() => {
       const startEvent = new TouchEvent('touchstart', {
@@ -277,7 +255,7 @@ describe('useTouchGesture', () => {
       mockElement.dispatchEvent(startEvent);
 
       // Manually advance time beyond 300ms
-      return new Promise(resolve => {
+      return new Promise((resolve) => {
         setTimeout(() => {
           const endEvent = new TouchEvent('touchend', {
             changedTouches: [{ clientX: 100, clientY: 0 } as Touch],
@@ -296,17 +274,12 @@ describe('useTouchGesture', () => {
     const ref = { current: mockElement };
     const onSwipeRight = vi.fn();
 
-    renderHook(() =>
-      useTouchGesture(ref, { onSwipeRight })
-    );
+    renderHook(() => useTouchGesture(ref, { onSwipeRight }));
 
     act(() => {
       // Multi-touch start
       const startEvent = new TouchEvent('touchstart', {
-        touches: [
-          { clientX: 0, clientY: 0 } as Touch,
-          { clientX: 10, clientY: 10 } as Touch,
-        ],
+        touches: [{ clientX: 0, clientY: 0 } as Touch, { clientX: 10, clientY: 10 } as Touch],
       });
       mockElement.dispatchEvent(startEvent);
     });
@@ -330,9 +303,7 @@ describe('useEdgeSwipe', () => {
   it('detects right swipe from left edge', () => {
     const onSwipeRight = vi.fn();
 
-    renderHook(() =>
-      useEdgeSwipe({ onSwipeRight, edgeThreshold: 30 })
-    );
+    renderHook(() => useEdgeSwipe({ onSwipeRight, edgeThreshold: 30 }));
 
     // Test that the hook attaches event listeners
     // The actual swipe detection is tested in the useTouchGesture tests
@@ -342,9 +313,7 @@ describe('useEdgeSwipe', () => {
   it('detects left swipe from right edge', () => {
     const onSwipeLeft = vi.fn();
 
-    renderHook(() =>
-      useEdgeSwipe({ onSwipeLeft, edgeThreshold: 30 })
-    );
+    renderHook(() => useEdgeSwipe({ onSwipeLeft, edgeThreshold: 30 }));
 
     // Test that the hook attaches event listeners
     // The actual swipe detection is tested in the useTouchGesture tests
@@ -354,9 +323,7 @@ describe('useEdgeSwipe', () => {
   it('does not trigger swipe when not starting from edge', () => {
     const onSwipeRight = vi.fn();
 
-    renderHook(() =>
-      useEdgeSwipe({ onSwipeRight, edgeThreshold: 30 })
-    );
+    renderHook(() => useEdgeSwipe({ onSwipeRight, edgeThreshold: 30 }));
 
     act(() => {
       // Start in middle of screen (not near edge)
@@ -378,9 +345,7 @@ describe('useEdgeSwipe', () => {
   it('does not trigger when enabled is false', () => {
     const onSwipeRight = vi.fn();
 
-    renderHook(() =>
-      useEdgeSwipe({ onSwipeRight, enabled: false })
-    );
+    renderHook(() => useEdgeSwipe({ onSwipeRight, enabled: false }));
 
     act(() => {
       const startEvent = new TouchEvent('touchstart', {
@@ -399,9 +364,7 @@ describe('useEdgeSwipe', () => {
 
   it('cleans up event listeners on unmount', () => {
     // Test that the hook can be mounted and unmounted without errors
-    const { unmount } = renderHook(() =>
-      useEdgeSwipe({ onSwipeRight: vi.fn() })
-    );
+    const { unmount } = renderHook(() => useEdgeSwipe({ onSwipeRight: vi.fn() }));
 
     // Should not throw
     expect(() => unmount()).not.toThrow();
@@ -410,9 +373,7 @@ describe('useEdgeSwipe', () => {
   it('resets touch start on touch end', () => {
     const onSwipeRight = vi.fn();
 
-    renderHook(() =>
-      useEdgeSwipe({ onSwipeRight, edgeThreshold: 30 })
-    );
+    renderHook(() => useEdgeSwipe({ onSwipeRight, edgeThreshold: 30 }));
 
     act(() => {
       const startEvent = new TouchEvent('touchstart', {
@@ -437,9 +398,7 @@ describe('useEdgeSwipe', () => {
   it('requires minimum swipe distance of 50px', () => {
     const onSwipeRight = vi.fn();
 
-    renderHook(() =>
-      useEdgeSwipe({ onSwipeRight, edgeThreshold: 30 })
-    );
+    renderHook(() => useEdgeSwipe({ onSwipeRight, edgeThreshold: 30 }));
 
     act(() => {
       const startEvent = new TouchEvent('touchstart', {

@@ -15,7 +15,12 @@ export async function authMiddleware(c: Context<AppBindings>, next: Next) {
   const payload = await verifyToken(token, c.env.JWT_SECRET);
 
   if (!payload) {
-    return errorResponse(c, 401, ERROR_CODES.UNAUTHORIZED, 'Unauthorized: Invalid or expired token');
+    return errorResponse(
+      c,
+      401,
+      ERROR_CODES.UNAUTHORIZED,
+      'Unauthorized: Invalid or expired token'
+    );
   }
 
   // Store auth info in context for use in handlers

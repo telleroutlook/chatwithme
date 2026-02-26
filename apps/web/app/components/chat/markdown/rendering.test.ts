@@ -69,7 +69,11 @@ describe('markdown rendering', () => {
   });
 
   it('renders svg code block with preview iframe', async () => {
-    const content = ['```svg', '<svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" /></svg>', '```'].join('\n');
+    const content = [
+      '```svg',
+      '<svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" /></svg>',
+      '```',
+    ].join('\n');
     const el = mount(createElement(MarkdownRenderer, { content }));
     await waitForAsyncRender();
     expect(el.querySelector('iframe[title="Code Preview"]')).not.toBeNull();

@@ -28,8 +28,8 @@ export function EmptyMessages({ className = '' }: EmptyMessagesProps) {
         Welcome to ChatWithMe
       </h2>
       <p className="max-w-md text-center text-sm leading-relaxed sm:text-base">
-        Start a conversation by typing a message below. You can ask questions, get help with
-        tasks, or just chat.
+        Start a conversation by typing a message below. You can ask questions, get help with tasks,
+        or just chat.
       </p>
 
       {/* Quick hint cards */}

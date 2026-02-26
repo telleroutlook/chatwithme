@@ -5,10 +5,7 @@ import type { Message } from '@chatwithme/shared';
  * @param messages - Array of chat messages
  * @param conversationTitle - Title of the conversation
  */
-export const exportChatToHtml = (
-  messages: Message[],
-  conversationTitle: string
-) => {
+export const exportChatToHtml = (messages: Message[], conversationTitle: string) => {
   const title = `Chat Export - ${conversationTitle} - ${new Date().toLocaleDateString()}`;
 
   const messagesHtml = messages

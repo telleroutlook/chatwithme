@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { retryWithBackoff, RETRY_CONFIG, type RetryResult } from './apiRetry';
+import { retryWithBackoff, RETRY_CONFIG } from './apiRetry';
 
 describe('retryWithBackoff', () => {
   beforeEach(() => {
@@ -21,7 +21,8 @@ describe('retryWithBackoff', () => {
   });
 
   it('retries on retryable status code (500)', async () => {
-    const mockFn = vi.fn()
+    const mockFn = vi
+      .fn()
       .mockRejectedValueOnce({ response: { status: 500 } })
       .mockResolvedValueOnce('success');
 
@@ -40,7 +41,8 @@ describe('retryWithBackoff', () => {
   });
 
   it('retries on 429 Too Many Requests', async () => {
-    const mockFn = vi.fn()
+    const mockFn = vi
+      .fn()
       .mockRejectedValueOnce({ response: { status: 429 } })
       .mockResolvedValueOnce('success');
 
@@ -100,7 +102,8 @@ describe('retryWithBackoff', () => {
   });
 
   it('allows custom initial delay', async () => {
-    const mockFn = vi.fn()
+    const mockFn = vi
+      .fn()
       .mockRejectedValueOnce({ response: { status: 500 } })
       .mockResolvedValueOnce('success');
 
@@ -115,7 +118,8 @@ describe('retryWithBackoff', () => {
   });
 
   it('allows custom retryable status codes', async () => {
-    const mockFn = vi.fn()
+    const mockFn = vi
+      .fn()
       .mockRejectedValueOnce({ response: { status: 418 } })
       .mockResolvedValueOnce('success');
 
@@ -130,7 +134,8 @@ describe('retryWithBackoff', () => {
   });
 
   it('returns correct attempt count after multiple retries', async () => {
-    const mockFn = vi.fn()
+    const mockFn = vi
+      .fn()
       .mockRejectedValueOnce({ response: { status: 500 } })
       .mockRejectedValueOnce({ response: { status: 500 } })
       .mockResolvedValueOnce('success');
@@ -162,7 +167,8 @@ describe('retryWithBackoff', () => {
   });
 
   it('adds jitter to retry delays', async () => {
-    const mockFn = vi.fn()
+    const mockFn = vi
+      .fn()
       .mockRejectedValueOnce({ response: { status: 500 } })
       .mockResolvedValueOnce('success');
 

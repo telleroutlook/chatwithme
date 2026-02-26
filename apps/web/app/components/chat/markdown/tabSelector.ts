@@ -66,7 +66,7 @@ export function getDefaultTab(config: TabSelectorConfig): CodeBlockTab {
 /**
  * Check if a tab transition is valid
  */
-export function isValidTabTransition(from: CodeBlockTab, to: CodeBlockTab): boolean {
+export function isValidTabTransition(_from: CodeBlockTab, _to: CodeBlockTab): boolean {
   // All transitions are valid
   return true;
 }

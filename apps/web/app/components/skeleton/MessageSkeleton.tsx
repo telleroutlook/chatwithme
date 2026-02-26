@@ -9,12 +9,7 @@ export function MessageSkeleton({ role = 'assistant' }: MessageSkeletonProps) {
   const isUser = role === 'user';
 
   return (
-    <div
-      className={cn(
-        'flex gap-2 p-3 sm:gap-3 sm:p-4',
-        isUser ? 'flex-row-reverse' : 'flex-row'
-      )}
-    >
+    <div className={cn('flex gap-2 p-3 sm:gap-3 sm:p-4', isUser ? 'flex-row-reverse' : 'flex-row')}>
       <Avatar className="h-8 w-8 shrink-0 sm:h-9 sm:w-9">
         <AvatarFallback className={cn('animate-pulse', isUser ? 'bg-muted' : 'bg-muted')} />
       </Avatar>

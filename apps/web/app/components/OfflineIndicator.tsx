@@ -28,6 +28,7 @@ export function OfflineIndicator({ isOnline }: OfflineIndicatorProps) {
       }, 300); // Match CSS transition duration
       return () => clearTimeout(timer);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOnline]);
 
   if (!showBanner) {

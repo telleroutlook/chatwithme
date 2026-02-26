@@ -20,7 +20,7 @@ describe('copyToClipboard', () => {
 
     // Clean up any textarea elements that might be left
     const textareas = document.querySelectorAll('textarea');
-    textareas.forEach(ta => ta.remove());
+    textareas.forEach((ta) => ta.remove());
   });
 
   it('copies text using modern Clipboard API when available', async () => {
