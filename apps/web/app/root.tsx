@@ -31,7 +31,35 @@ const themeBootScript = `
 })();
 `;
 
-export const links: LinksFunction = () => [];
+export const links: LinksFunction = () => [
+  // Font preloading for critical above-the-fold content
+  {
+    rel: 'preload',
+    href: '/fonts/manrope-400.woff2',
+    as: 'font',
+    type: 'font/woff2',
+    crossOrigin: 'anonymous',
+  },
+  {
+    rel: 'preload',
+    href: '/fonts/manrope-500.woff2',
+    as: 'font',
+    type: 'font/woff2',
+    crossOrigin: 'anonymous',
+  },
+  {
+    rel: 'preload',
+    href: '/fonts/manrope-700.woff2',
+    as: 'font',
+    type: 'font/woff2',
+    crossOrigin: 'anonymous',
+  },
+  // Preconnect to API origin for faster fetch requests
+  {
+    rel: 'preconnect',
+    href: import.meta.env.VITE_API_URL || 'http://localhost:8787',
+  },
+];
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -70,11 +98,10 @@ export default function App() {
     // Register service worker
     registerSW({
       onUpdate: () => {
-        console.log('[SW] New version available');
         // Optionally show update notification to user
       },
       onSuccess: () => {
-        console.log('[SW] Service worker activated');
+        // Service worker activated successfully
       },
     });
   }, []);

@@ -32,8 +32,6 @@ export function registerSW(
   return navigator.serviceWorker
     .register(SW_URL)
     .then((registration) => {
-      console.log('[SW] Service worker registered successfully');
-
       // Check for updates
       if (registration.waiting) {
         options.onUpdate?.(registration);
@@ -81,7 +79,6 @@ export async function unregisterSW(): Promise<boolean> {
     const registration = await navigator.serviceWorker.getRegistration();
     if (registration) {
       await registration.unregister();
-      console.log('[SW] Service worker unregistered successfully');
       return true;
     }
     return false;

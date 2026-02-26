@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { reportError, trackErrorFrequency } from '~/lib/performance';
+import { reportError } from '~/lib/errorReporting';
+import { trackErrorFrequency } from '~/lib/performance';
 
 interface ErrorBoundaryState {
   hasError: boolean;

@@ -32,6 +32,7 @@ export class MCPAgent extends Agent<Env, MCPAgentState> {
    * Agent startup - initialize MCP connections
    */
   async onStart(): Promise<void> {
+    // eslint-disable-next-line no-console -- MCP agent startup logging for debugging
     console.log('MCPAgent: Starting');
     await this.ensureConnections();
   }
@@ -99,6 +100,7 @@ export class MCPAgent extends Agent<Env, MCPAgentState> {
         });
       }
 
+      // eslint-disable-next-line no-console -- MCP connection logging for debugging
       console.log('MCPAgent: All connections established');
     } catch (error) {
       console.error('MCPAgent: Failed to establish connections', error);
@@ -187,6 +189,7 @@ export class MCPAgent extends Agent<Env, MCPAgentState> {
    * State update callback
    */
   onStateUpdate(state: MCPAgentState, _source: unknown): void {
+    // eslint-disable-next-line no-console -- MCP state logging for debugging
     console.log('MCPAgent state updated:', state);
   }
 }

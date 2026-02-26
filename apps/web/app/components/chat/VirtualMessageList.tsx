@@ -47,6 +47,9 @@ export function VirtualMessageList({
       }
       atBottomStateChange={handleIsAtBottom}
       atBottomThreshold={100}
+      increaseViewportBy={{ top: 200, bottom: 200 }}
+      overscan={200}
+      defaultItemHeight={100}
       className="h-full w-full"
       style={{ contain: 'strict' }}
       components={{

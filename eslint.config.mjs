@@ -40,6 +40,7 @@ export default [
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
       'prettier/prettier': 'warn',
+      'no-console': ['error', { allow: ['warn', 'error'] }],
     },
   },
   // Test files - relaxed rules

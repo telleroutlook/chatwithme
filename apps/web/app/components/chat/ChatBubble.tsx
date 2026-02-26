@@ -14,7 +14,7 @@ import { useState, memo, Suspense, lazy, useEffect, useRef } from 'react';
 import { ErrorBoundary } from '~/components/error';
 import type { Message, ImageAnalysis } from '@chatwithme/shared';
 import { useTouchGesture } from '~/hooks/useTouchGesture';
-import { getFileIcon, formatFileSize } from '~/lib/fileUtils';
+import { getFileIcon, formatFileSize, isValidImageUrl } from '~/lib/fileUtils';
 
 const LazyMarkdownRenderer = lazy(() =>
   import('./MarkdownRenderer').then((m) => ({ default: m.MarkdownRenderer }))
@@ -102,11 +102,18 @@ export const ChatBubble = memo<ChatBubbleProps>(
                     >
                       {file.mimeType.startsWith('image/') ? (
                         <>
-                          <img
-                            src={file.url}
-                            alt={file.fileName}
-                            className="h-8 w-8 rounded object-cover"
-                          />
+                          {isValidImageUrl(file.url) ? (
+                            <img
+                              loading="lazy"
+                              decoding="async"
+                              src={file.url}
+                              alt={file.fileName}
+                              className="h-8 w-8 rounded object-cover"
+                            />
+                          ) : (
+                            // Fallback if URL validation fails
+                            <FileImage className="h-8 w-8 text-muted-foreground" />
+                          )}
                           <span className="text-xs opacity-80 max-w-[100px] truncate">
                             {file.fileName}
                           </span>

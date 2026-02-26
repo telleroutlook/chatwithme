@@ -116,3 +116,6 @@ export interface ChatResponseData {
   traceId: string;
   imageAnalyses?: ImageAnalysis[];
 }
+
+// Error monitoring types
+export * from './errorMonitoring';

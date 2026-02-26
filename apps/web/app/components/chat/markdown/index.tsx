@@ -10,6 +10,7 @@ import { KatexRenderer } from './KatexBlock';
 import { CodeBlockWithPreview } from './CodeBlock';
 import { CodeHighlightTheme } from './CodeHighlightTheme';
 import type { MarkdownRendererProps } from './types';
+import { Loader2 } from 'lucide-react';
 
 const LazyMermaidRenderer = lazy(() =>
   import('./MermaidBlock').then((m) => ({ default: m.MermaidRenderer }))
@@ -46,7 +47,19 @@ export const MarkdownRenderer = memo<MarkdownRendererProps>(({ content, classNam
             if (isBlock && isMermaid) {
               return (
                 <Suspense
-                  fallback={<div className="text-sm text-muted-foreground">Loading Mermaid...</div>}
+                  fallback={
+                    <div className="my-4 rounded-lg border border-border bg-background overflow-hidden">
+                      <div className="px-3 py-2 border-b border-border">
+                        <span className="text-xs text-muted-foreground font-mono">mermaid</span>
+                      </div>
+                      <div className="p-8 flex items-center justify-center min-h-[120px]">
+                        <div className="flex flex-col items-center gap-2">
+                          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                          <span className="text-xs text-muted-foreground">Loading diagram...</span>
+                        </div>
+                      </div>
+                    </div>
+                  }
                 >
                   <LazyMermaidRenderer chart={rawText} />
                 </Suspense>

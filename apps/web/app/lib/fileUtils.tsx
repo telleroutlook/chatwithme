@@ -137,3 +137,42 @@ export function getFileType(file: File): 'image' | 'pdf' | 'code' | 'text' | 'of
 
   return 'text';
 }
+
+/**
+ * Validate if a URL is safe to use in an <img> tag
+ * Prevents XSS attacks by checking protocol and URL structure
+ * @param url - URL string to validate
+ * @returns true if URL is safe, false otherwise
+ */
+export function isValidImageUrl(url: string): boolean {
+  try {
+    // Parse URL with fallback to current origin for relative URLs
+    const parsed = new URL(url, window.location.origin);
+
+    // Only allow http/https protocols (block javascript:, data:, vbscript:, etc.)
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return false;
+    }
+
+    // Additional security: block data: URLs which can execute scripts
+    if (url.startsWith('data:')) {
+      return false;
+    }
+
+    // Optional: Restrict to specific trusted domains (R2 bucket, CDN, etc.)
+    // Uncomment and configure based on your infrastructure
+    // const allowedHosts = [
+    //   'your-r2-bucket.r2.dev',
+    //   'your-cdn.com',
+    //   'localhost'
+    // ];
+    // if (!allowedHosts.some(host => parsed.hostname === host || parsed.hostname.endsWith(`.${host}`))) {
+    //   return false;
+    // }
+
+    return true;
+  } catch {
+    // Invalid URL format
+    return false;
+  }
+}

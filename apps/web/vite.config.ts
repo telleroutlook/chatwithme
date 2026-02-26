@@ -56,6 +56,14 @@ export default defineConfig({
             if (id.includes('react-virtuoso')) {
               return 'virtuoso';
             }
+            // PDF.js 单独分割（大体积库）
+            if (id.includes('pdfjs-dist')) {
+              return 'pdfjs';
+            }
+            // Office 文件处理单独分割（延迟加载）
+            if (id.includes('mammoth') || id.includes('xlsx') || id.includes('jszip')) {
+              return 'office';
+            }
           }
         },
       },

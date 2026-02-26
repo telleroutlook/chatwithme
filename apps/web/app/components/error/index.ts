@@ -6,3 +6,5 @@ export type { ChatErrorBoundaryProps } from './ChatErrorBoundary';
 
 export { FallbackError } from './FallbackError';
 export type { FallbackErrorProps } from './FallbackError';
+
+export { ErrorReport } from './ErrorReport';

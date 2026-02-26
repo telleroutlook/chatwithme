@@ -46,7 +46,7 @@ class ApiClient {
     }
 
     // Wrap fetch with retry mechanism
-    const { data: response, attempts } = await retryWithBackoff(
+    const { data: response } = await retryWithBackoff(
       async () => {
         const res = await fetch(`${this.baseUrl}${endpoint}`, {
           ...fetchOptions,
@@ -66,11 +66,6 @@ class ApiClient {
       },
       { maxRetries: 3, initialDelay: 1000 }
     );
-
-    // Log retry attempts if any occurred
-    if (attempts > 1) {
-      console.log(`API request to ${endpoint} completed after ${attempts} attempt(s)`);
-    }
 
     const contentType = response.headers.get('content-type') || '';
     const data: ApiResponse<T> = contentType.includes('application/json')
@@ -102,7 +97,7 @@ class ApiClient {
   private async refreshToken(refreshToken: string): Promise<boolean> {
     try {
       // Wrap refresh token request with retry mechanism
-      const { data: response, attempts } = await retryWithBackoff(
+      const { data: response } = await retryWithBackoff(
         async () => {
           const res = await fetch(`${this.baseUrl}/auth/refresh`, {
             method: 'POST',
@@ -123,11 +118,6 @@ class ApiClient {
         },
         { maxRetries: 3, initialDelay: 1000 }
       );
-
-      // Log retry attempts if any occurred
-      if (attempts > 1) {
-        console.log(`Token refresh completed after ${attempts} attempt(s)`);
-      }
 
       const data = (await response.json()) as ApiResponse<{
         accessToken: string;

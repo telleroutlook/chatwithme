@@ -143,8 +143,9 @@
     button:active,
     a:active,
     [role='button']:active {
-      transform: scale(0.98);
-      opacity: 0.9;
+      transform: scale(0.97);
+      opacity: 0.85;
+      transition: transform 100ms ease-out, opacity 100ms ease-out;
     }
   }
 

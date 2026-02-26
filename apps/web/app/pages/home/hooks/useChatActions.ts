@@ -184,23 +184,6 @@ export function useChatActions(): UseChatActionsReturn {
 
       setPendingConversation(conversationId);
 
-      // Debug log: Check extractedText before sending
-      if (files && files.length > 0) {
-        console.log('[Frontend] Sending files:', files.length);
-        for (const file of files) {
-          console.log('[Frontend] File:', file.fileName, 'Type:', file.mimeType);
-          if (file.extractedText) {
-            console.log('[Frontend] Has extractedText, length:', file.extractedText.length);
-            console.log(
-              '[Frontend] Extracted text preview (first 200 chars):',
-              file.extractedText.substring(0, 200)
-            );
-          } else {
-            console.log('[Frontend] No extractedText for file:', file.fileName);
-          }
-        }
-      }
-
       try {
         const response = await api.post<ChatResponseData>('/chat/respond', {
           conversationId,

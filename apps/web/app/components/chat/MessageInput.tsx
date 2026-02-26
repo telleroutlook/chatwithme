@@ -35,6 +35,22 @@ export const MessageInput = memo(function MessageInput({
   const objectUrlsRef = useRef<Set<string>>(new Set());
   const { processFiles: processFilesWithWorker, isProcessing } = useFileProcessor();
 
+  // Mobile keyboard adaptation
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.innerWidth >= 768) return;
+
+    const handleResize = () => {
+      const vh = window.visualViewport?.height ?? window.innerHeight;
+      document.documentElement.style.setProperty('--visual-viewport-height', `${vh}px`);
+
+      // Auto-scroll to input when keyboard appears
+      textareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    };
+
+    window.visualViewport?.addEventListener('resize', handleResize);
+    return () => window.visualViewport?.removeEventListener('resize', handleResize);
+  }, []);
+
   // Cleanup object URLs when component unmounts
   useEffect(() => {
     const currentUrls = objectUrlsRef.current;
@@ -150,9 +166,8 @@ export const MessageInput = memo(function MessageInput({
             return newFiles;
           });
         },
-        onOverallProgress: (progress) => {
+        onOverallProgress: (_progress) => {
           // Optional: could use for a global progress indicator
-          console.log('Overall progress:', progress);
         },
       });
 

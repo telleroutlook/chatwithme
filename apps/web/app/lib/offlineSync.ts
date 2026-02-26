@@ -47,8 +47,6 @@ export async function syncPendingRequests(): Promise<SyncResult> {
     return { succeeded: 0, failed: 0 };
   }
 
-  console.log(`[offlineSync] Syncing ${pendingRequests.length} pending requests...`);
-
   let succeeded = 0;
   let failed = 0;
 
@@ -79,7 +77,6 @@ export async function syncPendingRequests(): Promise<SyncResult> {
     }
   }
 
-  console.log(`[offlineSync] Sync complete: ${succeeded} succeeded, ${failed} failed`);
   return { succeeded, failed };
 }
 

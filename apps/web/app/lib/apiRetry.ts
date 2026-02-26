@@ -72,11 +72,6 @@ export async function retryWithBackoff<T>(
     try {
       const data = await fn();
 
-      // If this wasn't the first attempt, log successful retry
-      if (attempt > 0) {
-        console.log(`Request succeeded after ${attempt} retry attempt(s)`);
-      }
-
       return { data, attempts: attempt + 1 };
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
@@ -100,10 +95,6 @@ export async function retryWithBackoff<T>(
 
       // Calculate delay and wait before retrying
       const delay = calculateDelay(attempt, config.initialDelay);
-      console.log(
-        `Request failed (attempt ${attempt + 1}/${config.maxRetries + 1}). ` +
-          `Retrying in ${Math.round(delay)}ms...`
-      );
 
       await new Promise((resolve) => setTimeout(resolve, delay));
     }

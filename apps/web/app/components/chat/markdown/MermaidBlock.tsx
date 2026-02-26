@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import { Download } from 'lucide-react';
+import { Download, Loader2 } from 'lucide-react';
 import { useThemeStore } from '~/stores/theme';
 import { downloadSvgElementAsPng } from './utils';
 import type { MermaidRendererProps } from './types';
@@ -100,9 +100,16 @@ export const MermaidRenderer = memo<MermaidRendererProps>(({ chart }) => {
           {isDownloading ? 'Exporting...' : 'PNG'}
         </button>
       </div>
-      <div className="p-4 overflow-x-auto">
-        <div ref={containerRef} className="mermaid-diagram min-h-[120px]" />
-        {isLoading && <div className="text-sm text-muted-foreground">Rendering diagram...</div>}
+      <div className="p-4 overflow-x-auto relative min-h-[120px]">
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-2">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <span className="text-xs text-muted-foreground">Rendering diagram...</span>
+            </div>
+          </div>
+        )}
+        <div ref={containerRef} className="mermaid-diagram" />
       </div>
     </div>
   );
