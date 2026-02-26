@@ -4,7 +4,7 @@
  * Registers the service worker for offline support and PWA capabilities.
  */
 
-const SW_URL = '/sw.ts';
+const SW_URL = '/sw.js';
 
 export interface ServiceWorkerRegisterOptions {
   onUpdate?: (registration: ServiceWorkerRegistration) => void;

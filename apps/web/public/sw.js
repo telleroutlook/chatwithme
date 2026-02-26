@@ -1,21 +1,20 @@
-import './sw.d.ts';
-
+/* eslint-disable no-undef */
 // Service Worker for offline support
 const CACHE_NAME = 'chatwithme-v2';
 const OFFLINE_CACHE = 'chatwithme-offline-v2';
 
 // Assets to cache immediately on install
-const STATIC_ASSETS: string[] = ['/', '/favicon.svg'];
+const STATIC_ASSETS = ['/', '/favicon.svg'];
 
 // API routes that should use network-first strategy
-const API_ROUTES: string[] = ['/api/'];
+const API_ROUTES = ['/api/'];
 
 // Routes that need network-first (critical resources)
-const NETWORK_FIRST_ROUTES: string[] = ['/assets/', '/build/', '/public/', '/lib/'];
+const NETWORK_FIRST_ROUTES = ['/assets/', '/build/', '/public/', '/lib/'];
 
 // Stale-While-Revalidate strategy for static assets
 // Returns cached response immediately if available, then updates cache in background
-async function staleWhileRevalidate(request: Request): Promise<Response> {
+async function staleWhileRevalidate(request) {
   const cache = await caches.open(CACHE_NAME);
   const cachedResponse = await cache.match(request);
 
@@ -36,12 +35,12 @@ async function staleWhileRevalidate(request: Request): Promise<Response> {
 
   // If no cache, wait for network
   try {
-    return (await fetchPromise) as Response;
+    return await fetchPromise;
   } catch (error) {
     // Return offline fallback for HTML requests
     if (request.headers.get('accept')?.includes('text/html')) {
       const offlineCache = await caches.open(OFFLINE_CACHE);
-      const offlinePage = await offlineCache.match('/offline');
+      const offlinePage = await offlineCache.match('/offline.html');
       if (offlinePage) {
         return offlinePage;
       }
@@ -52,7 +51,7 @@ async function staleWhileRevalidate(request: Request): Promise<Response> {
 
 // Network-first strategy for critical assets (JS, CSS, API calls)
 // Always tries network first, falls back to cache on error
-async function networkFirst(request: Request): Promise<Response> {
+async function networkFirst(request) {
   const cache = await caches.open(CACHE_NAME);
 
   try {
@@ -74,7 +73,7 @@ async function networkFirst(request: Request): Promise<Response> {
 }
 
 // Determine which strategy to use based on the request
-function getCacheStrategy(request: Request): CacheStrategy {
+function getCacheStrategy(request) {
   const url = new URL(request.url);
 
   // Use network-first for API routes
@@ -92,18 +91,23 @@ function getCacheStrategy(request: Request): CacheStrategy {
 }
 
 // Install event - cache static assets
-self.addEventListener('install', (event: ExtendableEvent) => {
+self.addEventListener('install', (event) => {
   event.waitUntil(
     Promise.all([
       caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS)),
-      caches.open(OFFLINE_CACHE).then((cache) => cache.add('/offline.html')),
+      // Note: /offline.html may not exist in production, so we handle it gracefully
+      caches.open(OFFLINE_CACHE).then((cache) =>
+        cache.add('/offline.html').catch(() => {
+          console.log('[SW] /offline.html not found, skipping offline page cache');
+        })
+      ),
     ])
   );
   self.skipWaiting();
 });
 
 // Activate event - clean up old caches
-self.addEventListener('activate', (event: ExtendableEvent) => {
+self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -119,7 +123,7 @@ self.addEventListener('activate', (event: ExtendableEvent) => {
 });
 
 // Fetch event - handle requests with appropriate strategy
-self.addEventListener('fetch', (event: FetchEvent) => {
+self.addEventListener('fetch', (event) => {
   const { request } = event;
 
   // Skip non-GET requests
@@ -138,7 +142,7 @@ self.addEventListener('fetch', (event: FetchEvent) => {
 });
 
 // Message event - handle messages from clients
-self.addEventListener('message', (event: ExtendableMessageEvent) => {
+self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }

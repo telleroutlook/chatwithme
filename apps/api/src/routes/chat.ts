@@ -397,41 +397,80 @@ function buildStructuredReplyMessages(
   role: 'system' | 'user' | 'assistant';
   content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
 }> {
-  // Use configured system prompt, or default
+  // For images with GLM-4.6v, use simpler format
+  // GLM-4.6v is sensitive to complex prompts with images
+  if (hasImages) {
+    const baseSystemPrompt = env?.CHAT_SYSTEM_PROMPT || 'You are a helpful assistant.';
+    const simpleInstruction = `${baseSystemPrompt}
+
+Please analyze the provided image and respond in a helpful manner. Focus on describing what you see in the image.`;
+
+    const normalized = messages.flatMap(
+      (
+        item
+      ): Array<{
+        role: 'system' | 'user' | 'assistant';
+        content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+      }> => {
+        const role = item.role === 'assistant' || item.role === 'system' ? item.role : 'user';
+
+        if (Array.isArray(item.content)) {
+          if (!item.content || item.content.length === 0) return [];
+          return [
+            {
+              role,
+              content: item.content as Array<{
+                type: string;
+                text?: string;
+                image_url?: { url: string };
+              }>,
+            },
+          ];
+        } else {
+          const content = item.content?.trim();
+          if (!content) return [];
+          return [{ role, content }];
+        }
+      }
+    );
+
+    // Prepend simple instruction to first user message with images
+    const firstUserMsgIndex = normalized.findIndex(
+      (msg) => msg.role === 'user' && Array.isArray(msg.content)
+    );
+    if (firstUserMsgIndex >= 0) {
+      const firstUserMsg = normalized[firstUserMsgIndex];
+      const contentArray = firstUserMsg.content as Array<{
+        type: string;
+        text?: string;
+        image_url?: { url: string };
+      }>;
+      const textElement = contentArray.find((item) => item.type === 'text');
+      if (textElement && textElement.text) {
+        textElement.text = `${simpleInstruction}\n\n${textElement.text}`;
+      } else {
+        contentArray.push({ type: 'text', text: simpleInstruction });
+      }
+    }
+    return normalized;
+  }
+
+  // For non-image messages, use the original structured reply format
   const baseSystemPrompt = env?.CHAT_SYSTEM_PROMPT || 'You are a helpful assistant.';
 
   let systemInstruction = `${baseSystemPrompt}
 
 IMPORTANT: You must respond with a valid JSON object only. No markdown, no code blocks, no additional text.
 
-JSON format:`;
-
-  if (hasImages) {
-    systemInstruction += `
-{
-  "message": "Your response to the user",
-  "suggestions": ["question 1", "question 2", "question 3"],
-  "imageAnalyses": [
-    {"fileName": "ACTUAL_FILENAME_FROM_USER_MESSAGE", "analysis": "Detailed analysis of the image"}
-  ]
-}
-
-CRITICAL: When images are provided, you MUST include imageAnalyses array with analysis for EACH image.
-Use the EXACT file names from the user's message (look for "[Image files: ...]").`;
-  } else {
-    systemInstruction += `
+JSON format:
 {
   "message": "Your response to the user",
   "suggestions": ["question 1", "question 2", "question 3"]
-}`;
-  }
-
-  systemInstruction += `
+}
 
 Rules:
 - Return ONLY the JSON object, nothing else
-- suggestions: exactly 3 relevant follow-up questions
-- imageAnalyses: required when images are present, must use exact filenames from user message`;
+- suggestions: exactly 3 relevant follow-up questions`;
 
   if (hasTools) {
     systemInstruction += `
@@ -510,39 +549,14 @@ function buildNonStreamingChatCompletionParams(params: {
   maxTokens?: number;
   tools?: OpenAI.Chat.ChatCompletionTool[];
   tool_choice?: 'auto' | 'required';
-  env?: Env; // Add env parameter for configuration
 }): OpenAI.Chat.ChatCompletionCreateParamsNonStreaming {
-  const { model, messages, responseFormat = 'text', maxTokens, tools, tool_choice, env } = params;
-
-  // Use configured stream setting, default to false
-  const streamEnabled = env?.CHAT_STREAM_ENABLED === 'true' || env?.CHAT_STREAM_ENABLED === '1';
-
+  const { model, messages, responseFormat = 'text', maxTokens, tools, tool_choice } = params;
   const payload: Record<string, unknown> = {
     model,
     messages,
-    stream: streamEnabled,
+    stream: false,
   };
-
-  // Use configured max_tokens, fallback to provided maxTokens, then default
-  const configuredMaxTokens = env?.CHAT_MAX_TOKENS ? parseInt(env.CHAT_MAX_TOKENS, 10) : undefined;
-  payload.max_tokens = maxTokens ?? configuredMaxTokens ?? 65536;
-
-  // Use configured temperature
-  if (env?.CHAT_TEMPERATURE !== undefined) {
-    payload.temperature = parseFloat(env.CHAT_TEMPERATURE);
-  }
-
-  // Use configured top_p
-  if (env?.CHAT_TOP_P !== undefined) {
-    payload.top_p = parseFloat(env.CHAT_TOP_P);
-  }
-
-  // Configure thinking parameter (GLM-5 specific)
-  if (env?.CHAT_THINKING_ENABLED !== undefined) {
-    const thinkingEnabled =
-      env.CHAT_THINKING_ENABLED === 'true' || env.CHAT_THINKING_ENABLED === '1';
-    payload.thinking = { type: thinkingEnabled ? 'enabled' : 'disabled' };
-  }
+  if (typeof maxTokens === 'number') payload.max_tokens = maxTokens;
 
   if (responseFormat === 'json_object') {
     payload.response_format = { type: 'json_object' };
@@ -735,23 +749,6 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
   const { conversationId, message, files, model: requestedModel } = c.req.valid('json');
   const db = createDb(c.env.DB);
 
-  // Debug: Log extracted text from Office documents
-  if (files && files.length > 0) {
-    console.log('[Backend] Received files:', files.length);
-    for (const file of files) {
-      console.log('[Backend] File:', file.fileName, 'Type:', file.mimeType, 'Size:', file.size);
-      if ('extractedText' in file && file.extractedText) {
-        console.log('[Backend] Has extractedText, length:', file.extractedText.length);
-        console.log(
-          '[Backend] Extracted text preview (first 200 chars):',
-          file.extractedText.substring(0, 200)
-        );
-      } else {
-        console.log('[Backend] No extractedText found for file:', file.fileName);
-      }
-    }
-  }
-
   const conversation = await getConversationById(db, conversationId);
   if (!conversation) {
     return errorResponse(c, 404, ERROR_CODES.CONVERSATION_NOT_FOUND, 'Conversation not found');
@@ -780,14 +777,14 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
     c.env.OPENROUTER_CHAT_MODEL ||
     'gpt-5.3-codex';
 
-  // Process files: upload image dataURLs to R2 and get API URLs
-  // PDFs and Office documents are NOT uploaded to R2 - their extracted text is used instead
+  // Process files: upload images to R2 and get public URLs
+  // GLM-4.6v requires HTTP(S) URLs, not base64 dataURLs
+  // We use R2's public access URL (r2.dev) for this
   let processedFiles = files;
   if (files && files.length > 0) {
     processedFiles = await Promise.all(
       files.map(async (file) => {
-        // Only upload images to R2 (for vision model)
-        // PDFs always use browser-side text extraction, no R2 upload needed
+        // Images: upload to R2 and get public URL
         if (file.mimeType.startsWith('image/') && file.url.startsWith('data:')) {
           try {
             // Parse dataURL
@@ -806,30 +803,26 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
 
               const key = `uploads/${userId}/${generateId()}.${ext}`;
 
-              console.log(
-                `Uploading file to R2: ${key}, size: ${buffer.length} bytes, mimeType: ${mimeType}`
-              );
               await c.env.BUCKET.put(key, buffer, {
                 httpMetadata: { contentType: mimeType },
               });
-              console.log(`Upload successful: ${key}`);
 
-              // Construct download URL
-              const url = new URL(c.req.url);
-              const downloadUrl = `${url.origin}/file/download/${key}`;
-              console.log(`Download URL: ${downloadUrl}`);
+              // Use R2 public URL (r2.dev) for GLM-4.6v access
+              const publicUrl = `https://pub-dc5339e22e694b328a07160c88c3cd64.r2.dev/${key}`;
 
               return {
                 ...file,
-                url: downloadUrl,
+                url: publicUrl,
               };
             }
           } catch (error) {
-            console.error('Failed to upload file to R2:', error);
-            // Fall back to original dataURL if upload fails
+            throw new Error(
+              `Image upload to R2 failed. GLM-4.6v requires HTTP URLs. Original error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              { cause: error }
+            );
           }
         }
-        // PDFs, Office documents and other files keep original URL (dataURL or existing URL)
+        // PDFs, Office documents and other files keep original URL
         return file;
       })
     );
@@ -850,6 +843,23 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
 
   // Re-fetch history after creating the new message
   const history = await getRecentMessages(db, conversationId, 20);
+
+  // Convert legacy image URLs to R2.dev public URLs for GLM-4.6v compatibility
+  // Legacy format: https://chat.3we.org/file/download/{key}
+  // New format: https://pub-dc5339e22e694b328a07160c88c3cd64.r2.dev/{key}
+  const R2_DEV_PUBLIC_URL = 'https://pub-dc5339e22e694b328a07160c88c3cd64.r2.dev';
+  const LEGACY_DOWNLOAD_PATTERN = /^https:\/\/chat\.3we\.org\/file\/download\/(.+)$/;
+
+  function convertImageUrl(url: string): string {
+    // Convert legacy download URLs to R2.dev public URLs
+    const match = url.match(LEGACY_DOWNLOAD_PATTERN);
+    if (match) {
+      const key = match[1];
+      return `${R2_DEV_PUBLIC_URL}/${key}`;
+    }
+    return url;
+  }
+
   const openAiMessages: Array<{ role: string; content: string | Array<unknown> }> = [];
   for (const msg of history) {
     if (msg.role === 'user') {
@@ -858,13 +868,12 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
           { type: 'text', text: msg.message },
         ];
 
-        // Collect image file names for the model to reference
-        const imageFileNames: string[] = [];
-
+        // Process files
         for (const file of msg.files) {
           if (file.mimeType.startsWith('image/')) {
-            imageFileNames.push(file.fileName);
-            content.push({ type: 'image_url', image_url: { url: file.url } });
+            // Convert legacy URLs to R2.dev public URLs
+            const imageUrl = convertImageUrl(file.url);
+            content.push({ type: 'image_url', image_url: { url: imageUrl } });
           } else if (file.mimeType === 'application/pdf') {
             // PDF: always use extracted text (browser-side parsing)
             // If no text was extracted, add a placeholder
@@ -887,11 +896,6 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
               content[0].text += `\n\n--- File: ${file.fileName} ---\n${fileContent}`;
             }
           }
-        }
-
-        // Add image file names to the text message so the model knows what to reference
-        if (imageFileNames.length > 0) {
-          content[0].text += `\n\n[Image files: ${imageFileNames.join(', ')}]`;
         }
 
         openAiMessages.push({ role: 'user', content });
