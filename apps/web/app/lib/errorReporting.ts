@@ -174,6 +174,14 @@ export function reportError(error: Error | unknown, context?: ErrorContext): str
     return `skipped_${Date.now()}`;
   }
 
+  const metadata = {
+    ...(context?.metadata || {}),
+    sessionId: sessionContext.sessionId,
+    breadcrumbs: sessionContext.breadcrumbs.slice(-10), // Last 10 breadcrumbs
+    environment: config.environment,
+    release: config.release,
+  };
+
   // Build structured error
   const structuredError: StructuredError = {
     message: errorObj.message,
@@ -181,10 +189,7 @@ export function reportError(error: Error | unknown, context?: ErrorContext): str
     stack: errorObj.stack,
     context: {
       ...context,
-      sessionId: sessionContext.sessionId,
-      breadcrumbs: sessionContext.breadcrumbs.slice(-10), // Last 10 breadcrumbs
-      environment: config.environment,
-      release: config.release,
+      metadata,
     },
     timestamp: Date.now(),
     id: `err_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,

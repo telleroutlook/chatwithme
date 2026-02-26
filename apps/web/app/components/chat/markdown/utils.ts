@@ -10,7 +10,8 @@ export const extractText = (node: React.ReactNode): string => {
   return '';
 };
 
-const FULL_HTML_DOC_PATTERN = /^\s*(?:<!DOCTYPE\s+html[^>]*>\s*)?<html[\s\S]*<\/html>\s*$/i;
+export const FULL_HTML_DOC_PATTERN = /^\s*(?:<!DOCTYPE\s+html[^>]*>\s*)?<html[\s\S]*<\/html>\s*$/i;
+const EMBEDDED_HTML_DOC_PATTERN = /(?:<!DOCTYPE\s+html[^>]*>\s*)?<html[\s\S]*?<\/html>/i;
 
 // HTML entity decoder - decodes common HTML entities like &lt;, &gt;, &amp;, &quot;, etc.
 function decodeHtmlEntities(text: string): string {
@@ -47,7 +48,21 @@ export const normalizeMarkdownContent = (content: string): string => {
   if (alreadyCodeBlock) {
     result = decoded;
   } else if (FULL_HTML_DOC_PATTERN.test(decoded)) {
+    // Wrap full HTML documents in code blocks
+    // This allows the preview system to render them in iframes
     result = `\`\`\`html\n${decoded}\n\`\`\``;
+  } else if (!decoded.includes('```')) {
+    const embeddedHtmlDoc = EMBEDDED_HTML_DOC_PATTERN.exec(decoded);
+    if (embeddedHtmlDoc?.[0]) {
+      const htmlDoc = embeddedHtmlDoc[0];
+      const matchIndex = embeddedHtmlDoc.index ?? 0;
+      const prefix = decoded.slice(0, matchIndex).trimEnd();
+      const suffix = decoded.slice(matchIndex + htmlDoc.length).trimStart();
+
+      result = [prefix, `\`\`\`html\n${htmlDoc}\n\`\`\``, suffix].filter(Boolean).join('\n\n');
+    } else {
+      result = decoded;
+    }
   } else {
     result = decoded;
   }
@@ -117,6 +132,11 @@ export const isPreviewCodeComplete = (rawCode: string, isSvg: boolean): boolean 
   if (!trimmedCode) return false;
   if (!/<[a-z!/]/i.test(trimmedCode)) return false;
   if (/<[^>]*$/.test(trimmedCode)) return false;
+
+  // Full HTML documents are always ready for preview
+  if (FULL_HTML_DOC_PATTERN.test(trimmedCode)) {
+    return true;
+  }
 
   if (isSvg) {
     if (!/<svg[\s>]/i.test(trimmedCode)) return false;

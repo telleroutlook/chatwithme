@@ -147,28 +147,3 @@ export function MessageActions({
     </div>
   );
 }
-
-/**
- * Hook to manage message actions menu state
- */
-export function useMessageActions() {
-  const [activeMenu, setActiveMenu] = useState<{
-    messageId: string;
-    content: string;
-    position: { x: number; y: number };
-  } | null>(null);
-
-  const showMenu = (messageId: string, content: string, position: { x: number; y: number }) => {
-    setActiveMenu({ messageId, content, position });
-  };
-
-  const hideMenu = () => {
-    setActiveMenu(null);
-  };
-
-  return {
-    activeMenu,
-    showMenu,
-    hideMenu,
-  };
-}

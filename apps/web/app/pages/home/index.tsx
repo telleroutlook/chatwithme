@@ -12,8 +12,8 @@ import { useConversations } from '~/hooks/useConversations';
 import { useMessages } from '~/hooks/useMessages';
 import { cn } from '~/lib/utils';
 import { useEdgeSwipe } from '~/hooks/useTouchGesture';
-import { useMessageActions } from '~/components/chat/MessageActions';
 import { MessageActions } from '~/components/chat/MessageActions';
+import { useMessageActions } from '~/components/chat/useMessageActions';
 
 const SIDEBAR_WIDTH_KEY = 'chatwithme-sidebar-width';
 const SIDEBAR_COLLAPSED_KEY = 'chatwithme-sidebar-collapsed';
@@ -239,6 +239,23 @@ export function Home() {
           />
         )}
 
+        {/* Mobile Sidebar */}
+        <div className="lg:hidden">
+          <Sidebar
+            isOpen={sidebarOpen}
+            isCollapsed={false}
+            conversations={conversations}
+            activeId={activeConversationId}
+            deletingId={deletingConversationId}
+            isLoading={isLoading}
+            onClose={() => setSidebarOpen(false)}
+            onSelect={handleSidebarSelectConversation}
+            onCreate={handleCreateConversation}
+            onDelete={onDelete}
+            onRename={handleRenameConversation}
+          />
+        </div>
+
         {/* Sidebar - Desktop Resizable Container */}
         <aside
           style={{ width: sidebarCollapsed ? 0 : `${sidebarWidth}px` }}
@@ -299,7 +316,7 @@ export function Home() {
           </div>
 
           <footer className="shrink-0 p-4 pt-0">
-            <div className="mx-auto max-w-4xl">
+            <div className="mx-auto w-full max-w-[1400px] px-2 sm:px-4 lg:px-6">
               <MessageInput
                 onSend={handleSendMessage}
                 disabled={isLoading}

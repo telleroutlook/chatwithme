@@ -221,7 +221,7 @@ export function UserErrorTracking({ userId }: { userId: string }) {
 }
 
 // Example 7: Error reporting without React
-export function vanillaJSErrorReporting() {
+function _vanillaJSErrorReporting() {
   // Direct usage of error reporting functions
   document.getElementById('myButton')?.addEventListener('click', () => {
     try {

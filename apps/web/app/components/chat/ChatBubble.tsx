@@ -68,7 +68,7 @@ export const ChatBubble = memo<ChatBubbleProps>(
         ref={bubbleRef}
         data-message-id={messageId}
         className={cn(
-          'flex gap-2 p-3 sm:gap-3 sm:p-4',
+          'flex min-w-0 gap-2 p-3 sm:gap-3 sm:p-4',
           isUser ? 'flex-row-reverse' : 'flex-row',
           animateEntry ? 'message-enter' : ''
         )}
@@ -83,7 +83,7 @@ export const ChatBubble = memo<ChatBubbleProps>(
 
         <div
           className={cn(
-            'flex-1 max-w-[88%] rounded-xl px-3.5 py-3 text-[15px] leading-relaxed sm:max-w-[82%] sm:px-4',
+            'min-w-0 w-full max-w-[calc(100%-2.5rem)] rounded-xl px-3.5 py-3 text-[15px] leading-relaxed sm:max-w-[calc(100%-3rem)] sm:px-4',
             isUser ? 'bg-primary text-primary-foreground' : 'bg-card border border-border'
           )}
         >

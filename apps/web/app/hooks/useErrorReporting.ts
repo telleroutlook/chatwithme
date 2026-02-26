@@ -86,12 +86,14 @@ export function useErrorReporting(options: UseErrorReportingOptions = {}): Error
   // Enhanced reportError with component context
   const handleError = useCallback(
     (error: Error | unknown, context?: ErrorContext) => {
+      const tags: Record<string, string | number | boolean> = {
+        ...(context?.tags || {}),
+        ...(componentName ? { componentName } : {}),
+      };
+
       return reportError(error, {
         ...context,
-        tags: {
-          ...context?.tags,
-          componentName,
-        },
+        tags,
       });
     },
     [componentName]
@@ -106,7 +108,7 @@ export function useErrorReporting(options: UseErrorReportingOptions = {}): Error
         level: 'info',
         data: {
           ...data,
-          componentName,
+          ...(componentName ? { componentName } : {}),
         },
       });
     },

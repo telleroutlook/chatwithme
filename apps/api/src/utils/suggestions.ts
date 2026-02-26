@@ -1,13 +1,20 @@
 import OpenAI from 'openai';
 
-const FALLBACK_SUGGESTIONS = [
+const ZH_FALLBACK_SUGGESTIONS = [
   '你能进一步展开关键步骤吗？',
   '如果要落地执行，第一步该做什么？',
   '这个方案有哪些风险和取舍？',
 ];
 
+const EN_FALLBACK_SUGGESTIONS = [
+  'Can you break down the key steps in more detail?',
+  'If I want to implement this, what should I do first?',
+  'What are the main risks and trade-offs in this approach?',
+];
+
 const MAX_CONTEXT_LENGTH = 2000;
 const MAX_SUGGESTION_LENGTH = 80;
+type SuggestionLanguage = 'zh' | 'en';
 
 function clampText(text: string): string {
   return text.trim().slice(0, MAX_CONTEXT_LENGTH);
@@ -15,6 +22,11 @@ function clampText(text: string): string {
 
 function normalizeSuggestion(value: string): string {
   return value.replace(/\s+/g, ' ').trim().slice(0, MAX_SUGGESTION_LENGTH);
+}
+
+function detectSuggestionLanguage(text: string): SuggestionLanguage {
+  const zhMatches = text.match(/[\u4e00-\u9fff]/g) ?? [];
+  return zhMatches.length > 0 ? 'zh' : 'en';
 }
 
 function extractContextKeywords(context: string): string[] {
@@ -53,16 +65,30 @@ function extractContextKeywords(context: string): string[] {
   return unique;
 }
 
-function buildContextualFallbackSuggestions(context: string): string[] {
+function buildContextualFallbackSuggestions(
+  context: string,
+  language: SuggestionLanguage
+): string[] {
   const keywords = extractContextKeywords(context);
-  const target = keywords[0] || context.slice(0, 18).trim() || '这个问题';
+  const target =
+    keywords[0] ||
+    context.slice(0, language === 'zh' ? 18 : 28).trim() ||
+    (language === 'zh' ? '这个问题' : 'this topic');
   const second = keywords[1] || target;
   const third = keywords[2] || target;
 
+  if (language === 'zh') {
+    return [
+      `关于「${target}」，你能分步骤展开说明吗？`,
+      `如果要把「${second}」真正落地，第一步最该做什么？`,
+      `在「${third}」这部分最容易踩的坑和取舍是什么？`,
+    ].map(normalizeSuggestion);
+  }
+
   return [
-    `关于「${target}」，你能分步骤展开说明吗？`,
-    `如果要把「${second}」真正落地，第一步最该做什么？`,
-    `在「${third}」这部分最容易踩的坑和取舍是什么？`,
+    `Can you explain "${target}" step by step?`,
+    `If I want to put "${second}" into practice, what should I start with?`,
+    `What are the common pitfalls and trade-offs around "${third}"?`,
   ].map(normalizeSuggestion);
 }
 
@@ -128,13 +154,15 @@ function dedupeSuggestions(items: string[]): string[] {
   return unique;
 }
 
-function finalizeSuggestions(items: string[], context: string): string[] {
+function finalizeSuggestions(items: string[], context: string, languageHint: string): string[] {
   const unique = dedupeSuggestions(items);
+  const language = detectSuggestionLanguage(`${languageHint}\n${context}`);
+  const fallbackSuggestions = language === 'zh' ? ZH_FALLBACK_SUGGESTIONS : EN_FALLBACK_SUGGESTIONS;
   if (unique.length >= 3) {
     return unique.slice(0, 3);
   }
 
-  for (const fallback of buildContextualFallbackSuggestions(context)) {
+  for (const fallback of buildContextualFallbackSuggestions(context, language)) {
     if (unique.length >= 3) break;
     const next = normalizeSuggestion(fallback);
     if (!unique.some((item) => item.toLowerCase() === next.toLowerCase())) {
@@ -142,7 +170,7 @@ function finalizeSuggestions(items: string[], context: string): string[] {
     }
   }
 
-  for (const fallback of FALLBACK_SUGGESTIONS) {
+  for (const fallback of fallbackSuggestions) {
     if (unique.length >= 3) break;
     const next = normalizeSuggestion(fallback);
     if (!unique.some((item) => item.toLowerCase() === next.toLowerCase())) {
@@ -153,14 +181,23 @@ function finalizeSuggestions(items: string[], context: string): string[] {
   return unique.slice(0, 3);
 }
 
-export function parseAndFinalizeSuggestions(raw: string, context: string): string[] {
-  return finalizeSuggestions(parseJsonSuggestions(raw), clampText(context));
+export function parseAndFinalizeSuggestions(
+  raw: string,
+  context: string,
+  languageHint: string = context
+): string[] {
+  return finalizeSuggestions(
+    parseJsonSuggestions(raw),
+    clampText(context),
+    clampText(languageHint)
+  );
 }
 
 export async function generateFollowUpSuggestions(params: {
   openai: OpenAI;
   model: string;
   answerText: string;
+  userMessage?: string;
   env?: {
     // Add env parameter for configuration
     CHAT_TEMPERATURE?: string;
@@ -170,16 +207,22 @@ export async function generateFollowUpSuggestions(params: {
   };
 }): Promise<string[]> {
   const context = clampText(params.answerText);
+  const languageHint = clampText(params.userMessage || context);
+  const language = detectSuggestionLanguage(languageHint);
   if (!context) {
-    return FALLBACK_SUGGESTIONS.slice(0, 3);
+    return (language === 'zh' ? ZH_FALLBACK_SUGGESTIONS : EN_FALLBACK_SUGGESTIONS).slice(0, 3);
   }
 
-  const prompt = `Based on the assistant response below, generate exactly 3 short and relevant follow-up questions the user is most likely to ask next.
+  const prompt = `Based on the user question and assistant response below, generate exactly 3 short and relevant follow-up questions the user is most likely to ask next.
 Return ONLY JSON as either:
 1) ["Q1","Q2","Q3"]
 or
 2) {"suggestions":["Q1","Q2","Q3"]}
 Questions must be concise and directly tied to the response.
+Use the same language as the user question.
+
+User question:
+${languageHint}
 
 Assistant response:
 ${context}`;
@@ -232,10 +275,10 @@ ${context}`;
     );
 
     const raw = completion.choices[0]?.message?.content || '';
-    return finalizeSuggestions(parseJsonSuggestions(raw), context);
+    return finalizeSuggestions(parseJsonSuggestions(raw), context, languageHint);
   } catch (error) {
     console.warn('Suggestion generation failed, using fallback suggestions.', error);
-    return finalizeSuggestions([], context);
+    return finalizeSuggestions([], context, languageHint);
   }
 }
 

@@ -72,10 +72,14 @@ export const MessageList = memo(function MessageList({
       <ChatErrorBoundary
         onError={(error, errorInfo) => console.error('Chat error:', error, errorInfo)}
       >
-        <div className="mx-auto w-full max-w-4xl divide-y divide-border/80">
+        <div className="mx-auto w-full max-w-[1400px] divide-y divide-border/80 px-2 sm:px-4 lg:px-6">
           {safeMessages.map(renderMessage)}
         </div>
-        {showTypingIndicator && <TypingIndicator className="message-enter" />}
+        {showTypingIndicator && (
+          <div className="mx-auto w-full max-w-[1400px] px-2 sm:px-4 lg:px-6">
+            <TypingIndicator className="message-enter" />
+          </div>
+        )}
       </ChatErrorBoundary>
     </ScrollArea>
   );

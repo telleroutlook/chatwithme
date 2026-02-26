@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { __test__parseAndFinalizeSuggestions } from './suggestions';
+import { __test__parseAndFinalizeSuggestions, parseAndFinalizeSuggestions } from './suggestions';
 
 describe('suggestions parser and finalizer', () => {
   it('parses plain JSON array', () => {
@@ -30,5 +30,15 @@ describe('suggestions parser and finalizer', () => {
         (item) => item.includes('AI') || item.includes('workflow') || item.includes('risk')
       )
     ).toBe(true);
+  });
+
+  it('uses english fallback when user language hint is english', () => {
+    const result = parseAndFinalizeSuggestions(
+      'not-json',
+      'This response is about deployment strategy and rollback plans.',
+      'How should I roll this out safely?'
+    );
+    expect(result).toHaveLength(3);
+    expect(result.every((item) => !/[\u4e00-\u9fff]/.test(item))).toBe(true);
   });
 });

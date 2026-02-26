@@ -324,6 +324,48 @@ interface JsonObjectFromTextResult {
   remaining: string;
 }
 
+function findJsonObjectEnd(input: string, startIndex: number): number {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = startIndex; i < input.length; i++) {
+    const char = input[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === '{') {
+      depth++;
+      continue;
+    }
+
+    if (char === '}') {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+
+  return -1;
+}
+
 function parseJsonObjectFromText(raw: string): JsonObjectFromTextResult | null {
   const cleaned = raw.trim();
   if (!cleaned) return null;
@@ -359,17 +401,7 @@ function parseJsonObjectFromText(raw: string): JsonObjectFromTextResult | null {
 
   // Find the first complete JSON object by brace matching
   const start = cleaned.indexOf('{');
-  let braceCount = 0;
-  let end = -1;
-
-  for (let i = start; i < cleaned.length; i++) {
-    if (cleaned[i] === '{') braceCount++;
-    if (cleaned[i] === '}') braceCount--;
-    if (braceCount === 0 && i > start) {
-      end = i;
-      break;
-    }
-  }
+  const end = start === -1 ? -1 : findJsonObjectEnd(cleaned, start);
 
   if (start !== -1 && end > start) {
     try {
@@ -387,7 +419,7 @@ function parseJsonObjectFromText(raw: string): JsonObjectFromTextResult | null {
   return null;
 }
 
-function parseStructuredReply(raw: string): StructuredReply | null {
+function parseStructuredReply(raw: string, languageHint: string): StructuredReply | null {
   const result = parseJsonObjectFromText(raw);
   if (!result) return null;
 
@@ -429,7 +461,7 @@ function parseStructuredReply(raw: string): StructuredReply | null {
 
   return {
     message: finalMessage,
-    suggestions: parseAndFinalizeSuggestions(suggestionsRaw, finalMessage),
+    suggestions: parseAndFinalizeSuggestions(suggestionsRaw, finalMessage, languageHint),
     imageAnalyses,
   };
 }
@@ -438,7 +470,8 @@ function buildStructuredReplyMessages(
   messages: Array<{ role: string; content: string | Array<unknown> }>,
   hasTools: boolean = false,
   hasImages: boolean = false,
-  env?: Env
+  env?: Env,
+  languageHint?: string
 ): Array<{
   role: 'system' | 'user' | 'assistant';
   content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
@@ -518,6 +551,14 @@ Rules:
 - Return ONLY the JSON object, nothing else
 - suggestions: exactly 3 relevant follow-up questions`;
 
+  if (languageHint) {
+    systemInstruction += `
+- suggestions language: must match the user's latest question language
+
+Latest user question:
+${truncateText(languageHint, 200)}`;
+  }
+
   if (hasTools) {
     systemInstruction += `
 
@@ -595,6 +636,7 @@ function buildNonStreamingChatCompletionParams(params: {
   maxTokens?: number;
   tools?: OpenAI.Chat.ChatCompletionTool[];
   tool_choice?: 'auto' | 'required';
+  env?: Env;
 }): OpenAI.Chat.ChatCompletionCreateParamsNonStreaming {
   const { model, messages, responseFormat = 'text', maxTokens, tools, tool_choice } = params;
   const payload: Record<string, unknown> = {
@@ -1073,7 +1115,8 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
     openAiMessages,
     hasMcpTools,
     isImageRequest,
-    c.env
+    c.env,
+    message
   );
   const enhancedMessages: Array<{
     role: 'system' | 'user' | 'assistant' | 'tool';
@@ -1165,7 +1208,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
         );
 
         const text = parseCompletionText(finalCompletion);
-        const structured = parseStructuredReply(text);
+        const structured = parseStructuredReply(text, message);
         if (structured) {
           answerText = structured.message;
           bundledSuggestions = structured.suggestions;
@@ -1182,6 +1225,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
             openai,
             model: candidateModel,
             answerText: text,
+            userMessage: message,
             env: c.env,
           });
           activeModel = candidateModel;
@@ -1193,7 +1237,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
         // When mcpTools were provided but no tools were called, the response is plain text
         // When no mcpTools were provided, the response is structured JSON
         const text = parseCompletionText(completion);
-        const structured = parseStructuredReply(text);
+        const structured = parseStructuredReply(text, message);
         if (structured) {
           // Structured reply (no tools were configured)
           answerText = structured.message;
@@ -1211,6 +1255,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
             openai,
             model: candidateModel,
             answerText: text,
+            userMessage: message,
             env: c.env,
           });
           activeModel = candidateModel;
@@ -1230,7 +1275,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
       });
     } catch (error) {
       attemptLogs.push({
-        model: candidateModel,
+        model: candidateConfig.model,
         baseUrl: candidateConfig.baseUrl,
         error: toModelErrorDetail(error),
       });

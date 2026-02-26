@@ -20,7 +20,15 @@ export const MarkdownRenderer = memo<MarkdownRendererProps>(({ content, classNam
   const normalizedContent = normalizeMarkdownContent(content);
 
   return (
-    <div className={cn('prose prose-invert max-w-none', className)}>
+    <div
+      className={cn(
+        'prose prose-invert max-w-none break-words',
+        '[&_pre]:max-w-full [&_pre]:overflow-x-auto',
+        '[&_table]:block [&_table]:w-full [&_table]:overflow-x-auto',
+        '[&_img]:max-w-full',
+        className
+      )}
+    >
       <CodeHighlightTheme />
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}

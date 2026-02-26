@@ -2,7 +2,12 @@ import { memo, useState, useEffect, useMemo, useCallback } from 'react';
 import { Copy, Check, Eye, Code, FileText, Image as ImageIcon } from 'lucide-react';
 import { cn } from '~/lib/utils';
 import { sanitizeFileName } from '~/lib/utils';
-import { downloadSvgElementAsPng, extractText, isPreviewCodeComplete } from './utils';
+import {
+  downloadSvgElementAsPng,
+  extractText,
+  isPreviewCodeComplete,
+  FULL_HTML_DOC_PATTERN,
+} from './utils';
 import { parseCodeBlockTitle, countLines } from './titleParser';
 import { getLanguageConfig, isPreviewableLanguage } from './languageConfig';
 import { getDefaultTab } from './tabSelector';
@@ -167,6 +172,15 @@ export const CodeBlockWithPreview = memo<CodeBlockWithPreviewProps>(
 
     // Generate iframe source for preview
     const iframeSrc = useMemo(() => {
+      // Check if this is a full HTML document
+      const isFullHtmlDoc = FULL_HTML_DOC_PATTERN.test(rawCode.trim());
+
+      // For full HTML documents, use the code directly without wrapping
+      if (isFullHtmlDoc) {
+        return rawCode;
+      }
+
+      // For HTML snippets and SVG, wrap in a container
       const bg = '#ffffff';
       const fg = '#1e293b';
       return `
@@ -240,14 +254,14 @@ export const CodeBlockWithPreview = memo<CodeBlockWithPreviewProps>(
     return (
       <div className="relative group my-4 rounded-lg overflow-hidden border border-border bg-muted/30">
         {/* Header */}
-        <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-b border-border">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-muted/50 border-b border-border">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="text-xs text-muted-foreground lowercase font-mono">
               {language || 'code'}
             </span>
 
             {/* Tab buttons */}
-            <div className="flex bg-background rounded-md p-0.5 border border-border">
+            <div className="flex max-w-full overflow-x-auto bg-background rounded-md p-0.5 border border-border">
               <button
                 onClick={() => handleTabChange('title')}
                 className={cn(
@@ -291,7 +305,7 @@ export const CodeBlockWithPreview = memo<CodeBlockWithPreviewProps>(
             </div>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="ml-auto flex items-center gap-1">
             <DownloadButton
               text={rawCode}
               language={language}

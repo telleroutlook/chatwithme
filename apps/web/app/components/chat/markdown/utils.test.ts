@@ -11,7 +11,7 @@ import { getDefaultTab } from './tabSelector';
 import { getLanguageConfig } from './languageConfig';
 
 describe('normalizeMarkdownContent', () => {
-  it('wraps a full html document in a fenced html block', () => {
+  it('wraps a full html document in a fenced code block', () => {
     const input = `<!DOCTYPE html>
 <html>
   <head><title>Demo</title></head>
@@ -31,6 +31,20 @@ describe('normalizeMarkdownContent', () => {
   it('keeps normal markdown unchanged', () => {
     const input = '# title\n\nplain text';
     expect(normalizeMarkdownContent(input)).toBe(input);
+  });
+
+  it('wraps embedded html document and keeps trailing text', () => {
+    const input = `<!DOCTYPE html>
+<html>
+  <head><title>Demo</title></head>
+  <body><h1>Hello</h1></body>
+</html>
+用户要求我用HTML格式介绍元旦。`;
+
+    const output = normalizeMarkdownContent(input);
+    expect(output).toContain('```html\n<!DOCTYPE html>');
+    expect(output).toContain('</html>\n```');
+    expect(output).toContain('用户要求我用HTML格式介绍元旦。');
   });
 });
 
@@ -137,7 +151,27 @@ describe('parseCodeBlockTitle', () => {
 
   it('generates default filename when no explicit format', () => {
     const result = parseCodeBlockTitle('typescript', 'code');
-    expect(result.filename).toBe('code_snippet.ts');
+    expect(result.filename).toBe('typescript_snippet.ts');
+    expect(result.isExplicit).toBe(false);
+  });
+
+  it('infers meaningful filename for python code', () => {
+    const pythonCode = `
+def setup_screen():
+    pass
+
+def draw_firework():
+    pass
+`;
+    const result = parseCodeBlockTitle('python', pythonCode);
+    expect(result.filename).toBe('draw_firework.py');
+    expect(result.isExplicit).toBe(false);
+  });
+
+  it('infers meaningful filename for typescript code', () => {
+    const tsCode = `export function buildChart() { return []; }`;
+    const result = parseCodeBlockTitle('typescript', tsCode);
+    expect(result.filename).toBe('buildChart.ts');
     expect(result.isExplicit).toBe(false);
   });
 });
@@ -175,11 +209,11 @@ describe('inferTitleFromContext', () => {
 
 describe('generateFriendlyTitle', () => {
   it('generates title with fallback index 0', () => {
-    expect(generateFriendlyTitle('typescript', 0)).toBe('code_snippet.ts');
+    expect(generateFriendlyTitle('typescript', 0)).toBe('typescript_snippet.ts');
   });
 
   it('generates title with fallback index > 0', () => {
-    expect(generateFriendlyTitle('python', 2)).toBe('code_snippet_3.py');
+    expect(generateFriendlyTitle('python', 2)).toBe('python_snippet_3.py');
   });
 });
 

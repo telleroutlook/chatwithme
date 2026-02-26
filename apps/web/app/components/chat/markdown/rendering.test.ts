@@ -98,4 +98,17 @@ describe('markdown rendering', () => {
     expect(el.querySelector('iframe[title="Code Preview"]')).not.toBeNull();
     expect(el.textContent).toContain('html');
   });
+
+  it('renders mixed response with html document and explanation text', async () => {
+    const content = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>demo</title></head>
+<body><h1>HTML reply</h1></body>
+</html>
+用户要求我用HTML格式介绍元旦。`;
+    const el = mount(createElement(MarkdownRenderer, { content }));
+    await waitForAsyncRender();
+    expect(el.querySelector('iframe[title="Code Preview"]')).not.toBeNull();
+    expect(el.textContent).toContain('用户要求我用HTML格式介绍元旦。');
+  });
 });

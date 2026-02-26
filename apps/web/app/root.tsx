@@ -31,6 +31,7 @@ const themeBootScript = `
 })();
 `;
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const links: LinksFunction = () => [
   // Font preloading for critical above-the-fold content
   {

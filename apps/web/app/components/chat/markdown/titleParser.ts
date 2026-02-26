@@ -117,6 +117,84 @@ function extractTextTitle(rawCode: string): string | null {
 }
 
 /**
+ * Extract meaningful title from Python content
+ * Priority: domain-specific function/class names -> first meaningful def/class name
+ */
+function extractPythonTitle(rawCode: string): string | null {
+  const matches = Array.from(rawCode.matchAll(/^\s*(?:async\s+)?(?:def|class)\s+([A-Za-z_]\w*)/gm));
+  if (matches.length === 0) return null;
+
+  const names = matches
+    .map((match) => match[1])
+    .filter((name) => !/^_{1,2}.+_{1,2}$/.test(name) && name.toLowerCase() !== 'main');
+
+  if (names.length === 0) return null;
+
+  const preferred = names.find((name) =>
+    ['firework', 'rocket', 'spark', 'particle'].some((keyword) =>
+      name.toLowerCase().includes(keyword)
+    )
+  );
+  if (preferred) return preferred;
+
+  return names[0];
+}
+
+function extractScriptTitle(rawCode: string): string | null {
+  const patterns = [
+    /^\s*export\s+default\s+function\s+([A-Za-z_]\w*)/m,
+    /^\s*export\s+function\s+([A-Za-z_]\w*)/m,
+    /^\s*function\s+([A-Za-z_]\w*)/m,
+    /^\s*export\s+class\s+([A-Za-z_]\w*)/m,
+    /^\s*class\s+([A-Za-z_]\w*)/m,
+    /^\s*export\s+const\s+([A-Za-z_]\w*)\s*=/m,
+    /^\s*const\s+([A-Za-z_]\w*)\s*=\s*(?:async\s*)?\(/m,
+  ];
+
+  for (const pattern of patterns) {
+    const match = rawCode.match(pattern);
+    if (match?.[1]) return match[1];
+  }
+  return null;
+}
+
+function extractCssTitle(rawCode: string): string | null {
+  const classMatch = rawCode.match(/\.([a-zA-Z][\w-]{2,})\s*\{/);
+  if (classMatch?.[1]) return classMatch[1];
+
+  const idMatch = rawCode.match(/#([a-zA-Z][\w-]{2,})\s*\{/);
+  if (idMatch?.[1]) return idMatch[1];
+
+  return null;
+}
+
+function extractSqlTitle(rawCode: string): string | null {
+  const patterns = [
+    /\bcreate\s+table\s+(?:if\s+not\s+exists\s+)?([a-zA-Z_][\w.]*)/i,
+    /\balter\s+table\s+([a-zA-Z_][\w.]*)/i,
+    /\bselect\s+.+?\s+from\s+([a-zA-Z_][\w.]*)/is,
+  ];
+
+  for (const pattern of patterns) {
+    const match = rawCode.match(pattern);
+    if (match?.[1]) return match[1].split('.').pop() ?? match[1];
+  }
+  return null;
+}
+
+function extractShellTitle(rawCode: string): string | null {
+  const lines = rawCode.split('\n').map((line) => line.trim());
+  for (const line of lines) {
+    if (!line || line.startsWith('#')) continue;
+    const command = line.split(/\s+/)[0];
+    if (command && /^[a-zA-Z][\w.-]+$/.test(command)) {
+      return `${command}_script`;
+    }
+  }
+  return null;
+}
+
+/**
  * Extract meaningful title from HTML content
  * Priority: <title> tag -> <h1> tag -> first heading
  */
@@ -174,6 +252,31 @@ function inferTitleFromContent(language: string, rawCode: string): string | null
   // HTML content
   if (lowerLanguage === 'html') {
     return extractHtmlTitle(rawCode);
+  }
+
+  // Python content
+  if (lowerLanguage === 'py' || lowerLanguage === 'python') {
+    return extractPythonTitle(rawCode);
+  }
+
+  // JavaScript / TypeScript / JSX / TSX
+  if (['js', 'javascript', 'ts', 'typescript', 'jsx', 'tsx'].includes(lowerLanguage)) {
+    return extractScriptTitle(rawCode);
+  }
+
+  // CSS
+  if (['css', 'scss', 'sass', 'less'].includes(lowerLanguage)) {
+    return extractCssTitle(rawCode);
+  }
+
+  // SQL
+  if (lowerLanguage === 'sql') {
+    return extractSqlTitle(rawCode);
+  }
+
+  // Shell
+  if (['sh', 'bash', 'shell', 'zsh'].includes(lowerLanguage)) {
+    return extractShellTitle(rawCode);
   }
 
   // Plain text
@@ -243,9 +346,10 @@ export function parseCodeBlockTitle(language: string, rawCode: string): ParsedTi
 
   // No explicit filename found, generate a friendly one
   const extension = getLanguageExtension(language);
+  const languageName = sanitizeFilename(language.toLowerCase()) || 'code';
   return {
-    filename: `code_snippet.${extension}`,
-    displayName: language || 'code',
+    filename: `${languageName}_snippet.${extension}`,
+    displayName: languageName,
     isExplicit: false,
   };
 }
@@ -301,10 +405,12 @@ export function generateFriendlyTitle(
   }
 
   if (fallbackIndex === 0) {
-    return `code_snippet.${extension}`;
+    const languageName = sanitizeFilename(language.toLowerCase()) || 'code';
+    return `${languageName}_snippet.${extension}`;
   }
 
-  return `code_snippet_${fallbackIndex + 1}.${extension}`;
+  const languageName = sanitizeFilename(language.toLowerCase()) || 'code';
+  return `${languageName}_snippet_${fallbackIndex + 1}.${extension}`;
 }
 
 /**

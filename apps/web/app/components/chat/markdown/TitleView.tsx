@@ -28,7 +28,7 @@ export const TitleView = memo<TitleViewProps>(({ meta, onSwitchToCode }) => {
       )}
       aria-label={`View code for ${filename}`}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-3">
         {/* File icon */}
         <div
           className={cn(
@@ -43,10 +43,10 @@ export const TitleView = memo<TitleViewProps>(({ meta, onSwitchToCode }) => {
         </div>
 
         {/* File info */}
-        <div className="text-left">
+        <div className="min-w-0 text-left">
           <div
             className={cn(
-              'text-sm font-medium text-foreground',
+              'truncate text-sm font-medium text-foreground',
               'group-hover:text-primary',
               'transition-colors duration-200'
             )}

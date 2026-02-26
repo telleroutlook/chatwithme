@@ -99,17 +99,3 @@ export class PreviewErrorBoundary extends Component<
     return this.props.children;
   }
 }
-
-/**
- * Functional wrapper for the error boundary
- */
-export const withPreviewErrorBoundary = <P extends object>(
-  Component: React.ComponentType<P>,
-  onViewCode?: () => void
-) => {
-  return (props: P) => (
-    <PreviewErrorBoundary onViewCode={onViewCode}>
-      <Component {...props} />
-    </PreviewErrorBoundary>
-  );
-};
