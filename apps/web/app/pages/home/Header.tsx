@@ -1,4 +1,5 @@
 import { Menu, LogOut, Download, Moon, Sun, Monitor } from 'lucide-react';
+import { memo } from 'react';
 import { Button } from '~/components/ui/button';
 import type { ThemeMode } from '~/stores/theme';
 
@@ -14,7 +15,7 @@ export interface HeaderProps {
   sidebarCollapsed: boolean;
 }
 
-export function Header({
+export const Header = memo(function Header({
   title,
   userEmail,
   themeMode,
@@ -74,4 +75,4 @@ export function Header({
       </div>
     </header>
   );
-}
+});

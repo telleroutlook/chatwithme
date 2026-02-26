@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef, memo } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuthStore } from '~/stores/auth';
 import { useChatStore } from '~/stores/chat';
@@ -65,8 +65,10 @@ export function Home() {
     handleRegenerate, handleQuickReply, handleExportChat, handleLogout,
   } = useChatActions();
 
-  // Persistence & Initial Load
+  // Persistence & Initial Load - moved to useEffect to avoid hydration issues
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const savedWidth = localStorage.getItem(SIDEBAR_WIDTH_KEY);
     const savedCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
     if (savedWidth) setSidebarWidth(Math.min(parseInt(savedWidth, 10), CONFIG.MAX_WIDTH));
@@ -93,10 +95,9 @@ export function Home() {
   }, [isResizing]);
 
   useEffect(() => {
-    if (isResizing) {
-      window.addEventListener('mousemove', resize);
-      window.addEventListener('mouseup', stopResizing);
-    }
+    if (!isResizing) return;
+    window.addEventListener('mousemove', resize);
+    window.addEventListener('mouseup', stopResizing);
     return () => {
       window.removeEventListener('mousemove', resize);
       window.removeEventListener('mouseup', stopResizing);
@@ -131,7 +132,7 @@ export function Home() {
   // No need for manual loadMessages effect here
 
   const onSidebarToggle = useCallback(() => {
-    if (window.innerWidth >= 1024) {
+    if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
       const newState = !sidebarCollapsed;
       setSidebarCollapsed(newState);
       localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(newState));
@@ -158,16 +159,29 @@ export function Home() {
   // Edge swipe: swipe from left edge to open sidebar on mobile
   useEdgeSwipe({
     onSwipeRight: () => {
-      if (window.innerWidth < 1024 && !sidebarOpen) {
+      if (typeof window !== 'undefined' && window.innerWidth < 1024 && !sidebarOpen) {
         setSidebarOpen(true);
       }
     },
     enabled: !sidebarOpen,
   });
 
-  if (!hasHydrated || !isAuthenticated) return null;
+  // Wait for hydration to complete before rendering
+  if (typeof window === 'undefined' || !hasHydrated || !isAuthenticated) {
+    return null;
+  }
 
   const currentTitle = conversations.find((c) => c.id === activeConversationId)?.title || 'New Chat';
+
+  // Memoized callbacks to stabilize props passed to children
+  const handleExport = useCallback(() => {
+    handleExportChat(currentMessages, activeConversationId, conversations);
+  }, [currentMessages, activeConversationId, conversations, handleExportChat]);
+
+  const handleSidebarSelectConversation = useCallback((id: string) => {
+    handleSelectConversation(id);
+    setSidebarOpen(false);
+  }, [handleSelectConversation]);
 
   return (
     <>
@@ -217,7 +231,7 @@ export function Home() {
           deletingId={deletingConversationId}
           isLoading={isLoading}
           onClose={() => setSidebarOpen(false)}
-          onSelect={(id) => { handleSelectConversation(id); setSidebarOpen(false); }}
+          onSelect={handleSidebarSelectConversation}
           onCreate={handleCreateConversation}
           onDelete={onDelete}
           onRename={handleRenameConversation}
@@ -243,7 +257,7 @@ export function Home() {
           currentMessagesLength={currentMessages.length}
           onSidebarToggle={onSidebarToggle}
           onThemeToggle={onThemeCycle}
-          onExport={() => handleExportChat(currentMessages, activeConversationId, conversations)}
+          onExport={handleExport}
           onLogout={handleLogout}
           sidebarCollapsed={sidebarCollapsed}
         />

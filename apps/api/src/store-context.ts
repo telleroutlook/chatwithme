@@ -16,6 +16,14 @@ export interface Env {
   BIGMODEL_API_KEY?: string;  // MCP service authentication (can reuse OPENROUTER_API_KEY)
   MCP_WEB_SEARCH_URL?: string;  // Optional, default: https://open.bigmodel.cn/api/mcp/web_search_prime/mcp
   MCP_WEB_READER_URL?: string;  // Optional, default: https://open.bigmodel.cn/api/mcp/web_reader/mcp
+
+  // Chat completion parameters (GLM-5 compatible)
+  CHAT_MAX_TOKENS?: string;    // Default: 65536
+  CHAT_TEMPERATURE?: string;   // Default: 0.5
+  CHAT_TOP_P?: string;         // Default: 0.9
+  CHAT_THINKING_ENABLED?: string; // Default: false
+  CHAT_STREAM_ENABLED?: string;  // Default: false
+  CHAT_SYSTEM_PROMPT?: string;  // Default: Claude system prompt
 }
 
 export interface AuthInfo {

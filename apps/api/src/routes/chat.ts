@@ -365,12 +365,16 @@ function parseStructuredReply(raw: string): StructuredReply | null {
 function buildStructuredReplyMessages(
   messages: Array<{ role: string; content: string | Array<unknown> }>,
   hasTools: boolean = false,
-  hasImages: boolean = false
+  hasImages: boolean = false,
+  env?: Env
 ): Array<{
   role: 'system' | 'user' | 'assistant';
   content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
 }> {
-  let systemInstruction = `You are a helpful assistant.
+  // Use configured system prompt, or default
+  const baseSystemPrompt = env?.CHAT_SYSTEM_PROMPT || 'You are a helpful assistant.';
+
+  let systemInstruction = `${baseSystemPrompt}
 
 IMPORTANT: You must respond with a valid JSON object only. No markdown, no code blocks, no additional text.
 
@@ -463,14 +467,40 @@ function buildNonStreamingChatCompletionParams(params: {
   maxTokens?: number;
   tools?: OpenAI.Chat.ChatCompletionTool[];
   tool_choice?: 'auto' | 'required';
+  env?: Env; // Add env parameter for configuration
 }): OpenAI.Chat.ChatCompletionCreateParamsNonStreaming {
-  const { model, messages, responseFormat = 'text', maxTokens, tools, tool_choice } = params;
+  const { model, messages, responseFormat = 'text', maxTokens, tools, tool_choice, env } = params;
+
+  // Use configured stream setting, default to false
+  const streamEnabled = env?.CHAT_STREAM_ENABLED === 'true' || env?.CHAT_STREAM_ENABLED === '1';
+
   const payload: Record<string, unknown> = {
     model,
     messages,
-    stream: false,
+    stream: streamEnabled,
   };
-  if (typeof maxTokens === 'number') payload.max_tokens = maxTokens;
+
+  // Use configured max_tokens, fallback to provided maxTokens, then default
+  const configuredMaxTokens = env?.CHAT_MAX_TOKENS
+    ? parseInt(env.CHAT_MAX_TOKENS, 10)
+    : undefined;
+  payload.max_tokens = maxTokens ?? configuredMaxTokens ?? 65536;
+
+  // Use configured temperature
+  if (env?.CHAT_TEMPERATURE !== undefined) {
+    payload.temperature = parseFloat(env.CHAT_TEMPERATURE);
+  }
+
+  // Use configured top_p
+  if (env?.CHAT_TOP_P !== undefined) {
+    payload.top_p = parseFloat(env.CHAT_TOP_P);
+  }
+
+  // Configure thinking parameter (GLM-5 specific)
+  if (env?.CHAT_THINKING_ENABLED !== undefined) {
+    const thinkingEnabled = env.CHAT_THINKING_ENABLED === 'true' || env.CHAT_THINKING_ENABLED === '1';
+    payload.thinking = { type: thinkingEnabled ? 'enabled' : 'disabled' };
+  }
 
   if (responseFormat === 'json_object') {
     payload.response_format = { type: 'json_object' };
@@ -489,7 +519,8 @@ function buildNonStreamingChatCompletionParams(params: {
 async function probeModelHealth(
   openai: OpenAI,
   modelName: string,
-  traceId: string
+  traceId: string,
+  env?: Env
 ): Promise<ModelHealthProbeResult> {
   const cached = modelHealthProbeCache.get(modelName);
   const now = Date.now();
@@ -504,6 +535,7 @@ async function probeModelHealth(
         model: modelName,
         messages: [{ role: 'user', content: 'Respond with exactly: ok' }],
         maxTokens: 16,
+        env,
       })
     );
     const timeoutPromise = new Promise<never>((_, reject) => {
@@ -857,7 +889,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
   const isVisionModel = model.includes('vision') || model.includes('v');
   const responseFormat: ResponseFormat = (hasImages || isVisionModel || mcpTools) ? 'text' : 'json_object';
 
-  const llmMessages = buildStructuredReplyMessages(openAiMessages, hasMcpTools, hasImages);
+  const llmMessages = buildStructuredReplyMessages(openAiMessages, hasMcpTools, hasImages, c.env);
   let enhancedMessages: Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content?: string | Array<{ type: string; text?: string; image_url?: { url: string } }>; tool_call_id?: string; tool_calls?: OpenAI.Chat.ChatCompletionMessageToolCall[] }> = [...llmMessages];
 
   // First LLM call: Check if tools are needed
@@ -875,6 +907,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
               responseFormat,
               tools: mcpTools,
               tool_choice: mcpTools ? 'auto' : undefined,
+              env: c.env,
             })
           ),
         MODEL_CALL_TIMEOUT_MS
@@ -910,6 +943,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
                 model: candidate,
                 messages: enhancedMessages as Array<{ role: 'system' | 'user' | 'assistant'; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }>,
                 responseFormat: 'json_object',
+                env: c.env,
               })
             ),
           MODEL_CALL_TIMEOUT_MS
@@ -932,6 +966,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
             openai,
             model: candidate,
             answerText: text,
+            env: c.env,
           });
           activeModel = candidate;
           break;
@@ -958,6 +993,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
             openai,
             model: candidate,
             answerText: text,
+            env: c.env,
           });
           activeModel = candidate;
           break;

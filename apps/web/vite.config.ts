@@ -22,15 +22,35 @@ export default defineConfig({
         manualChunks(id) {
           // Only apply manual chunks for client builds
           if (id.includes('node_modules')) {
+            // React 生态系统
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+              return 'react-vendor';
+            }
+            // Markdown 和代码高亮
             if (id.includes('react-markdown') || id.includes('rehype-highlight') ||
-                id.includes('remark-gfm') || id.includes('remark-math')) {
+                id.includes('remark-gfm') || id.includes('remark-math') ||
+                id.includes('highlight.js')) {
               return 'markdown';
             }
+            // 数学公式渲染
             if (id.includes('katex')) {
               return 'katex';
             }
+            // 图表库（延迟加载）
             if (id.includes('mermaid')) {
               return 'mermaid';
+            }
+            // UI 库
+            if (id.includes('lucide-react') || id.includes('@radix-ui')) {
+              return 'ui-vendor';
+            }
+            // 状态管理
+            if (id.includes('@tanstack/react-query') || id.includes('zustand')) {
+              return 'state';
+            }
+            // 虚拟滚动
+            if (id.includes('react-virtuoso')) {
+              return 'virtuoso';
             }
           }
         }

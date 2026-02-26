@@ -13,6 +13,13 @@ export const extractText = (node: React.ReactNode): string => {
 const FULL_HTML_DOC_PATTERN =
   /^\s*(?:<!DOCTYPE\s+html[^>]*>\s*)?<html[\s\S]*<\/html>\s*$/i;
 
+// HTML entity decoder - decodes common HTML entities like &lt;, &gt;, &amp;, &quot;, etc.
+function decodeHtmlEntities(text: string): string {
+  const textarea = document.createElement('textarea');
+  textarea.innerHTML = text;
+  return textarea.value;
+}
+
 // LRU cache for normalized markdown content
 const normalizeCache = new Map<string, string>();
 const MAX_CACHE_SIZE = 100;
@@ -27,15 +34,23 @@ export const normalizeMarkdownContent = (content: string): string => {
   const trimmed = content.trim();
   if (!trimmed) return content;
 
-  const alreadyCodeBlock = /^```[\w-]*\n[\s\S]*\n```\s*$/m.test(trimmed);
+  // Decode HTML entities first (e.g., &lt; → <, &gt; → >, &amp; → &)
+  // This is important because AI responses may contain HTML-encoded characters
+  // in JSON strings that break markdown code block parsing
+  let decoded = trimmed;
+  if (/&(?:lt|gt|amp|quot|apos|#\d+|#x[0-9a-fA-F]+);/.test(trimmed)) {
+    decoded = decodeHtmlEntities(trimmed);
+  }
+
+  const alreadyCodeBlock = /^```[\w-]*\n[\s\S]*\n```\s*$/m.test(decoded);
   let result: string;
 
   if (alreadyCodeBlock) {
-    result = content;
-  } else if (FULL_HTML_DOC_PATTERN.test(trimmed)) {
-    result = `\`\`\`html\n${trimmed}\n\`\`\``;
+    result = decoded;
+  } else if (FULL_HTML_DOC_PATTERN.test(decoded)) {
+    result = `\`\`\`html\n${decoded}\n\`\`\``;
   } else {
-    result = content;
+    result = decoded;
   }
 
   // Cache the result (only cache if content is substantial enough)

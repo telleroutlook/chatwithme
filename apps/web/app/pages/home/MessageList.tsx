@@ -6,7 +6,7 @@ import { TypingIndicator } from '~/components/chat/TypingIndicator';
 import type { Message } from '@chatwithme/shared';
 import { useChatScroll } from './hooks/useChatScroll';
 import { useChatStore } from '~/stores/chat';
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, memo } from 'react';
 import { sanitizeMessages } from '~/lib/messageSanitizer';
 
 export interface MessageListProps {
@@ -17,7 +17,7 @@ export interface MessageListProps {
   onShowMessageMenu?: (messageId: string, content: string, position: { x: number; y: number }) => void;
 }
 
-export function MessageList({
+export const MessageList = memo(function MessageList({
   messages,
   activeConversationId,
   onRegenerate,
@@ -71,4 +71,4 @@ export function MessageList({
       </ChatErrorBoundary>
     </ScrollArea>
   );
-}
+});

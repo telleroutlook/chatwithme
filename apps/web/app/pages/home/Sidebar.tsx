@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import { memo } from 'react';
 import { Button } from '~/components/ui/button';
 import { ConversationList } from '~/components/chat/ConversationList';
 import type { Conversation } from '@chatwithme/shared';
@@ -18,7 +19,7 @@ export interface SidebarProps {
 }
 
 // Simplified Sidebar - Content provider, layout handled by Home
-export function Sidebar({
+export const Sidebar = memo(function Sidebar({
   isOpen,
   isCollapsed,
   conversations,
@@ -56,4 +57,4 @@ export function Sidebar({
       />
     </aside>
   );
-}
+});

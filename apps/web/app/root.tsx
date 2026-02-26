@@ -17,15 +17,17 @@ const themeBootScript = `
   const key = 'chatwithme-theme';
   let mode = 'system';
   try {
-    const saved = JSON.parse(window.localStorage.getItem(key) || '{}');
-    if (saved && (saved.state?.mode === 'light' || saved.state?.mode === 'dark' || saved.state?.mode === 'system')) {
-      mode = saved.state.mode;
+    if (typeof window !== 'undefined') {
+      const saved = JSON.parse(window.localStorage.getItem(key) || '{}');
+      if (saved && (saved.state?.mode === 'light' || saved.state?.mode === 'dark' || saved.state?.mode === 'system')) {
+        mode = saved.state.mode;
+      }
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const resolved = mode === 'system' ? (prefersDark ? 'dark' : 'light') : mode;
+      document.documentElement.classList.toggle('dark', resolved === 'dark');
+      document.documentElement.dataset.theme = resolved;
     }
   } catch {}
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const resolved = mode === 'system' ? (prefersDark ? 'dark' : 'light') : mode;
-  document.documentElement.classList.toggle('dark', resolved === 'dark');
-  document.documentElement.dataset.theme = resolved;
 })();
 `;
 
@@ -75,6 +77,9 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    // Only access window in client-side
+    if (typeof window === 'undefined') return;
+
     syncThemeWithSystem();
     const media = window.matchMedia('(prefers-color-scheme: dark)');
     const handleSystemThemeChange = () => syncThemeWithSystem();

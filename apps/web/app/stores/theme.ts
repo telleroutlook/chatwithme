@@ -6,10 +6,16 @@ export type ResolvedTheme = 'light' | 'dark';
 
 const THEME_STORAGE_KEY = 'chatwithme-theme';
 
-const getSystemTheme = (): ResolvedTheme =>
-  window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+// Safe version that works in SSR
+const getSystemTheme = (): ResolvedTheme => {
+  if (typeof window === 'undefined') return 'light';
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+};
 
-const resolveTheme = (mode: ThemeMode): ResolvedTheme => (mode === 'system' ? getSystemTheme() : mode);
+const resolveTheme = (mode: ThemeMode, clientMode?: ThemeMode): ResolvedTheme => {
+  if (typeof window === 'undefined') return 'light';
+  return mode === 'system' ? getSystemTheme() : mode;
+};
 
 const applyTheme = (theme: ResolvedTheme) => {
   document.documentElement.classList.toggle('dark', theme === 'dark');
@@ -45,7 +51,9 @@ export const useThemeStore = create<ThemeState>()(
       skipHydration: true,
       partialize: (state) => ({ mode: state.mode }),
       onRehydrateStorage: () => (state) => {
-        state?.syncWithSystem();
+        if (state) {
+          state.syncWithSystem();
+        }
       },
     }
   )

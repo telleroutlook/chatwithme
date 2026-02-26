@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, memo } from 'react';
 import { Send } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
@@ -22,7 +22,7 @@ interface MessageInputProps {
   autoFocus?: boolean;
 }
 
-export function MessageInput({
+export const MessageInput = memo(function MessageInput({
   onSend,
   disabled,
   placeholder = 'Type a message...',
@@ -262,4 +262,4 @@ export function MessageInput({
       </div>
     </div>
   );
-}
+});

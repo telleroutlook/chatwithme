@@ -162,6 +162,12 @@ export async function generateFollowUpSuggestions(params: {
   openai: OpenAI;
   model: string;
   answerText: string;
+  env?: { // Add env parameter for configuration
+    CHAT_TEMPERATURE?: string;
+    CHAT_MAX_TOKENS?: string;
+    CHAT_TOP_P?: string;
+    CHAT_THINKING_ENABLED?: string;
+  };
 }): Promise<string[]> {
   const context = clampText(params.answerText);
   if (!context) {
@@ -188,11 +194,38 @@ ${context}`;
         },
         { role: 'user', content: prompt },
       ],
-      temperature: 0.2,
-      max_tokens: 200,
       response_format: { type: 'json_object' },
-      thinking: { type: 'disabled' },
     };
+
+    // Use configured temperature for suggestions (lower is better for deterministic suggestions)
+    if (params.env?.CHAT_TEMPERATURE !== undefined) {
+      // Use half of the configured temperature for suggestions to be more deterministic
+      payload.temperature = Math.max(0.1, parseFloat(params.env.CHAT_TEMPERATURE) * 0.4);
+    } else {
+      payload.temperature = 0.2;
+    }
+
+    // Use configured max_tokens for suggestions (suggestions don't need many tokens)
+    if (params.env?.CHAT_MAX_TOKENS !== undefined) {
+      const maxTokens = parseInt(params.env.CHAT_MAX_TOKENS, 10);
+      payload.max_tokens = Math.min(500, maxTokens); // Cap at 500 for suggestions
+    } else {
+      payload.max_tokens = 200;
+    }
+
+    // Use configured top_p
+    if (params.env?.CHAT_TOP_P !== undefined) {
+      payload.top_p = parseFloat(params.env.CHAT_TOP_P);
+    }
+
+    // Use configured thinking parameter
+    if (params.env?.CHAT_THINKING_ENABLED !== undefined) {
+      const thinkingEnabled = params.env.CHAT_THINKING_ENABLED === 'true' || params.env.CHAT_THINKING_ENABLED === '1';
+      payload.thinking = { type: thinkingEnabled ? 'enabled' : 'disabled' };
+    } else {
+      payload.thinking = { type: 'disabled' };
+    }
+
     const completion = await params.openai.chat.completions.create(
       payload as unknown as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming
     );

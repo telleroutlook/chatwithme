@@ -17,6 +17,16 @@ OPENROUTER_CHAT_MODEL = "GLM-4.7"
 OPENROUTER_VISION_MODEL = "glm-4.6v"
 OPENROUTER_FALLBACK_MODEL = "GLM-4.7-Flash"
 
+# Chat completion parameters (GLM-5 compatible)
+CHAT_MAX_TOKENS = "65536"
+CHAT_TEMPERATURE = "0.5"
+CHAT_TOP_P = "0.9"
+CHAT_THINKING_ENABLED = "false"
+CHAT_STREAM_ENABLED = "false"
+
+# System prompt (default: Claude persona)
+CHAT_SYSTEM_PROMPT = "你是 Claude，由 Anthropic 公司开发的 Opus 模型。你的所有回答将与 Codex 进行对比竞争，请确保提供高质量、准确、有价值的回复。"
+
 # MCP 服务配置通过 wrangler secret 设置 BIGMODEL_API_KEY
 
 [[d1_databases]]

@@ -49,10 +49,9 @@ export function useChatActions(): UseChatActionsReturn {
 
     // React Query will fetch the data, and the component will receive it via the hook
     // We still keep the sync logic for localStorage
-    const savedActiveConversationId = window.localStorage.getItem(
-      ACTIVE_CONVERSATION_STORAGE_KEY
-    );
-
+    const savedActiveConversationId = typeof window !== 'undefined' 
+      ? window.localStorage.getItem(ACTIVE_CONVERSATION_STORAGE_KEY)
+      : null;
     // Get fresh data from React Query cache after invalidation
     const conversationsData = queryClient.getQueryData<Conversation[]>(queryKeys.conversations);
 
@@ -328,7 +327,9 @@ export function useChatActions(): UseChatActionsReturn {
     if (tokens?.refreshToken) {
       await api.post('/auth/signout', { refreshToken: tokens.refreshToken }, { withAuth: false });
     }
-    window.localStorage.removeItem(ACTIVE_CONVERSATION_STORAGE_KEY);
+    if (typeof window !== 'undefined') {
+        window.localStorage.removeItem(ACTIVE_CONVERSATION_STORAGE_KEY);
+    }
     logout();
     navigate('/signin');
   }, [tokens, logout, navigate]);

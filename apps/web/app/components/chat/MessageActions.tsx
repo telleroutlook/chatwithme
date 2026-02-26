@@ -25,6 +25,7 @@ export function MessageActions({
 }: MessageActionsProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
+  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -40,6 +41,10 @@ export function MessageActions({
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('touchstart', handleClickOutside);
+      // 清理待处理的 timeout
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
     };
   }, [onClose]);
 
@@ -48,7 +53,11 @@ export function MessageActions({
     if (success) {
       setCopied(true);
       onCopy?.();
-      setTimeout(() => {
+      // 清理之前的 timeout（如果有）
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+      copyTimeoutRef.current = setTimeout(() => {
         setCopied(false);
         onClose();
       }, 1000);
