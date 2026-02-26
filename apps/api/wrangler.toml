@@ -12,10 +12,22 @@ not_found_handling = "single-page-application"
 
 [vars]
 ENVIRONMENT = "production"
-OPENROUTER_BASE_URL = "https://open.bigmodel.cn/api/coding/paas/v4"
-OPENROUTER_CHAT_MODEL = "GLM-4.7"
-OPENROUTER_VISION_MODEL = "glm-4.6v"
-OPENROUTER_FALLBACK_MODEL = "GLM-4.7-Flash"
+
+# 聊天主模型配置
+CHAT_PRIMARY_BASE_URL = "https://open.bigmodel.cn/api/coding/paas/v4"
+CHAT_PRIMARY_MODEL = "GLM-4.7"
+
+# 聊天备用模型配置
+CHAT_FALLBACK_BASE_URL = "https://www.kegui.net/v1"
+CHAT_FALLBACK_MODEL = "gpt-5.3-codex"
+
+# 图片主模型配置
+IMAGE_PRIMARY_BASE_URL = "https://www.kegui.net/v1"
+IMAGE_PRIMARY_MODEL = "gpt-5.3-codex"
+
+# 图片备用模型配置
+IMAGE_FALLBACK_BASE_URL = "https://open.bigmodel.cn/api/coding/paas/v4"
+IMAGE_FALLBACK_MODEL = "glm-4.6v"
 
 # Chat completion parameters (GLM-5 compatible)
 CHAT_MAX_TOKENS = "65536"

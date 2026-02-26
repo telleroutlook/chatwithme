@@ -20,6 +20,68 @@ import OpenAI from 'openai';
 import { parseToolCalls } from '../mcp/parser';
 import type { MessageFile } from '@chatwithme/shared';
 
+// ============================================================================
+// 模型配置类型定义
+// ============================================================================
+
+type ModelType = 'chat-primary' | 'chat-fallback' | 'image-primary' | 'image-fallback';
+
+type ModelConfig = {
+  baseUrl: string;
+  model: string;
+  apiKey: string;
+};
+
+/**
+ * 获取模型配置
+ * @param env - 环境变量
+ * @param modelType - 模型类型
+ * @returns 模型配置对象
+ */
+function getModelConfig(env: Env, modelType: ModelType): ModelConfig {
+  const defaultBaseUrl = 'https://open.bigmodel.cn/api/coding/paas/v4';
+  const defaultApiKey = env.OPENROUTER_API_KEY;
+
+  switch (modelType) {
+    case 'chat-primary':
+      return {
+        baseUrl: env.CHAT_PRIMARY_BASE_URL || defaultBaseUrl,
+        model: env.CHAT_PRIMARY_MODEL || 'GLM-4.7',
+        apiKey: env.CHAT_PRIMARY_API_KEY || defaultApiKey,
+      };
+    case 'chat-fallback':
+      return {
+        baseUrl: env.CHAT_FALLBACK_BASE_URL || defaultBaseUrl,
+        model: env.CHAT_FALLBACK_MODEL || 'GLM-4.7-Flash',
+        apiKey: env.CHAT_FALLBACK_API_KEY || defaultApiKey,
+      };
+    case 'image-primary':
+      return {
+        baseUrl: env.IMAGE_PRIMARY_BASE_URL || defaultBaseUrl,
+        model: env.IMAGE_PRIMARY_MODEL || 'glm-4v-plus',
+        apiKey: env.IMAGE_PRIMARY_API_KEY || defaultApiKey,
+      };
+    case 'image-fallback':
+      return {
+        baseUrl: env.IMAGE_FALLBACK_BASE_URL || defaultBaseUrl,
+        model: env.IMAGE_FALLBACK_MODEL || 'glm-4.6v',
+        apiKey: env.IMAGE_FALLBACK_API_KEY || defaultApiKey,
+      };
+  }
+}
+
+/**
+ * 创建 OpenAI 客户端
+ * @param config - 模型配置
+ * @returns OpenAI 客户端实例
+ */
+function createOpenAIClient(config: ModelConfig): OpenAI {
+  return new OpenAI({
+    apiKey: config.apiKey,
+    baseURL: config.baseUrl,
+  });
+}
+
 const CODE_EXTENSIONS = [
   'js',
   'ts',
@@ -73,22 +135,6 @@ async function readFileContentFromDataURL(url: string): Promise<string> {
     }
   }
   return '';
-}
-
-function detectVisionModel(
-  messages: Array<{ role: string; content: string | Array<unknown>; files?: MessageFile[] }>,
-  env: Env
-): string {
-  const currentUserMessage = messages[messages.length - 1];
-  // Only images trigger Vision model
-  // PDFs always use text extraction and go to regular chat model
-  const hasVisionContent =
-    currentUserMessage?.files?.some((f) => f.mimeType.startsWith('image/')) ?? false;
-
-  if (hasVisionContent) {
-    return env.OPENROUTER_VISION_MODEL || env.OPENROUTER_CHAT_MODEL || 'glm-4.6v';
-  }
-  return env.OPENROUTER_CHAT_MODEL || 'GLM-4.7';
 }
 
 const chat = new Hono<AppBindings>();
@@ -761,21 +807,37 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
   // Fetch history for model detection
   const historyForModelDetection = await getRecentMessages(db, conversationId, 20);
 
-  const model =
-    requestedModel ||
-    detectVisionModel(
-      [
-        ...historyForModelDetection.map((msg) => ({
-          role: msg.role,
-          content: msg.message,
-          files: msg.files || undefined,
-        })),
-        { role: 'user', content: message, files },
-      ],
-      c.env
-    ) ||
-    c.env.OPENROUTER_CHAT_MODEL ||
-    'gpt-5.3-codex';
+  // 检测当前请求是否需要图片模型
+  const hasImages = files?.some((f) => f.mimeType.startsWith('image/')) ?? false;
+  const hasHistoryImages = historyForModelDetection.some(
+    (msg) => msg.role === 'user' && msg.files?.some((f) => f.mimeType.startsWith('image/'))
+  );
+  const isImageRequest = hasImages || hasHistoryImages;
+
+  // 构建模型候选列表
+  const modelCandidates: ModelConfig[] = requestedModel
+    ? [
+        // 用户指定了模型，使用默认配置创建自定义模型配置
+        {
+          baseUrl: c.env.CHAT_PRIMARY_BASE_URL,
+          model: requestedModel,
+          apiKey: c.env.OPENROUTER_API_KEY,
+        },
+      ]
+    : (() => {
+        // 自动检测模型：主模型 + 备用模型
+        const primaryConfig = isImageRequest
+          ? getModelConfig(c.env, 'image-primary')
+          : getModelConfig(c.env, 'chat-primary');
+        const fallbackConfig = isImageRequest
+          ? getModelConfig(c.env, 'image-fallback')
+          : getModelConfig(c.env, 'chat-fallback');
+
+        return [primaryConfig, fallbackConfig].filter((config) => config.model && config.baseUrl);
+      })();
+
+  // 用于日志的模型名称
+  const primaryModelName = modelCandidates[0]?.model || 'unknown';
 
   // Process files: upload images to R2 and get public URLs
   // GLM-4.6v requires HTTP(S) URLs, not base64 dataURLs
@@ -924,14 +986,6 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
     }
   }
 
-  const openai = new OpenAI({
-    apiKey: c.env.OPENROUTER_API_KEY,
-    baseURL: c.env.OPENROUTER_BASE_URL,
-  });
-  const candidates = Array.from(
-    new Set([model, c.env.OPENROUTER_FALLBACK_MODEL?.trim()].filter((v): v is string => Boolean(v)))
-  );
-
   // Initialize MCPAgent
   const agentId = c.env.MCPAgent.idFromName('global-mcp');
   const mcpAgentStub = c.env.MCPAgent.get(agentId);
@@ -1000,26 +1054,27 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
         ]
       : undefined;
 
-  let activeModel = candidates[0] || model;
+  let activeModel = modelCandidates[0]?.model || 'unknown';
+  let activeBaseUrl = modelCandidates[0]?.baseUrl || 'unknown';
   let answerText = '';
   let bundledSuggestions: string[] = [];
   let parsedImageAnalyses: ImageAnalysis[] = [];
-  const attemptLogs: Array<{ model: string; error?: ModelErrorDetail }> = [];
+  const attemptLogs: Array<{ model: string; baseUrl?: string; error?: ModelErrorDetail }> = [];
 
   // Build messages for LLM call
   const hasMcpTools = mcpAgentStub && (await mcpAgentStub.isConfigured());
 
-  // Detect if current message contains images
-  const hasImages = historyForModelDetection.some(
-    (msg) => msg.role === 'user' && msg.files?.some((f) => f.mimeType.startsWith('image/'))
-  );
-
   // Vision model doesn't support json_object format
-  const isVisionModel = model.includes('vision') || model.includes('v');
+  const isVisionModel = primaryModelName.includes('vision') || primaryModelName.includes('v');
   const responseFormat: ResponseFormat =
-    hasImages || isVisionModel || mcpTools ? 'text' : 'json_object';
+    isImageRequest || isVisionModel || mcpTools ? 'text' : 'json_object';
 
-  const llmMessages = buildStructuredReplyMessages(openAiMessages, hasMcpTools, hasImages, c.env);
+  const llmMessages = buildStructuredReplyMessages(
+    openAiMessages,
+    hasMcpTools,
+    isImageRequest,
+    c.env
+  );
   const enhancedMessages: Array<{
     role: 'system' | 'user' | 'assistant' | 'tool';
     content?: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
@@ -1031,13 +1086,17 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
   // Note: When tools are present, we use 'text' format to allow function calling
   // GLM-4.7 cannot simultaneously return both tool_calls and json_object format
   // Vision models also don't support json_object format
-  for (const candidate of candidates) {
+  for (const candidateConfig of modelCandidates) {
     try {
+      // 为每个候选模型创建独立的 OpenAI 客户端
+      const openai = createOpenAIClient(candidateConfig);
+      const candidateModel = candidateConfig.model;
+
       const completion = await withModelTimeout(
         () =>
           openai.chat.completions.create(
             buildNonStreamingChatCompletionParams({
-              model: candidate,
+              model: candidateModel,
               messages: enhancedMessages as Array<{
                 role: 'system' | 'user' | 'assistant';
                 content:
@@ -1091,7 +1150,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
           () =>
             openai.chat.completions.create(
               buildNonStreamingChatCompletionParams({
-                model: candidate,
+                model: candidateModel,
                 messages: enhancedMessages as Array<{
                   role: 'system' | 'user' | 'assistant';
                   content:
@@ -1111,7 +1170,8 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
           answerText = structured.message;
           bundledSuggestions = structured.suggestions;
           parsedImageAnalyses = structured.imageAnalyses || [];
-          activeModel = candidate;
+          activeModel = candidateModel;
+          activeBaseUrl = candidateConfig.baseUrl;
           break;
         }
         // Fallback: if structured parsing fails, use the text directly
@@ -1120,11 +1180,12 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
           // Generate simple suggestions for tool-based responses
           bundledSuggestions = await generateFollowUpSuggestions({
             openai,
-            model: candidate,
+            model: candidateModel,
             answerText: text,
             env: c.env,
           });
-          activeModel = candidate;
+          activeModel = candidateModel;
+          activeBaseUrl = candidateConfig.baseUrl;
           break;
         }
       } else {
@@ -1138,7 +1199,8 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
           answerText = structured.message;
           bundledSuggestions = structured.suggestions;
           parsedImageAnalyses = structured.imageAnalyses || [];
-          activeModel = candidate;
+          activeModel = candidateModel;
+          activeBaseUrl = candidateConfig.baseUrl;
           break;
         }
         // Fallback: if tools were configured but not called, use plain text
@@ -1147,17 +1209,19 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
           // Generate simple suggestions for tool-based responses
           bundledSuggestions = await generateFollowUpSuggestions({
             openai,
-            model: candidate,
+            model: candidateModel,
             answerText: text,
             env: c.env,
           });
-          activeModel = candidate;
+          activeModel = candidateModel;
+          activeBaseUrl = candidateConfig.baseUrl;
           break;
         }
       }
 
       attemptLogs.push({
-        model: candidate,
+        model: candidateModel,
+        baseUrl: candidateConfig.baseUrl,
         error: {
           name: 'InvalidStructuredReplyError',
           message: 'Model returned completion without parseable structured reply',
@@ -1165,7 +1229,11 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
         },
       });
     } catch (error) {
-      attemptLogs.push({ model: candidate, error: toModelErrorDetail(error) });
+      attemptLogs.push({
+        model: candidateModel,
+        baseUrl: candidateConfig.baseUrl,
+        error: toModelErrorDetail(error),
+      });
     }
     if (answerText.trim()) break;
   }
@@ -1175,7 +1243,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
       traceId,
       userId,
       conversationId,
-      model,
+      primaryModel: primaryModelName,
       attempts: attemptLogs,
     });
     return errorResponse(
@@ -1211,6 +1279,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
       message: answerText,
       suggestions: bundledSuggestions,
       model: activeModel,
+      baseUrl: activeBaseUrl,
       traceId,
       imageAnalyses: parsedImageAnalyses,
     },

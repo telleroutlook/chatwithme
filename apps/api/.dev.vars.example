@@ -1,3 +1,43 @@
 # Copy this file to .dev.vars for local development
+# 本地开发环境配置示例（复制此文件为 .dev.vars 并填写实际值）
+
+# ============================================================================
+# 默认 API 配置（当模型级别 API Key 未设置时使用）
+# ============================================================================
 OPENROUTER_API_KEY=your_openrouter_api_key_here
 JWT_SECRET=your_jwt_secret_here_at_least_32_characters_long
+
+# ============================================================================
+# 聊天主模型配置
+# ============================================================================
+CHAT_PRIMARY_BASE_URL=https://open.bigmodel.cn/api/coding/paas/v4
+CHAT_PRIMARY_MODEL=GLM-4.7
+# CHAT_PRIMARY_API_KEY=optional_override_api_key
+
+# ============================================================================
+# 聊天备用模型配置
+# ============================================================================
+CHAT_FALLBACK_BASE_URL=https://www.kegui.net/v1
+CHAT_FALLBACK_MODEL=gpt-5.3-codex
+# CHAT_FALLBACK_API_KEY=optional_override_api_key
+
+# ============================================================================
+# 图片主模型配置
+# ============================================================================
+IMAGE_PRIMARY_BASE_URL=https://open.bigmodel.cn/api/coding/paas/v4
+IMAGE_PRIMARY_MODEL=glm-4v-plus
+# IMAGE_PRIMARY_API_KEY=optional_override_api_key
+
+# ============================================================================
+# 图片备用模型配置
+# ============================================================================
+IMAGE_FALLBACK_BASE_URL=https://open.bigmodel.cn/api/coding/paas/v4
+IMAGE_FALLBACK_MODEL=glm-4.6v
+# IMAGE_FALLBACK_API_KEY=optional_override_api_key
+
+# ============================================================================
+# MCP 服务配置（可选）
+# ============================================================================
+# BIGMODEL_API_KEY=your_bigmodel_api_key_here
+# MCP_WEB_SEARCH_URL=https://open.bigmodel.cn/api/mcp/web_search_prime/mcp
+# MCP_WEB_READER_URL=https://open.bigmodel.cn/api/mcp/web_reader/mcp
