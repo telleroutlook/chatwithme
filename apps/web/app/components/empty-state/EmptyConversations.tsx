@@ -1,4 +1,5 @@
 import { FilePlus, MessageSquarePlus, Sparkles } from 'lucide-react';
+import { useTranslation } from '~/i18n';
 
 interface EmptyConversationsProps {
   onCreateNew?: () => void;
@@ -10,6 +11,8 @@ interface EmptyConversationsProps {
  * Shows a prompt to create a new conversation.
  */
 export function EmptyConversations({ onCreateNew, className = '' }: EmptyConversationsProps) {
+  const { t } = useTranslation();
+
   return (
     <div
       className={`flex h-full w-full flex-col items-center justify-center px-6 py-12 text-muted-foreground fade-in ${className}`}
@@ -24,10 +27,10 @@ export function EmptyConversations({ onCreateNew, className = '' }: EmptyConvers
 
       {/* Empty state message */}
       <h3 className="mb-2 text-center text-lg font-semibold text-foreground">
-        No conversations yet
+        {t('chat.sidebar.noConversations')}
       </h3>
       <p className="max-w-xs text-center text-sm leading-relaxed">
-        Create your first conversation to start chatting with the assistant.
+        {t('chat.sidebar.startFirst')}
       </p>
 
       {/* Action button */}
@@ -37,14 +40,14 @@ export function EmptyConversations({ onCreateNew, className = '' }: EmptyConvers
           className="mt-6 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-smooth hover:bg-primary/90 active:scale-95"
         >
           <FilePlus className="h-4 w-4" />
-          New Conversation
+          {t('chat.sidebar.newChat')}
         </button>
       )}
 
       {/* Decorative hint */}
       <div className="mt-8 flex items-center gap-2 text-xs text-muted-foreground/70">
         <Sparkles className="h-3 w-3" />
-        <span>Your conversations will appear here</span>
+        <span>{t('chat.sidebar.noConversations')}</span>
       </div>
     </div>
   );

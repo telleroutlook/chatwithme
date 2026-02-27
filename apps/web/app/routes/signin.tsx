@@ -6,9 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/com
 import { useAuthStore } from '~/stores/auth';
 import { api, getApiErrorMessage } from '~/client';
 import { Link } from 'react-router';
+import { useTranslation } from '~/i18n';
 import type { AuthResponse } from '@chatwithme/shared';
 
 export default function SignIn() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -35,7 +37,7 @@ export default function SignIn() {
         setError(getApiErrorMessage(response.error));
       }
     } catch {
-      setError('Network error. Please try again.');
+      setError(t('common.networkError'));
     } finally {
       setLoading(false);
     }
@@ -46,9 +48,9 @@ export default function SignIn() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_10%,rgba(71,125,255,0.18),transparent_42%),radial-gradient(circle_at_85%_85%,rgba(118,169,255,0.14),transparent_38%)]" />
       <Card className="relative w-full max-w-md border-border/90 bg-card/95">
         <CardHeader className="space-y-2 pb-4 text-center">
-          <CardTitle className="text-2xl sm:text-[1.9rem]">Welcome Back</CardTitle>
+          <CardTitle className="text-2xl sm:text-[1.9rem]">{t('auth.signIn.title')}</CardTitle>
           <CardDescription className="text-sm sm:text-base">
-            Sign in to your account to continue
+            {t('auth.signIn.subtitle')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -61,12 +63,12 @@ export default function SignIn() {
 
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">
-                Email
+                {t('auth.signIn.emailLabel')}
               </label>
               <Input
                 id="email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder={t('auth.signIn.emailPlaceholder')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -76,12 +78,12 @@ export default function SignIn() {
 
             <div className="space-y-2">
               <label htmlFor="password" className="text-sm font-medium">
-                Password
+                {t('auth.signIn.passwordLabel')}
               </label>
               <Input
                 id="password"
                 type="password"
-                placeholder="Enter your password"
+                placeholder={t('auth.signIn.passwordPlaceholder')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -94,13 +96,13 @@ export default function SignIn() {
               className="h-11 w-full rounded-xl text-sm font-semibold"
               disabled={loading}
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? t('common.loading') : t('auth.signIn.submitButton')}
             </Button>
 
             <p className="text-center text-sm text-muted-foreground">
-              Don't have an account?{' '}
+              {t('auth.signIn.noAccount')}{' '}
               <Link to="/signup" className="font-semibold text-primary hover:underline">
-                Sign up
+                {t('auth.signIn.signUpLink')}
               </Link>
             </p>
           </form>

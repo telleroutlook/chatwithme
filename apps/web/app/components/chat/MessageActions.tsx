@@ -2,6 +2,7 @@ import { Copy, Trash2, RefreshCw, Check } from 'lucide-react';
 import { cn } from '~/lib/utils';
 import { useState, useEffect, useRef } from 'react';
 import { copyToClipboard } from '~/lib/clipboard';
+import { useTranslation } from '~/i18n';
 
 export interface MessageActionsProps {
   messageId: string;
@@ -22,6 +23,7 @@ export function MessageActions({
   position,
   onClose,
 }: MessageActionsProps) {
+  const { t } = useTranslation();
   const menuRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
   const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -107,10 +109,10 @@ export function MessageActions({
           'hover:bg-accent active:bg-accent/80',
           'transition-colors'
         )}
-        aria-label={copied ? 'Copied to clipboard' : 'Copy message to clipboard'}
+        aria-label={copied ? t('common.copied') : t('common.copy')}
       >
         {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-        <span>{copied ? 'Copied!' : 'Copy'}</span>
+        <span>{copied ? t('common.copied') : t('common.copy')}</span>
       </button>
 
       {/* Regenerate button (assistant messages only) */}
@@ -122,10 +124,10 @@ export function MessageActions({
             'hover:bg-accent active:bg-accent/80',
             'transition-colors'
           )}
-          aria-label="Regenerate response"
+          aria-label={t('chat.message.regenerate')}
         >
           <RefreshCw className="h-4 w-4" />
-          <span>Regenerate</span>
+          <span>{t('chat.message.regenerate')}</span>
         </button>
       )}
 
@@ -138,10 +140,10 @@ export function MessageActions({
             'text-destructive hover:bg-destructive/10 active:bg-destructive/20',
             'transition-colors'
           )}
-          aria-label="Delete message"
+          aria-label={t('chat.message.delete')}
         >
           <Trash2 className="h-4 w-4" />
-          <span>Delete</span>
+          <span>{t('chat.message.delete')}</span>
         </button>
       )}
     </div>

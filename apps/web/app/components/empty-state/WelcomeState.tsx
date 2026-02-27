@@ -1,31 +1,27 @@
-import { MessageCircle, Sparkles, Zap, Shield, type LucideIcon } from 'lucide-react';
+import { MessageCircle, Sparkles, FileText, Image, type LucideIcon } from 'lucide-react';
+import { useTranslation } from '~/i18n';
 
 interface Feature {
   icon: LucideIcon;
-  title: string;
-  description: string;
+  titleKey: string;
 }
 
 const features: Feature[] = [
   {
-    icon: Sparkles,
-    title: 'AI-Powered',
-    description: 'Get intelligent responses powered by advanced AI models.',
-  },
-  {
-    icon: Zap,
-    title: 'Fast & Responsive',
-    description: 'Lightning-fast responses with a smooth user experience.',
-  },
-  {
-    icon: Shield,
-    title: 'Privacy First',
-    description: 'Your conversations are secure and private.',
-  },
-  {
     icon: MessageCircle,
-    title: 'Natural Conversations',
-    description: 'Chat naturally with context-aware understanding.',
+    titleKey: 'chat.empty.features.chat',
+  },
+  {
+    icon: FileText,
+    titleKey: 'chat.empty.features.files',
+  },
+  {
+    icon: Image,
+    titleKey: 'chat.empty.features.images',
+  },
+  {
+    icon: Sparkles,
+    titleKey: 'chat.empty.features.search',
   },
 ];
 
@@ -39,6 +35,8 @@ interface WelcomeStateProps {
  * Shows a beautiful welcome screen with feature highlights.
  */
 export function WelcomeState({ onStartChat, className = '' }: WelcomeStateProps) {
+  const { t } = useTranslation();
+
   return (
     <div
       className={`mx-auto flex h-full w-full max-w-4xl flex-col items-center justify-center px-6 py-12 text-muted-foreground scale-in ${className}`}
@@ -62,15 +60,10 @@ export function WelcomeState({ onStartChat, className = '' }: WelcomeStateProps)
 
           {/* Title and subtitle */}
           <h1 className="mb-4 text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-            Welcome to
-            <span className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-              {' '}
-              ChatWithMe
-            </span>
+            {t('chat.empty.welcome')}
           </h1>
           <p className="mx-auto max-w-lg text-base leading-relaxed sm:text-lg">
-            Your intelligent conversation companion. Ask questions, explore ideas, and get things
-            done with the power of AI.
+            {t('chat.empty.subtitle')}
           </p>
 
           {/* CTA button */}
@@ -80,7 +73,7 @@ export function WelcomeState({ onStartChat, className = '' }: WelcomeStateProps)
               className="mt-8 inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-base font-medium text-primary-foreground shadow-lg shadow-primary/25 transition-smooth hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/30 active:scale-95"
             >
               <Sparkles className="h-5 w-5" />
-              Start Chatting
+              {t('chat.empty.getStarted')}
             </button>
           )}
         </div>
@@ -88,10 +81,13 @@ export function WelcomeState({ onStartChat, className = '' }: WelcomeStateProps)
 
       {/* Features grid */}
       <div className="mt-16 w-full">
+        <p className="text-center text-sm font-medium text-foreground mb-4">
+          {t('chat.empty.features.title')}
+        </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {features.map((feature, index) => (
             <div
-              key={feature.title}
+              key={feature.titleKey}
               className="group relative overflow-hidden rounded-2xl border border-border/50 bg-muted/30 p-5 transition-smooth hover:bg-muted/50 hover:border-primary/30"
               style={{
                 animationDelay: `${index * 100}ms`,
@@ -105,8 +101,7 @@ export function WelcomeState({ onStartChat, className = '' }: WelcomeStateProps)
                 <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20 transition-smooth group-hover:bg-primary/15 group-hover:ring-primary/30">
                   <feature.icon className="h-6 w-6 text-primary" strokeWidth={1.5} />
                 </div>
-                <h3 className="mb-1.5 font-semibold text-foreground">{feature.title}</h3>
-                <p className="text-sm leading-relaxed">{feature.description}</p>
+                <h3 className="mb-1.5 font-semibold text-foreground">{t(feature.titleKey)}</h3>
               </div>
             </div>
           ))}
@@ -116,7 +111,7 @@ export function WelcomeState({ onStartChat, className = '' }: WelcomeStateProps)
       {/* Footer hint */}
       <div className="mt-12 flex items-center gap-2 text-sm text-muted-foreground/60">
         <Sparkles className="h-4 w-4" />
-        <span>Ready to assist you 24/7</span>
+        <span>{t('chat.empty.features.chat')}</span>
       </div>
     </div>
   );

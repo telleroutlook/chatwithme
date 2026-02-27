@@ -3,7 +3,7 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import type { AppBindings } from '../store-context';
 import { createDb } from '../db';
-import { createUser, getUserByEmail, getUserByUsername } from '../dao/users';
+import { createUser, getUserByEmail, getUserByUsername, updateUser } from '../dao/users';
 import {
   createRefreshToken,
   deleteRefreshToken,
@@ -15,7 +15,7 @@ import { signAccessToken, signRefreshToken, verifyToken } from '../utils/jwt';
 import { authMiddleware, getAuthInfo } from '../middleware/auth';
 import { ERROR_CODES } from '../constants/error-codes';
 import { errorResponse, validationErrorHook } from '../utils/response';
-import type { AuthResponse, UserSafe } from '../types';
+import type { AuthResponse, UserSafe, AppLocale } from '../types';
 
 const auth = new Hono<AppBindings>();
 
@@ -94,6 +94,7 @@ auth.post('/signup', zValidator('json', signUpSchema, validationErrorHook), asyn
       email: user.email,
       username: user.username,
       avatar: user.avatar || '',
+      language: user.language || 'en',
     };
 
     const response: AuthResponse = {
@@ -151,6 +152,7 @@ auth.post('/signin', zValidator('json', signInSchema, validationErrorHook), asyn
       email: user.email,
       username: user.username,
       avatar: user.avatar || '',
+      language: user.language || 'en',
     };
 
     const response: AuthResponse = {
@@ -237,9 +239,70 @@ auth.get('/me', authMiddleware, async (c) => {
     email: user.email,
     username: user.username,
     avatar: user.avatar || '',
+    language: user.language || 'en',
   };
 
   return c.json({ success: true, data: { user: userSafe } });
 });
+
+const updatePreferencesSchema = z.object({
+  language: z.enum(['en', 'zh']).optional(),
+  username: z.string().trim().min(1).optional(),
+});
+
+auth.patch(
+  '/me',
+  authMiddleware,
+  zValidator('json', updatePreferencesSchema, validationErrorHook),
+  async (c) => {
+    try {
+      const { email, userId } = getAuthInfo(c);
+      const { language, username } = c.req.valid('json');
+      const db = createDb(c.env.DB);
+
+      const user = await getUserByEmail(db, email);
+      if (!user) {
+        return errorResponse(c, 404, ERROR_CODES.USER_NOT_FOUND, 'User not found');
+      }
+
+      // Check username uniqueness if updating
+      if (username && username !== user.username) {
+        const existingUsername = await getUserByUsername(db, username);
+        if (existingUsername) {
+          return errorResponse(
+            c,
+            409,
+            ERROR_CODES.USERNAME_ALREADY_TAKEN,
+            'Username already taken'
+          );
+        }
+      }
+
+      // Update user preferences
+      const updatedUser = await updateUser(db, userId, {
+        ...(language !== undefined && { language }),
+        ...(username !== undefined && { username }),
+        updatedAt: new Date(),
+      });
+
+      if (!updatedUser) {
+        return errorResponse(c, 500, ERROR_CODES.INTERNAL_SERVER_ERROR, 'Failed to update user');
+      }
+
+      const userSafe: UserSafe = {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        username: updatedUser.username,
+        avatar: updatedUser.avatar || '',
+        language: updatedUser.language || 'en',
+      };
+
+      return c.json({ success: true, data: { user: userSafe } });
+    } catch (error) {
+      console.error('Update preferences error:', error);
+      return errorResponse(c, 500, ERROR_CODES.INTERNAL_SERVER_ERROR, 'Internal Server Error');
+    }
+  }
+);
 
 export default auth;

@@ -4,6 +4,7 @@ import { Button } from '~/components/ui/button';
 import { ScrollArea } from '~/components/ui/scroll-area';
 import { ConversationSkeleton } from '~/components/skeleton';
 import { cn } from '~/lib/utils';
+import { useTranslation } from '~/i18n';
 import type { Conversation } from '@chatwithme/shared';
 
 interface ConversationListProps {
@@ -31,6 +32,7 @@ const ConversationItem = React.memo(
     onSelect: (id: string) => void;
     onDelete: (id: string) => void;
   }) => {
+    const { t } = useTranslation();
     const [showConfirm, setShowConfirm] = useState(false);
     const popoverRef = useRef<HTMLDivElement>(null);
 
@@ -39,9 +41,9 @@ const ConversationItem = React.memo(
       const now = new Date();
       const diff = now.getTime() - d.getTime();
       const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      if (days <= 0) return 'Today';
-      if (days === 1) return 'Yesterday';
-      if (days < 7) return `${days}d ago`;
+      if (days <= 0) return t('common.today');
+      if (days === 1) return t('common.yesterday');
+      if (days < 7) return t('common.daysAgo', { days });
       return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     };
 
@@ -86,7 +88,7 @@ const ConversationItem = React.memo(
                 isActive ? 'text-foreground' : 'text-muted-foreground/90'
               )}
             >
-              {conversation.title || 'New Chat'}
+              {conversation.title || t('chat.sidebar.newChat')}
             </p>
             <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground/50">
               <Clock3 className="h-3 w-3 shrink-0" />
@@ -112,7 +114,7 @@ const ConversationItem = React.memo(
               e.stopPropagation();
               setShowConfirm(true);
             }}
-            aria-label={`Delete ${conversation.title || 'conversation'}`}
+            aria-label={t('chat.conversationItem.delete')}
           >
             {isDeleting ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -128,7 +130,7 @@ const ConversationItem = React.memo(
             className="absolute right-2 top-10 z-50 w-44 rounded-lg border border-border bg-card p-2 shadow-xl animate-in fade-in slide-in-from-top-1"
           >
             <p className="px-1 pb-2 text-[11px] font-medium text-muted-foreground">
-              Delete conversation?
+              {t('chat.sidebar.newChat')}?
             </p>
             <div className="flex gap-1.5">
               <Button
@@ -137,7 +139,7 @@ const ConversationItem = React.memo(
                 className="h-7 flex-1 text-[11px]"
                 onClick={() => setShowConfirm(false)}
               >
-                No
+                {t('common.no')}
               </Button>
               <Button
                 size="sm"
@@ -148,7 +150,7 @@ const ConversationItem = React.memo(
                   setShowConfirm(false);
                 }}
               >
-                Yes
+                {t('common.yes')}
               </Button>
             </div>
           </div>
@@ -169,6 +171,8 @@ export function ConversationList({
   onCreate,
   onDelete,
 }: ConversationListProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-border/60 px-3 py-3 shrink-0">
@@ -178,7 +182,7 @@ export function ConversationList({
           variant="outline"
         >
           <Plus className="h-4 w-4 mr-2" />
-          New Chat
+          {t('chat.sidebar.newChat')}
         </Button>
       </div>
 
@@ -189,7 +193,7 @@ export function ConversationList({
           <div className="px-2 pb-4 pt-2">
             <header className="mb-2 flex items-center justify-between px-3">
               <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
-                History
+                {t('chat.sidebar.conversations')}
               </span>
               <span className="rounded-full bg-muted/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground/70">
                 {conversations.length}

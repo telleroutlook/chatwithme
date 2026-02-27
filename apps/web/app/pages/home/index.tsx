@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { useAuthStore } from '~/stores/auth';
 import { useChatStore } from '~/stores/chat';
 import { type ThemeMode, useThemeStore } from '~/stores/theme';
+import { useTranslation } from '~/i18n';
 import { MessageInput } from '~/components/chat/MessageInput';
 import { Header } from './Header';
 import { MessageList } from './MessageList';
@@ -24,6 +25,7 @@ const CONFIG = {
 };
 
 export function Home() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const mainContainerRef = useRef<HTMLDivElement>(null);
 
@@ -193,6 +195,10 @@ export function Home() {
     handleExportChat(currentMessages, activeConversationId, conversations);
   }, [currentMessages, activeConversationId, conversations, handleExportChat]);
 
+  const handleSettings = useCallback(() => {
+    navigate('/settings');
+  }, [navigate]);
+
   const handleSidebarSelectConversation = useCallback(
     (id: string) => {
       handleSelectConversation(id);
@@ -207,7 +213,7 @@ export function Home() {
   }
 
   const currentTitle =
-    conversations.find((c) => c.id === activeConversationId)?.title || 'New Chat';
+    conversations.find((c) => c.id === activeConversationId)?.title || t('chat.sidebar.newChat');
 
   return (
     <>
@@ -302,6 +308,7 @@ export function Home() {
             onThemeToggle={onThemeCycle}
             onExport={handleExport}
             onLogout={handleLogout}
+            onSettings={handleSettings}
             sidebarCollapsed={sidebarCollapsed}
           />
 
@@ -322,7 +329,9 @@ export function Home() {
                 disabled={isLoading}
                 autoFocus
                 placeholder={
-                  activeConversationId ? 'Message ChatWithMe...' : 'Start a new conversation...'
+                  activeConversationId
+                    ? t('chat.input.placeholder')
+                    : t('chat.empty.getStarted')
                 }
               />
               <p className="mt-2 text-center text-[10px] text-muted-foreground/50">

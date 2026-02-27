@@ -6,9 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/com
 import { useAuthStore } from '~/stores/auth';
 import { api, getApiErrorMessage } from '~/client';
 import { Link } from 'react-router';
+import { useTranslation } from '~/i18n';
 import type { AuthResponse } from '@chatwithme/shared';
 
 export default function SignUp() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -23,12 +25,12 @@ export default function SignUp() {
     setError('');
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setError(t('auth.signUp.errors.passwordTooShort'));
       return;
     }
 
     if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+      setError(t('auth.signUp.errors.passwordTooShort'));
       return;
     }
 
@@ -48,7 +50,7 @@ export default function SignUp() {
         setError(getApiErrorMessage(response.error));
       }
     } catch {
-      setError('Network error. Please try again.');
+      setError(t('common.networkError'));
     } finally {
       setLoading(false);
     }
@@ -59,9 +61,9 @@ export default function SignUp() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(68,115,255,0.16),transparent_40%),radial-gradient(circle_at_85%_8%,rgba(102,157,255,0.14),transparent_35%)]" />
       <Card className="relative w-full max-w-md border-border/90 bg-card/95">
         <CardHeader className="space-y-2 pb-4 text-center">
-          <CardTitle className="text-2xl sm:text-[1.9rem]">Create Account</CardTitle>
+          <CardTitle className="text-2xl sm:text-[1.9rem]">{t('auth.signUp.title')}</CardTitle>
           <CardDescription className="text-sm sm:text-base">
-            Sign up to start chatting with AI
+            {t('auth.signUp.subtitle')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -74,12 +76,12 @@ export default function SignUp() {
 
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">
-                Email
+                {t('auth.signUp.emailLabel')}
               </label>
               <Input
                 id="email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder={t('auth.signUp.emailPlaceholder')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -89,12 +91,12 @@ export default function SignUp() {
 
             <div className="space-y-2">
               <label htmlFor="username" className="text-sm font-medium">
-                Username
+                {t('auth.signUp.usernameLabel')}
               </label>
               <Input
                 id="username"
                 type="text"
-                placeholder="johndoe"
+                placeholder={t('auth.signUp.usernamePlaceholder')}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
@@ -104,12 +106,12 @@ export default function SignUp() {
 
             <div className="space-y-2">
               <label htmlFor="password" className="text-sm font-medium">
-                Password
+                {t('auth.signUp.passwordLabel')}
               </label>
               <Input
                 id="password"
                 type="password"
-                placeholder="Min 6 characters"
+                placeholder={t('auth.signUp.passwordPlaceholder')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -119,12 +121,12 @@ export default function SignUp() {
 
             <div className="space-y-2">
               <label htmlFor="confirmPassword" className="text-sm font-medium">
-                Confirm Password
+                {t('auth.signUp.passwordLabel')}
               </label>
               <Input
                 id="confirmPassword"
                 type="password"
-                placeholder="Re-enter password"
+                placeholder={t('auth.signUp.passwordPlaceholder')}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
@@ -137,13 +139,13 @@ export default function SignUp() {
               className="h-11 w-full rounded-xl text-sm font-semibold"
               disabled={loading}
             >
-              {loading ? 'Creating Account...' : 'Sign Up'}
+              {loading ? t('common.loading') : t('auth.signUp.submitButton')}
             </Button>
 
             <p className="text-center text-sm text-muted-foreground">
-              Already have an account?{' '}
+              {t('auth.signUp.hasAccount')}{' '}
               <Link to="/signin" className="font-semibold text-primary hover:underline">
-                Sign in
+                {t('auth.signUp.signInLink')}
               </Link>
             </p>
           </form>

@@ -1,14 +1,18 @@
+// Locale type
+export type AppLocale = 'en' | 'zh';
+
 // User types
 export interface User {
   id: string;
   email: string;
   username: string;
   avatar: string;
+  language: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export interface UserSafe extends Pick<User, 'id' | 'email' | 'username' | 'avatar'> {}
+export interface UserSafe extends Pick<User, 'id' | 'email' | 'username' | 'avatar' | 'language'> {}
 
 // Conversation types
 export interface Conversation {
@@ -75,6 +79,11 @@ export interface SignInRequest {
 export interface AuthResponse {
   user: UserSafe;
   tokens: AuthTokens;
+}
+
+export interface UpdatePreferencesRequest {
+  language?: AppLocale;
+  username?: string;
 }
 
 export interface RefreshTokenRequest {

@@ -22,7 +22,7 @@ export async function getUserByUsername(db: Db, username: string): Promise<User 
 export async function updateUser(
   db: Db,
   id: string,
-  data: Partial<Pick<User, 'username' | 'avatar' | 'emailVerifiedAt' | 'updatedAt'>>
+  data: Partial<Pick<User, 'username' | 'avatar' | 'language' | 'emailVerifiedAt' | 'updatedAt'>>
 ): Promise<User | undefined> {
   const result = await db.update(users).set(data).where(eq(users.id, id)).returning();
   return result[0];

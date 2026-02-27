@@ -1,6 +1,7 @@
-import { Menu, LogOut, Download, Moon, Sun, Monitor } from 'lucide-react';
+import { Menu, LogOut, Download, Moon, Sun, Monitor, Settings } from 'lucide-react';
 import { memo } from 'react';
 import { Button } from '~/components/ui/button';
+import { useTranslation } from '~/i18n';
 import type { ThemeMode } from '~/stores/theme';
 
 export interface HeaderProps {
@@ -12,6 +13,7 @@ export interface HeaderProps {
   onThemeToggle: () => void;
   onExport: () => void;
   onLogout: () => void;
+  onSettings: () => void;
   sidebarCollapsed: boolean;
 }
 
@@ -24,8 +26,11 @@ export const Header = memo(function Header({
   onThemeToggle,
   onExport,
   onLogout,
+  onSettings,
   sidebarCollapsed,
 }: HeaderProps) {
+  const { t } = useTranslation();
+
   const themeIcon =
     themeMode === 'light' ? (
       <Sun className="h-4 w-4" />
@@ -42,8 +47,8 @@ export const Header = memo(function Header({
           variant="ghost"
           size="icon"
           onClick={onSidebarToggle}
-          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={sidebarCollapsed ? t('chat.header.mobileMenu') : t('chat.sidebar.newChat')}
+          aria-label={sidebarCollapsed ? t('chat.header.mobileMenu') : t('chat.sidebar.newChat')}
         >
           <Menu className="h-5 w-5" />
         </Button>
@@ -56,8 +61,8 @@ export const Header = memo(function Header({
           variant="ghost"
           size="icon"
           onClick={onThemeToggle}
-          title={`Theme: ${themeMode}`}
-          aria-label={`Switch theme mode, current: ${themeMode}`}
+          title={t('settings.theme.title')}
+          aria-label={`${t('settings.theme.title')}: ${themeMode}`}
         >
           {themeIcon}
         </Button>
@@ -66,12 +71,21 @@ export const Header = memo(function Header({
           size="icon"
           onClick={onExport}
           disabled={currentMessagesLength === 0}
-          title="Export chat"
-          aria-label="Export chat"
+          title={t('common.download')}
+          aria-label={t('common.download')}
         >
           <Download className="h-5 w-5" />
         </Button>
-        <Button variant="ghost" size="icon" onClick={onLogout} aria-label="Log out">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onSettings}
+          title={t('common.settings')}
+          aria-label={t('common.settings')}
+        >
+          <Settings className="h-5 w-5" />
+        </Button>
+        <Button variant="ghost" size="icon" onClick={onLogout} aria-label={t('common.signOut')}>
           <LogOut className="h-5 w-5" />
         </Button>
       </div>

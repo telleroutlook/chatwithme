@@ -1,10 +1,13 @@
 // API Types (duplicated from shared package to avoid workspace dependency issues)
 
+export type AppLocale = 'en' | 'zh';
+
 export interface UserSafe {
   id: string;
   email: string;
   username: string;
   avatar: string;
+  language: string;
 }
 
 export interface AuthTokens {

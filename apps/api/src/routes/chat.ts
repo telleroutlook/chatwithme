@@ -1046,7 +1046,11 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
 
   if (mcpAgentStub && (await mcpAgentStub.isConfigured())) {
     try {
-      const rawTools = await mcpAgentStub.getAITools();
+      // @ts-expect-error - Cloudflare Agent SDK getAITools() causes deep type instantiation
+      const rawTools = (await mcpAgentStub.getAITools()) as Record<
+        string,
+        { description?: string; inputSchema?: unknown } | undefined
+      > | null;
 
       // Convert Agent SDK tool format to OpenAI function calling format
       // Agent SDK returns: Record<string, {description: string, inputSchema: object}>

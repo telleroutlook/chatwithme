@@ -5,6 +5,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import './styles/globals.css';
 import { useAuthStore } from './stores/auth';
 import { useThemeStore } from './stores/theme';
+import { useLanguageStore } from './stores/language';
 import { useChatStore } from './stores/chat';
 import { queryClient } from './lib/queryClient';
 import { initPerformanceMonitoring } from './lib/performance';
@@ -26,6 +27,20 @@ const themeBootScript = `
       const resolved = mode === 'system' ? (prefersDark ? 'dark' : 'light') : mode;
       document.documentElement.classList.toggle('dark', resolved === 'dark');
       document.documentElement.dataset.theme = resolved;
+    }
+  } catch {}
+})();
+
+(() => {
+  const key = 'chatwithme-language';
+  let locale = 'en';
+  try {
+    if (typeof window !== 'undefined') {
+      const saved = JSON.parse(window.localStorage.getItem(key) || '{}');
+      if (saved && (saved.state?.locale === 'en' || saved.state?.locale === 'zh')) {
+        locale = saved.state.locale;
+      }
+      document.documentElement.lang = locale;
     }
   } catch {}
 })();
@@ -86,6 +101,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const syncThemeWithSystem = useThemeStore((s) => s.syncWithSystem);
+  const syncLanguageWithUser = useLanguageStore((s) => s.syncWithUser);
+  const user = useAuthStore((s) => s.user);
   const isOnline = useOnlineStatus();
 
   useEffect(() => {
@@ -95,6 +112,7 @@ export default function App() {
     // Rehydrate stores
     void useAuthStore.persist.rehydrate();
     void useThemeStore.persist.rehydrate();
+    void useLanguageStore.persist.rehydrate();
 
     // Register service worker
     registerSW({
@@ -117,6 +135,13 @@ export default function App() {
     media.addEventListener('change', handleSystemThemeChange);
     return () => media.removeEventListener('change', handleSystemThemeChange);
   }, [syncThemeWithSystem]);
+
+  // Sync language with user preference
+  useEffect(() => {
+    if (user?.language) {
+      syncLanguageWithUser(user.language);
+    }
+  }, [user?.language, syncLanguageWithUser]);
 
   // Update online status in chat store
   useEffect(() => {

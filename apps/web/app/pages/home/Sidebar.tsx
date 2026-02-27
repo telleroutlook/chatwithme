@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { memo } from 'react';
 import { Button } from '~/components/ui/button';
 import { ConversationList } from '~/components/chat/ConversationList';
+import { useTranslation } from '~/i18n';
 import type { Conversation } from '@chatwithme/shared';
 
 export interface SidebarProps {
@@ -32,6 +33,8 @@ export const Sidebar = memo(function Sidebar({
   onDelete,
   onRename: _onRename,
 }: SidebarProps) {
+  const { t } = useTranslation();
+
   return (
     <aside
       className={`fixed inset-y-0 left-0 z-50 w-[85vw] max-w-[300px] border-r border-border bg-card transition-transform duration-300 ease-in-out lg:static lg:z-0 lg:w-full lg:max-w-none lg:translate-x-0 ${
@@ -41,7 +44,7 @@ export const Sidebar = memo(function Sidebar({
       {/* Mobile-only header */}
       <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3 lg:hidden">
         <h1 className="text-base font-semibold">ChatWithMe</h1>
-        <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close sidebar">
+        <Button variant="ghost" size="icon" onClick={onClose} aria-label={t('common.close')}>
           <X className="h-5 w-5" />
         </Button>
       </div>

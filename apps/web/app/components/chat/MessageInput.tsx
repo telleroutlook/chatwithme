@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, memo } from 'react';
 import { Send } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
+import { useTranslation } from '~/i18n';
 import type { MessageFile } from '@chatwithme/shared';
 import { getFileType } from '~/lib/fileUtils';
 import { FILE_SIZE_LIMITS } from '~/lib/constants';
@@ -25,9 +26,10 @@ interface MessageInputProps {
 export const MessageInput = memo(function MessageInput({
   onSend,
   disabled,
-  placeholder = 'Type a message...',
+  placeholder,
   autoFocus = false,
 }: MessageInputProps) {
+  const { t } = useTranslation();
   const [message, setMessage] = useState('');
   const [files, setFiles] = useState<FileWithProgress[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -270,7 +272,7 @@ export const MessageInput = memo(function MessageInput({
           onChange={setMessage}
           onKeyDown={handleKeyDown}
           disabled={disabled}
-          placeholder={placeholder}
+          placeholder={placeholder || t('chat.input.placeholder')}
           autoFocus={autoFocus}
           textareaRef={textareaRef}
         />
@@ -281,7 +283,7 @@ export const MessageInput = memo(function MessageInput({
           className="h-11 w-11 rounded-xl"
           onClick={handleSubmit}
           disabled={disabled || (!message.trim() && files.length === 0) || hasProcessingFiles}
-          aria-label="Send message"
+          aria-label={t('chat.input.send')}
         >
           <Send className="h-5 w-5" />
         </Button>
