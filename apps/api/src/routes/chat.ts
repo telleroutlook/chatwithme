@@ -537,37 +537,7 @@ Please analyze the provided image and respond in a helpful manner. Focus on desc
   // For non-image messages, use the original structured reply format
   const baseSystemPrompt = env?.CHAT_SYSTEM_PROMPT || 'You are a helpful assistant.';
 
-  let systemInstruction = `${baseSystemPrompt}
-
-IMPORTANT: You must respond with a valid JSON object only. No markdown, no code blocks, no additional text.
-
-JSON format:
-{
-  "message": "Your response to the user",
-  "suggestions": ["question 1", "question 2", "question 3"]
-}
-
-Rules:
-- Return ONLY the JSON object, nothing else
-- suggestions: exactly 3 relevant follow-up questions`;
-
-  if (languageHint) {
-    systemInstruction += `
-- suggestions language: must match the user's latest question language
-
-Latest user question:
-${truncateText(languageHint, 200)}`;
-  }
-
-  if (hasTools) {
-    systemInstruction += `
-
-Available Tools:
-You have access to web search and page reading tools. When users ask for news, current events, or real-time information, you MUST use the available search tools to fetch accurate, up-to-date information. Do not claim you cannot access the internet.
-
-IMPORTANT: Always use the provided tools when users ask for current events, news, or specific web page content.`;
-  }
-
+  // Normalize messages (needed for both tool and non-tool paths)
   const normalized = messages.flatMap(
     (
       item
@@ -598,6 +568,51 @@ IMPORTANT: Always use the provided tools when users ask for current events, news
       }
     }
   );
+
+  // When tools are available, prioritize tool calling over JSON response format
+  // GLM-4.7 cannot simultaneously support both tool_calls and json_object format
+  if (hasTools) {
+    let systemInstruction = `${baseSystemPrompt}
+
+Available Tools:
+You have access to web search and page reading tools. When users ask for news, current events, or real-time information, you MUST use the available search tools to fetch accurate, up-to-date information. Do not claim you cannot access the internet.
+
+IMPORTANT: Always use the provided tools when users ask for current events, news, or specific web page content.
+
+Response Format:
+After using tools (if needed), provide your response in plain text. Be direct and helpful.`;
+
+    if (languageHint) {
+      systemInstruction += `
+
+Please respond in the same language as the user's question. The user asked in: ${truncateText(languageHint, 200)}`;
+    }
+
+    return [{ role: 'system', content: systemInstruction }, ...normalized];
+  }
+
+  // No tools: use JSON response format
+  let systemInstruction = `${baseSystemPrompt}
+
+IMPORTANT: You must respond with a valid JSON object only. No markdown, no code blocks, no additional text.
+
+JSON format:
+{
+  "message": "Your response to the user",
+  "suggestions": ["question 1", "question 2", "question 3"]
+}
+
+Rules:
+- Return ONLY the JSON object, nothing else
+- suggestions: exactly 3 relevant follow-up questions`;
+
+  if (languageHint) {
+    systemInstruction += `
+- suggestions language: must match the user's latest question language
+
+Latest user question:
+${truncateText(languageHint, 200)}`;
+  }
 
   return [{ role: 'system', content: systemInstruction }, ...normalized];
 }
@@ -654,6 +669,17 @@ function buildNonStreamingChatCompletionParams(params: {
     if (tool_choice) {
       payload.tool_choice = tool_choice;
     }
+    // Log the tools being sent to the API for debugging
+    console.warn('API request with tools', {
+      model,
+      toolCount: tools.length,
+      toolChoice: tool_choice,
+      tools: tools.map((t) => ({
+        name: t.function.name,
+        description: t.function.description,
+        parameters: t.function.parameters,
+      })),
+    });
   }
 
   return payload as unknown as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming;
@@ -1146,6 +1172,18 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
       );
 
       // Check for tool calls
+      // Log completion structure for debugging
+      const messageContent = completion.choices[0]?.message;
+      console.warn('Completion analysis', {
+        traceId,
+        hasMessage: !!messageContent,
+        hasToolCalls: !!messageContent?.tool_calls,
+        toolCallsCount: messageContent?.tool_calls?.length || 0,
+        hasContent: !!messageContent?.content,
+        contentPreview: messageContent?.content?.substring(0, 200),
+        toolCalls: messageContent?.tool_calls,
+      });
+
       const toolCalls = parseToolCalls(completion);
 
       if (toolCalls.length > 0 && mcpAgentStub && (await mcpAgentStub.isConfigured())) {
@@ -1220,12 +1258,32 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
 
         // Second LLM call: Generate final response with tool results
         // After tools are executed, we can use json_object format since no more tools will be called
+        // Rebuild messages WITHOUT tool instructions to avoid format confusion
+        const finalMessages = buildStructuredReplyMessages(
+          openAiMessages,
+          false, // No tools in second call
+          isImageRequest,
+          c.env,
+          message
+        );
+
+        // Add the assistant message with tool calls and tool results
+        finalMessages.push({
+          role: 'assistant',
+          content: completion.choices[0]?.message?.content || undefined,
+        } as (typeof finalMessages)[number]);
+
+        finalMessages.push({
+          role: 'user',
+          content: `Tool results:\n${toolResult.results}\n\nPlease provide your response based on these tool results.`,
+        });
+
         const finalCompletion = await withModelTimeout(
           () =>
             openai.chat.completions.create(
               buildNonStreamingChatCompletionParams({
                 model: candidateModel,
-                messages: enhancedMessages as Array<{
+                messages: finalMessages as Array<{
                   role: 'system' | 'user' | 'assistant';
                   content:
                     | string
