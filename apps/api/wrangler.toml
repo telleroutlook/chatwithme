@@ -67,3 +67,14 @@ class_name = "MCPAgent"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["MCPAgent"]
+
+# v2 migration added GLMServiceAgent
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["GLMServiceAgent"]
+
+# v3 migration deletes GLMServiceAgent (reverting the change)
+# Note: The binding has been removed from wrangler.toml
+[[migrations]]
+tag = "v3"
+deleted_classes = ["GLMServiceAgent"]
