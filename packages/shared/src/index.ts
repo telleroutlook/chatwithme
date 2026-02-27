@@ -128,3 +128,6 @@ export interface ChatResponseData {
 
 // Error monitoring types
 export * from './errorMonitoring';
+
+// Agent types
+export * from './agent-types';

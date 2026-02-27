@@ -12,8 +12,8 @@ declare namespace Cloudflare {
     ASSETS: Fetcher;
     ENVIRONMENT: 'production';
     OPENROUTER_BASE_URL: 'https://open.bigmodel.cn/api/coding/paas/v4';
-    OPENROUTER_CHAT_MODEL: 'GLM-4.7';
-    OPENROUTER_FALLBACK_MODEL: 'GLM-4.7-Flash';
+    OPENROUTER_CHAT_MODEL: 'GLM-5';
+    OPENROUTER_FALLBACK_MODEL: 'GLM-5-Flash';
     BIGMODEL_API_KEY: '';
   }
 }

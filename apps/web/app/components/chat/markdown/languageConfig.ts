@@ -3,7 +3,7 @@
  * Categorizes languages to determine default tab and preview behavior
  */
 
-export type LanguageCategory = 'previewable' | 'plaintext' | 'programming' | 'mermaid';
+export type LanguageCategory = 'previewable' | 'plaintext' | 'programming' | 'mermaid' | 'vegalite' | 'markdown';
 
 export interface LanguageConfig {
   category: LanguageCategory;
@@ -58,7 +58,9 @@ const LANGUAGE_EXTENSIONS: Record<string, string> = {
 };
 
 // Language categories
-const PREVIEWABLE_LANGUAGES = new Set(['html', 'htm', 'svg', 'xml', 'markdown', 'md']);
+const PREVIEWABLE_LANGUAGES = new Set(['html', 'htm', 'svg', 'xml']);
+
+const MARKDOWN_LANGUAGES = new Set(['markdown', 'md']);
 
 const PLAINTEXT_LANGUAGES = new Set(['txt', 'text', 'plain']);
 
@@ -103,6 +105,8 @@ const PROGRAMMING_LANGUAGES = new Set([
 
 const MERMAID_LANGUAGES = new Set(['mermaid']);
 
+const VEGALITE_LANGUAGES = new Set(['vega-lite', 'vegalite', 'vega']);
+
 /**
  * Get language configuration for a given language
  */
@@ -113,6 +117,10 @@ export function getLanguageConfig(language: string): LanguageConfig {
   let category: LanguageCategory;
   if (MERMAID_LANGUAGES.has(normalizedLang)) {
     category = 'mermaid';
+  } else if (VEGALITE_LANGUAGES.has(normalizedLang)) {
+    category = 'vegalite';
+  } else if (MARKDOWN_LANGUAGES.has(normalizedLang)) {
+    category = 'markdown';
   } else if (PREVIEWABLE_LANGUAGES.has(normalizedLang)) {
     category = 'previewable';
   } else if (PLAINTEXT_LANGUAGES.has(normalizedLang)) {
@@ -175,4 +183,20 @@ export function isProgrammingLanguage(language: string): boolean {
 export function isMermaidLanguage(language: string): boolean {
   const normalizedLang = language.toLowerCase().trim();
   return MERMAID_LANGUAGES.has(normalizedLang);
+}
+
+/**
+ * Check if a language is Vega-Lite
+ */
+export function isVegaLiteLanguage(language: string): boolean {
+  const normalizedLang = language.toLowerCase().trim();
+  return VEGALITE_LANGUAGES.has(normalizedLang);
+}
+
+/**
+ * Check if a language is Markdown
+ */
+export function isMarkdownLanguage(language: string): boolean {
+  const normalizedLang = language.toLowerCase().trim();
+  return MARKDOWN_LANGUAGES.has(normalizedLang);
 }

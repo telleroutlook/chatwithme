@@ -261,17 +261,18 @@ export const MessageInput = memo(function MessageInput({
       )}
 
       {/* Mobile button row */}
-      <div className="flex items-center justify-between gap-2 sm:hidden mb-2 input-action-row">
+      <div className="flex items-center justify-center gap-2 sm:hidden mb-2 input-action-row">
         <FileUploadButton
           onFileSelect={processFiles}
           disabled={disabled || isProcessing}
           isDragging={isDragging}
-          className="h-10 w-10 rounded-lg"
+          className="h-10 w-10 rounded-lg flex items-center justify-center"
         />
         <Button
           type="button"
+          variant="default"
           size="icon"
-          className="h-10 w-10 rounded-lg"
+          className="h-10 w-10 rounded-lg flex items-center justify-center"
           onClick={handleSubmit}
           disabled={disabled || (!message.trim() && files.length === 0) || hasProcessingFiles}
           aria-label={t('chat.input.send')}
@@ -281,12 +282,12 @@ export const MessageInput = memo(function MessageInput({
       </div>
 
       {/* Desktop row: FileUpload + TextInput + Send button */}
-      <div className="flex items-end gap-2">
+      <div className="hidden sm:flex items-end gap-2">
         <FileUploadButton
           onFileSelect={processFiles}
           disabled={disabled || isProcessing}
           isDragging={isDragging}
-          className="hidden sm:block h-11 w-11 rounded-xl"
+          className="h-11 w-11 rounded-xl flex items-center justify-center"
         />
 
         <TextInput
@@ -301,8 +302,9 @@ export const MessageInput = memo(function MessageInput({
 
         <Button
           type="button"
+          variant="default"
           size="icon"
-          className="hidden sm:block h-11 w-11 rounded-xl"
+          className="h-11 w-11 rounded-xl flex items-center justify-center"
           onClick={handleSubmit}
           disabled={disabled || (!message.trim() && files.length === 0) || hasProcessingFiles}
           aria-label={t('chat.input.send')}

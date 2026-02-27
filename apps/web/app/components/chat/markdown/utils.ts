@@ -140,20 +140,27 @@ export const isPreviewCodeComplete = (rawCode: string, isSvg: boolean): boolean 
   }
 
   if (isSvg) {
+    // For SVG, just need opening tag (closing tag check is too strict for partial SVG)
     if (!/<svg[\s>]/i.test(trimmedCode)) return false;
-    if (!/<\/svg>/i.test(trimmedCode)) return false;
   } else {
-    // For non-SVG code, apply length limits to avoid showing preview for short snippets
+    // For non-SVG code, apply minimal length limits to allow more previews
     const nonEmptyLines = trimmedCode.split('\n').filter((line) => line.trim().length > 0);
-    const minLines = 3;
-    const minChars = 100;
+    const minLines = 2; // Reduced from 3
+    const minChars = 50; // Reduced from 100
 
     if (nonEmptyLines.length < minLines && trimmedCode.length < minChars) {
       return false;
     }
   }
 
-  return hasBalancedHtmlTags(trimmedCode);
+  // Relax tag balance check for common cases
+  // Allow unbalanced tags if the content looks like valid HTML structure
+  const hasValidStructure =
+    /<\w+[^>]*>.*<\/\w+>/is.test(trimmedCode) || // Has paired tags
+    /<\w+[^>]*\/>/i.test(trimmedCode) || // Has self-closing tags
+    /<(?:div|span|p|a|button|input|img|br|hr|meta|link)[\s>]/i.test(trimmedCode); // Common HTML elements
+
+  return hasValidStructure || hasBalancedHtmlTags(trimmedCode);
 };
 
 export const parseSvgNumber = (value: string | null): number | null => {

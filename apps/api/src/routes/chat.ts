@@ -46,13 +46,13 @@ function getModelConfig(env: Env, modelType: ModelType): ModelConfig {
     case 'chat-primary':
       return {
         baseUrl: env.CHAT_PRIMARY_BASE_URL || defaultBaseUrl,
-        model: env.CHAT_PRIMARY_MODEL || 'GLM-4.7',
+        model: env.CHAT_PRIMARY_MODEL || 'GLM-5',
         apiKey: env.CHAT_PRIMARY_API_KEY || defaultApiKey,
       };
     case 'chat-fallback':
       return {
         baseUrl: env.CHAT_FALLBACK_BASE_URL || defaultBaseUrl,
-        model: env.CHAT_FALLBACK_MODEL || 'GLM-4.7-Flash',
+        model: env.CHAT_FALLBACK_MODEL || 'GLM-5-Flash',
         apiKey: env.CHAT_FALLBACK_API_KEY || defaultApiKey,
       };
     case 'image-primary':
@@ -758,7 +758,7 @@ Please analyze the provided image and respond in a helpful manner. Focus on desc
   );
 
   // When tools are available, prioritize tool calling over JSON response format
-  // GLM-4.7 cannot simultaneously support both tool_calls and json_object format
+  // GLM-5 cannot simultaneously support both tool_calls and json_object format
   if (hasTools) {
     let systemInstruction = `${baseSystemPrompt}
 
@@ -840,12 +840,26 @@ function buildNonStreamingChatCompletionParams(params: {
   tool_choice?: 'auto' | 'required';
   env?: Env;
 }): OpenAI.Chat.ChatCompletionCreateParamsNonStreaming {
-  const { model, messages, responseFormat = 'text', maxTokens, tools, tool_choice } = params;
+  const { model, messages, responseFormat = 'text', maxTokens, tools, tool_choice, env } = params;
+
+  // Configure stream based on environment variable (default: false)
+  const streamEnabled = env?.CHAT_STREAM_ENABLED === 'true' || env?.CHAT_STREAM_ENABLED === '1';
+
   const payload: Record<string, unknown> = {
     model,
     messages,
-    stream: false,
+    stream: streamEnabled,
   };
+
+  // Configure thinking based on environment variable (default: disabled)
+  if (env?.CHAT_THINKING_ENABLED !== undefined) {
+    const thinkingEnabled =
+      env.CHAT_THINKING_ENABLED === 'true' || env.CHAT_THINKING_ENABLED === '1';
+    payload.thinking = { type: thinkingEnabled ? 'enabled' : 'disabled' };
+  } else {
+    payload.thinking = { type: 'disabled' };
+  }
+
   if (typeof maxTokens === 'number') payload.max_tokens = maxTokens;
 
   if (responseFormat === 'json_object') {
@@ -1048,6 +1062,37 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
 
   const { userId } = getAuthInfo(c);
   const { conversationId, message, files, model: requestedModel } = c.req.valid('json');
+
+  // New path: Use Agent when X-Use-Agent header is present
+  if (c.req.header('X-Use-Agent') === 'true') {
+    try {
+      const agentId = c.env.ChatAgent.idFromName(conversationId);
+      const agentStub = c.env.ChatAgent.get(agentId);
+
+      // Initialize conversation context
+      await agentStub.initializeConversation({ conversationId, userId });
+
+      // Send message via Agent
+      const response = await agentStub.sendMessage({
+        message,
+        modelOverride: requestedModel,
+        files,
+      });
+
+      return c.json({
+        success: true,
+        data: response,
+      });
+    } catch (error) {
+      console.error('Agent path failed, falling back to REST', {
+        traceId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      // Fall through to REST path on error
+    }
+  }
+
+  // Legacy REST path (existing implementation)
   const db = createDb(c.env.DB);
 
   const conversation = await getConversationById(db, conversationId);
@@ -1188,7 +1233,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
 
   // First LLM call: Check if tools are needed
   // Note: When tools are present, we use 'text' format to allow function calling
-  // GLM-4.7 cannot simultaneously return both tool_calls and json_object format
+  // GLM-5 cannot simultaneously return both tool_calls and json_object format
   // Vision models also don't support json_object format
   for (const candidateConfig of modelCandidates) {
     try {

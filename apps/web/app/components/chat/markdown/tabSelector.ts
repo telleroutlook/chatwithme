@@ -17,23 +17,35 @@ interface TabSelectorConfig {
 /**
  * Get the default tab for a code block
  * Priority rules (from highest to lowest):
- * 1. Mermaid → handled separately
- * 2. Previewable AND preview ready → Preview
- * 3. Viewport < 640px AND programming → Title
- * 4. Programming AND lineCount <= 12 → Code
- * 5. Programming AND lineCount > 50 → Title
- * 6. Plaintext → Code
- * 7. Other → Title
+ * 1. Mermaid → Preview
+ * 2. Vega-Lite → Preview
+ * 3. Markdown → Preview
+ * 4. Previewable AND preview ready → Preview
+ * 5. Viewport < 640px AND programming → Title
+ * 6. Programming AND lineCount <= 12 → Code
+ * 7. Programming AND lineCount > 50 → Title
+ * 8. Plaintext → Code
+ * 9. Other → Title
  */
 export function getDefaultTab(config: TabSelectorConfig): CodeBlockTab {
   const { category, lineCount, isPreviewReady, viewportWidth } = config;
 
-  // Rule 1: Mermaid is handled separately in the parent component
+  // Rule 1: Mermaid always shows preview
   if (category === 'mermaid') {
-    return 'code';
+    return 'preview';
   }
 
-  // Rule 2: Previewable content with ready preview
+  // Rule 2: Vega-Lite always shows preview
+  if (category === 'vegalite') {
+    return 'preview';
+  }
+
+  // Rule 3: Markdown always shows preview
+  if (category === 'markdown') {
+    return 'preview';
+  }
+
+  // Rule 4: Previewable content with ready preview
   if (category === 'previewable' && isPreviewReady) {
     return 'preview';
   }

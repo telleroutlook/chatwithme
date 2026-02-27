@@ -57,7 +57,9 @@ export function FileUploadButton({
         disabled={disabled}
         title="Attach files (images, PDFs, Office docs, spreadsheets, code, text)"
       >
-        <Paperclip className="h-5 w-5" />
+        <div className="flex items-center justify-center">
+          <Paperclip className="h-5 w-5" />
+        </div>
       </Button>
 
       {isDragging && (

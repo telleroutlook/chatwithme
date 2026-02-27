@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuthStore } from '~/stores/auth';
 import { useChatStore } from '~/stores/chat';
@@ -61,6 +61,7 @@ export function Home() {
   // Chat actions
   const {
     loadConversations,
+    restoreActiveConversation,
     handleCreateConversation,
     handleSelectConversation,
     handleDeleteConversation,
@@ -79,6 +80,13 @@ export function Home() {
   const queryEnabled = !isAuthLoading;
   const { data: conversationsData = [] } = useConversations(queryEnabled);
   const { data: messagesData = [] } = useMessages(activeConversationId, queryEnabled);
+
+  // Restore active conversation when conversations data is loaded
+  useEffect(() => {
+    if (conversationsData.length > 0 && queryEnabled) {
+      restoreActiveConversation(conversationsData);
+    }
+  }, [conversationsData, queryEnabled, restoreActiveConversation]);
 
   // Use React Query data when available, otherwise fall back to store data
   const conversations = conversationsData.length > 0 ? conversationsData : storeConversations;
@@ -249,9 +257,16 @@ export function Home() {
 
           <footer className="shrink-0 px-1 pb-4 pt-0 sm:p-4 sm:pt-0">
             <div className="mx-auto w-full max-w-[1400px] px-1 sm:px-4 lg:px-6">
-              {/* Mobile new chat button */}
-              <div className="mb-2 sm:hidden">
-                <NewChatButton onClick={handleMobileNewChat} disabled={isLoading} />
+              {/* New chat button - both mobile and desktop */}
+              <div className="mb-2">
+                <NewChatButton
+                  onClick={handleMobileNewChat}
+                  disabled={isLoading}
+                  className="sm:hidden"
+                />
+                <div className="hidden sm:block">
+                  <NewChatButton onClick={handleMobileNewChat} disabled={isLoading} />
+                </div>
               </div>
 
               <MessageInput

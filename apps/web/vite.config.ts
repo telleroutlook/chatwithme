@@ -44,6 +44,10 @@ export default defineConfig({
             if (id.includes('mermaid')) {
               return 'mermaid';
             }
+            // Vega/Vega-Lite 图表库（延迟加载）
+            if (id.includes('vega') || id.includes('vega-lite') || id.includes('vega-embed')) {
+              return 'vega';
+            }
             // UI 库
             if (id.includes('lucide-react') || id.includes('@radix-ui')) {
               return 'ui-vendor';

@@ -1,12 +1,14 @@
 import type { Db } from './db';
 import { createDb } from './db';
 import type { MCPAgent } from './agents/mcp-agent';
+import type { ChatAgent } from './agents/chat-agent';
 
 export interface Env {
   DB: D1Database;
   BUCKET: R2Bucket;
   AI: Ai;
   MCPAgent: DurableObjectNamespace<MCPAgent>;
+  ChatAgent: DurableObjectNamespace<ChatAgent>;
   ENVIRONMENT: string;
 
   // 默认 API Key (当模型级别 API Key 未设置时使用)

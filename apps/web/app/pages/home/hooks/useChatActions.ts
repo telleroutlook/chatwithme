@@ -10,8 +10,12 @@ import type { Message, MessageFile, Conversation, ChatResponseData } from '@chat
 
 const ACTIVE_CONVERSATION_STORAGE_KEY = 'chatwithme-active-conversation-id';
 
+// Feature flag for Agent mode - set to true to enable Agent path
+const USE_AGENT_MODE = import.meta.env.VITE_USE_AGENT === 'true';
+
 export interface UseChatActionsReturn {
   loadConversations: () => Promise<void>;
+  restoreActiveConversation: (conversationsData: Conversation[]) => void;
   loadMessages: (conversationId: string) => Promise<void>;
   handleCreateConversation: () => Promise<void>;
   handleSelectConversation: (id: string) => void;
@@ -26,6 +30,18 @@ export interface UseChatActionsReturn {
     conversations: Conversation[]
   ) => void;
   handleLogout: () => Promise<void>;
+}
+
+/**
+ * Get headers for API requests
+ * When USE_AGENT_MODE is true, includes X-Use-Agent header to enable Agent path
+ */
+function getApiHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (USE_AGENT_MODE) {
+    headers['X-Use-Agent'] = 'true';
+  }
+  return headers;
 }
 
 export function useChatActions(): UseChatActionsReturn {
@@ -47,40 +63,47 @@ export function useChatActions(): UseChatActionsReturn {
 
   const loadConversations = useCallback(async () => {
     // Invalidate and refetch conversations using React Query
+    // The data will be available via useConversations hook
     await queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
+  }, [queryClient]);
 
-    // React Query will fetch the data, and the component will receive it via the hook
-    // We still keep the sync logic for localStorage
-    const savedActiveConversationId =
-      typeof window !== 'undefined'
-        ? window.localStorage.getItem(ACTIVE_CONVERSATION_STORAGE_KEY)
-        : null;
-    // Get fresh data from React Query cache after invalidation
-    const conversationsData = queryClient.getQueryData<Conversation[]>(queryKeys.conversations);
+  // Restore active conversation from localStorage when conversations data is loaded
+  const restoreActiveConversation = useCallback(
+    (conversationsData: Conversation[]) => {
+      if (!conversationsData || conversationsData.length === 0) return;
 
-    if (conversationsData) {
       // Sync to store for backward compatibility
       setConversations(conversationsData);
 
+      // Check if current active conversation is valid
       const hasCurrentActiveConversation = conversationsData.some(
         (conversation) => conversation.id === activeConversationId
       );
+
+      if (hasCurrentActiveConversation) {
+        return; // Keep current active conversation
+      }
+
+      // Try to restore from localStorage
+      const savedActiveConversationId =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem(ACTIVE_CONVERSATION_STORAGE_KEY)
+          : null;
+
       const hasSavedActiveConversation = savedActiveConversationId
         ? conversationsData.some((conversation) => conversation.id === savedActiveConversationId)
         : false;
-
-      if (hasCurrentActiveConversation) {
-        return;
-      }
 
       if (hasSavedActiveConversation) {
         setActiveConversation(savedActiveConversationId);
         return;
       }
 
+      // Default to first conversation
       setActiveConversation(conversationsData[0]?.id ?? null);
-    }
-  }, [activeConversationId, setConversations, setActiveConversation, queryClient]);
+    },
+    [activeConversationId, setConversations, setActiveConversation]
+  );
 
   const loadMessages = useCallback(
     async (conversationId: string) => {
@@ -103,6 +126,10 @@ export function useChatActions(): UseChatActionsReturn {
     const response = await api.post<{ conversation: Conversation }>('/chat/conversations', {});
     if (response.success && response.data) {
       addConversation(response.data.conversation);
+      // Persist to localStorage for restoration on page refresh
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(ACTIVE_CONVERSATION_STORAGE_KEY, response.data.conversation.id);
+      }
       // Invalidate conversations query to reflect the new conversation
       await queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
     }
@@ -111,6 +138,10 @@ export function useChatActions(): UseChatActionsReturn {
   const handleSelectConversation = useCallback(
     (id: string) => {
       setActiveConversation(id);
+      // Persist to localStorage for restoration on page refresh
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(ACTIVE_CONVERSATION_STORAGE_KEY, id);
+      }
     },
     [setActiveConversation]
   );
@@ -120,13 +151,17 @@ export function useChatActions(): UseChatActionsReturn {
       const response = await api.delete(`/chat/conversations/${id}`);
       if (response.success) {
         removeConversation(id);
+        // Clear localStorage if deleting the active conversation
+        if (activeConversationId === id && typeof window !== 'undefined') {
+          window.localStorage.removeItem(ACTIVE_CONVERSATION_STORAGE_KEY);
+        }
         // Invalidate conversations query to reflect the deletion
         await queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
         // Invalidate messages query for this conversation
         queryClient.removeQueries({ queryKey: queryKeys.messages(id) });
       }
     },
-    [removeConversation, queryClient]
+    [removeConversation, queryClient, activeConversationId]
   );
 
   const handleRenameConversation = useCallback(
@@ -185,11 +220,15 @@ export function useChatActions(): UseChatActionsReturn {
       setPendingConversation(conversationId);
 
       try {
-        const response = await api.post<ChatResponseData>('/chat/respond', {
-          conversationId,
-          message,
-          files,
-        });
+        const response = await api.post<ChatResponseData>(
+          '/chat/respond',
+          {
+            conversationId,
+            message,
+            files,
+          },
+          { headers: getApiHeaders() }
+        );
 
         if (!response.success || !response.data) {
           throw new Error('响应失败');
@@ -254,11 +293,15 @@ export function useChatActions(): UseChatActionsReturn {
       setPendingConversation(activeConversationId);
 
       try {
-        const response = await api.post<ChatResponseData>('/chat/respond', {
-          conversationId: activeConversationId,
-          message: lastUserMessage.message,
-          files: lastUserMessage.files || undefined,
-        });
+        const response = await api.post<ChatResponseData>(
+          '/chat/respond',
+          {
+            conversationId: activeConversationId,
+            message: lastUserMessage.message,
+            files: lastUserMessage.files || undefined,
+          },
+          { headers: getApiHeaders() }
+        );
 
         if (!response.success || !response.data) {
           throw new Error('响应失败');
@@ -338,6 +381,7 @@ export function useChatActions(): UseChatActionsReturn {
 
   return {
     loadConversations,
+    restoreActiveConversation,
     loadMessages,
     handleCreateConversation,
     handleSelectConversation,

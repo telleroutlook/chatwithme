@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { routeAgentRequest } from 'agents';
 import { corsMiddleware } from './middleware';
 import authRoutes from './routes/auth';
 import chatRoutes from './routes/chat';
@@ -7,6 +8,7 @@ import type { AppBindings, Env } from './store-context';
 import { ERROR_CODES } from './constants/error-codes';
 import { errorResponse } from './utils/response';
 import { MCPAgent } from './agents/mcp-agent';
+import { ChatAgent } from './agents/chat-agent';
 
 // Extend Env type to include ASSETS binding
 interface ExtendedEnv extends Env {
@@ -62,7 +64,13 @@ export default {
   async fetch(request: Request, env: ExtendedEnv, ctx: ExecutionContext) {
     const url = new URL(request.url);
 
-    // Handle API routes (auth, chat, file, health)
+    // Priority 1: Agent WebSocket routes
+    const agentResponse = await routeAgentRequest(request, env, { cors: true });
+    if (agentResponse) {
+      return agentResponse;
+    }
+
+    // Priority 2: Handle API routes (auth, chat, file, health)
     if (
       url.pathname.startsWith('/auth') ||
       url.pathname.startsWith('/chat') ||
@@ -72,14 +80,14 @@ export default {
       return app.fetch(request, env, ctx);
     }
 
-    // For all other requests, serve static assets
+    // Priority 3: For all other requests, serve static assets
     // This handles the React SPA
     return env.ASSETS.fetch(request);
   },
 };
 
 // Export Durable Objects for Wrangler
-export { MCPAgent };
+export { MCPAgent, ChatAgent };
 
 // Export type for Hono client
 export type AppType = typeof app;

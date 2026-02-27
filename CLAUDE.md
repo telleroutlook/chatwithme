@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture Overview
 
-This is a Turborepo monorepo for a Cloudflare Workers full-stack AI chat application using GLM-4.7 models.
+This is a Turborepo monorepo for a Cloudflare Workers full-stack AI chat application using GLM-5 models.
 
 ### Repository Structure
 
@@ -23,7 +23,7 @@ chatwithme/
 
 - **Backend**: Hono + Cloudflare Workers + Drizzle ORM (D1)
 - **Frontend**: React Router v7 + React 19 + TanStack Query + Zustand
-- **AI**: OpenAI SDK with GLM-4.7 (chat) + GLM-4.6v (vision)
+- **AI**: OpenAI SDK with GLM-5 (chat) + GLM-4.6v (vision)
 - **MCP**: Cloudflare Agent SDK with Durable Objects for MCP server connections
 - **Storage**: D1 (metadata) + R2 (files)
 
@@ -121,7 +121,7 @@ Durable Object that manages connections to external MCP servers (web search, web
 ### Routes Structure
 
 - `routes/auth.ts`: Authentication (signup, signin, refresh token)
-- `routes/chat.ts`: Chat completions with GLM-4.7, tool calling, file handling
+- `routes/chat.ts`: Chat completions with GLM-5, tool calling, file handling
 - `routes/file.ts`: File upload to R2 with public URL generation
 
 ### Models (src/models/)

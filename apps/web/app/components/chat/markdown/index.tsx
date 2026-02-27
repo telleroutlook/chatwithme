@@ -2,27 +2,25 @@ import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
-import { Suspense, lazy, memo } from 'react';
+import { memo } from 'react';
 import 'katex/dist/katex.min.css';
 import { cn } from '~/lib/utils';
 import { extractText, normalizeMarkdownContent } from './utils';
 import { KatexRenderer } from './KatexBlock';
 import { CodeBlockWithPreview } from './CodeBlock';
 import { CodeHighlightTheme } from './CodeHighlightTheme';
+import { useThemeStore } from '~/stores/theme';
 import type { MarkdownRendererProps } from './types';
-import { Loader2 } from 'lucide-react';
-
-const LazyMermaidRenderer = lazy(() =>
-  import('./MermaidBlock').then((m) => ({ default: m.MermaidRenderer }))
-);
 
 export const MarkdownRenderer = memo<MarkdownRendererProps>(({ content, className }) => {
   const normalizedContent = normalizeMarkdownContent(content);
+  const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
 
   return (
     <div
       className={cn(
-        'prose prose-invert max-w-none break-words',
+        'prose max-w-none break-words',
+        resolvedTheme === 'dark' ? 'prose-invert' : '',
         '[&_pre]:max-w-full [&_pre]:overflow-x-auto',
         '[&_table]:block [&_table]:w-full [&_table]:overflow-x-auto',
         '[&_img]:max-w-full',
@@ -50,33 +48,9 @@ export const MarkdownRenderer = memo<MarkdownRendererProps>(({ content, classNam
             }
 
             const isBlock = !inline && (!!match || rawText.includes('\n'));
-            const isMermaid = language.toLowerCase() === 'mermaid';
-
-            if (isBlock && isMermaid) {
-              return (
-                <Suspense
-                  fallback={
-                    <div className="my-4 rounded-lg border border-border bg-background overflow-hidden">
-                      <div className="px-3 py-2 border-b border-border">
-                        <span className="text-xs text-muted-foreground font-mono">mermaid</span>
-                      </div>
-                      <div className="p-8 flex items-center justify-center min-h-[120px]">
-                        <div className="flex flex-col items-center gap-2">
-                          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                          <span className="text-xs text-muted-foreground">Loading diagram...</span>
-                        </div>
-                      </div>
-                    </div>
-                  }
-                >
-                  <LazyMermaidRenderer chart={rawText} />
-                </Suspense>
-              );
-            }
 
             if (isBlock) {
-              // For future context inference, we could pass preceding text here
-              // Currently using empty string as default
+              // All code blocks including mermaid now go through CodeBlockWithPreview
               return (
                 <CodeBlockWithPreview className={className} language={language} context="">
                   {children}

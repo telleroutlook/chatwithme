@@ -15,7 +15,7 @@ ENVIRONMENT = "production"
 
 # 聊天主模型配置
 CHAT_PRIMARY_BASE_URL = "https://open.bigmodel.cn/api/coding/paas/v4"
-CHAT_PRIMARY_MODEL = "GLM-4.7"
+CHAT_PRIMARY_MODEL = "GLM-5"
 
 # 聊天备用模型配置
 CHAT_FALLBACK_BASE_URL = "https://www.kegui.net/v1"
@@ -78,3 +78,13 @@ new_sqlite_classes = ["GLMServiceAgent"]
 [[migrations]]
 tag = "v3"
 deleted_classes = ["GLMServiceAgent"]
+
+# ChatAgent DurableObject binding
+[[durable_objects.bindings]]
+name = "ChatAgent"
+class_name = "ChatAgent"
+
+# v4 migration adds ChatAgent
+[[migrations]]
+tag = "v4"
+new_sqlite_classes = ["ChatAgent"]

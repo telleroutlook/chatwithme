@@ -18,6 +18,10 @@ export interface DownloadButtonProps {
   language: string;
   filename?: string;
   onDownloadAsPng?: () => void;
+  isVegaLite?: boolean;
+  isMermaid?: boolean;
+  isMarkdown?: boolean;
+  markdownContainerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 export interface CodeBlockWithPreviewProps {
@@ -36,7 +40,7 @@ export interface MarkdownRendererProps {
 export type CodeBlockTab = 'title' | 'code' | 'preview';
 
 // Language category
-export type LanguageCategory = 'previewable' | 'plaintext' | 'programming' | 'mermaid';
+export type LanguageCategory = 'previewable' | 'plaintext' | 'programming' | 'mermaid' | 'vegalite' | 'markdown';
 
 // Language configuration
 export interface LanguageConfig {
