@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuthStore } from '~/stores/auth';
 import { useChatStore } from '~/stores/chat';
-import { type ThemeMode, useThemeStore } from '~/stores/theme';
+import { useThemeStore } from '~/stores/theme';
 import { useTranslation } from '~/i18n';
 import { MessageInput } from '~/components/chat/MessageInput';
 import { Header } from './Header';
@@ -15,32 +15,42 @@ import { cn } from '~/lib/utils';
 import { useEdgeSwipe } from '~/hooks/useTouchGesture';
 import { MessageActions } from '~/components/chat/MessageActions';
 import { useMessageActions } from '~/components/chat/useMessageActions';
+import { useSidebarState } from '~/hooks/useSidebarState';
+import { useMobileViewport } from '~/hooks/useMobileViewport';
+import { useAuthGuard } from '~/hooks/useAuthGuard';
+import { useThemeCycle } from '~/hooks/useThemeCycle';
+import { MobileSidebarOverlay } from '~/components/layout/MobileSidebarOverlay';
+import { SidebarDragHandle } from '~/components/layout/SidebarDragHandle';
+import { NewChatButton } from '~/components/chat/NewChatButton';
 
-const SIDEBAR_WIDTH_KEY = 'chatwithme-sidebar-width';
-const SIDEBAR_COLLAPSED_KEY = 'chatwithme-sidebar-collapsed';
-const CONFIG = {
-  MIN_WIDTH: 220,
-  DEFAULT_WIDTH: 280,
-  MAX_WIDTH: 450,
-};
-
+/**
+ * Home Page Component
+ *
+ * Main chat interface with sidebar, message list, and input.
+ * Handles authentication guard, theme cycling, and mobile viewport adaptation.
+ */
 export function Home() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const mainContainerRef = useRef<HTMLDivElement>(null);
 
   // Sidebar State
-  const [sidebarWidth, setSidebarWidth] = useState(CONFIG.DEFAULT_WIDTH);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false); // Mobile drawer
-  const [isResizing, setIsResizing] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [deletingConversationId, setDeletingConversationId] = useState<string | null>(null);
+  const { sidebarWidth, sidebarCollapsed, isResizing, startResizing, toggleSidebar } =
+    useSidebarState();
+
+  // Mobile viewport adaptation
+  useMobileViewport();
+
+  // Theme cycling
+  const onThemeCycle = useThemeCycle();
 
   // Message actions menu state
   const { activeMenu, showMenu, hideMenu } = useMessageActions();
 
-  const { isAuthenticated, hasHydrated, user } = useAuthStore();
-  const { mode: themeMode, setMode: setThemeMode } = useThemeStore();
+  const { user } = useAuthStore();
+  const { mode: themeMode } = useThemeStore();
   const {
     conversations: storeConversations,
     activeConversationId,
@@ -48,27 +58,9 @@ export function Home() {
     isLoading,
   } = useChatStore();
 
-  // React Query hooks for data fetching with caching
-  const queryEnabled = hasHydrated && isAuthenticated;
-  const { data: conversationsData = [] } = useConversations(queryEnabled);
-  const { data: messagesData = [] } = useMessages(activeConversationId, queryEnabled);
-
-  // Use React Query data when available, otherwise fall back to store data
-  const conversations = conversationsData.length > 0 ? conversationsData : storeConversations;
-  // For messages, we use a hybrid approach: React Query for initial load, store for real-time updates
-  const currentMessages = useMemo(() => {
-    // If we have messages in the store (from send/regenerate), use those
-    const storedMessages = activeConversationId ? messages[activeConversationId] || [] : [];
-    // If React Query has data and we don't have store updates, use React Query data
-    if (storedMessages.length === 0 && messagesData.length > 0) {
-      return messagesData;
-    }
-    return storedMessages;
-  }, [activeConversationId, messages, messagesData]);
-
+  // Chat actions
   const {
     loadConversations,
-    loadMessages: _loadMessages,
     handleCreateConversation,
     handleSelectConversation,
     handleDeleteConversation,
@@ -80,92 +72,31 @@ export function Home() {
     handleLogout,
   } = useChatActions();
 
-  // Persistence & Initial Load - moved to useEffect to avoid hydration issues
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
+  // Auth guard with data loading
+  const { isLoading: isAuthLoading } = useAuthGuard(loadConversations);
 
-    const savedWidth = localStorage.getItem(SIDEBAR_WIDTH_KEY);
-    const savedCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-    if (savedWidth) setSidebarWidth(Math.min(parseInt(savedWidth, 10), CONFIG.MAX_WIDTH));
-    if (savedCollapsed === 'true') setSidebarCollapsed(true);
-  }, []);
+  // React Query data fetching
+  const queryEnabled = !isAuthLoading;
+  const { data: conversationsData = [] } = useConversations(queryEnabled);
+  const { data: messagesData = [] } = useMessages(activeConversationId, queryEnabled);
 
-  // Resize Handling
-  const startResizing = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing(true);
-  }, []);
-
-  const stopResizing = useCallback(() => {
-    setIsResizing(false);
-    localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
-  }, [sidebarWidth]);
-
-  const resize = useCallback(
-    (e: MouseEvent) => {
-      if (!isResizing) return;
-      const newWidth = e.clientX;
-      if (newWidth >= CONFIG.MIN_WIDTH && newWidth <= CONFIG.MAX_WIDTH) {
-        setSidebarWidth(newWidth);
-      }
-    },
-    [isResizing]
-  );
-
-  useEffect(() => {
-    if (!isResizing) return;
-    window.addEventListener('mousemove', resize);
-    window.addEventListener('mouseup', stopResizing);
-    return () => {
-      window.removeEventListener('mousemove', resize);
-      window.removeEventListener('mouseup', stopResizing);
-    };
-  }, [isResizing, resize, stopResizing]);
-
-  // Auth & Data sync
-  useEffect(() => {
-    if (!hasHydrated) return;
-    if (!isAuthenticated) navigate('/signin');
-    else loadConversations();
-  }, [hasHydrated, isAuthenticated, navigate, loadConversations]);
-
-  // Visual Viewport API for mobile keyboard adaptation
-  useEffect(() => {
-    if (typeof window === 'undefined' || !('visualViewport' in window)) return;
-
-    const viewport = window.visualViewport!;
-    const handleResize = () => {
-      // Set CSS custom property for visual viewport height
-      document.documentElement.style.setProperty(
-        '--visual-viewport-height',
-        `${viewport.height}px`
-      );
-    };
-
-    // Initial set
-    handleResize();
-
-    viewport.addEventListener('resize', handleResize);
-    return () => viewport.removeEventListener('resize', handleResize);
-  }, []);
-
-  // Note: React Query's useMessages hook automatically fetches when activeConversationId changes
-  // No need for manual loadMessages effect here
+  // Use React Query data when available, otherwise fall back to store data
+  const conversations = conversationsData.length > 0 ? conversationsData : storeConversations;
+  const currentMessages = useMemo(() => {
+    const storedMessages = activeConversationId ? messages[activeConversationId] || [] : [];
+    if (storedMessages.length === 0 && messagesData.length > 0) {
+      return messagesData;
+    }
+    return storedMessages;
+  }, [activeConversationId, messages, messagesData]);
 
   const onSidebarToggle = useCallback(() => {
     if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
-      const newState = !sidebarCollapsed;
-      setSidebarCollapsed(newState);
-      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(newState));
+      toggleSidebar();
     } else {
       setSidebarOpen(true);
     }
-  }, [sidebarCollapsed]);
-
-  const onThemeCycle = useCallback(() => {
-    const order: ThemeMode[] = ['system', 'dark', 'light'];
-    setThemeMode(order[(order.indexOf(themeMode) + 1) % order.length]);
-  }, [themeMode, setThemeMode]);
+  }, [toggleSidebar]);
 
   const onDelete = useCallback(
     async (id: string) => {
@@ -207,8 +138,14 @@ export function Home() {
     [handleSelectConversation]
   );
 
+  // Mobile: Create new conversation and close sidebar
+  const handleMobileNewChat = useCallback(async () => {
+    await handleCreateConversation();
+    setSidebarOpen(false);
+  }, [handleCreateConversation]);
+
   // Wait for hydration to complete before rendering
-  if (typeof window === 'undefined' || !hasHydrated || !isAuthenticated) {
+  if (isAuthLoading) {
     return null;
   }
 
@@ -238,12 +175,7 @@ export function Home() {
         )}
       >
         {/* Mobile Overlay */}
-        {sidebarOpen && (
-          <div
-            className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm lg:hidden animate-in fade-in duration-200"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
+        <MobileSidebarOverlay isOpen={sidebarOpen} onClick={() => setSidebarOpen(false)} />
 
         {/* Mobile Sidebar */}
         <div className="lg:hidden">
@@ -288,14 +220,7 @@ export function Home() {
         </aside>
 
         {/* Drag Handle */}
-        {!sidebarCollapsed && (
-          <div
-            onMouseDown={startResizing}
-            className="hidden lg:flex w-1 hover:w-1.5 active:w-1.5 transition-all cursor-col-resize items-center justify-center z-40 group -ml-[2px]"
-          >
-            <div className="h-10 w-[2px] rounded-full bg-border group-hover:bg-primary/50 group-active:bg-primary transition-colors" />
-          </div>
-        )}
+        <SidebarDragHandle collapsed={sidebarCollapsed} onMouseDown={startResizing} />
 
         {/* Main Area */}
         <main className="flex min-w-0 flex-1 flex-col relative z-10">
@@ -322,16 +247,19 @@ export function Home() {
             />
           </div>
 
-          <footer className="shrink-0 p-4 pt-0">
-            <div className="mx-auto w-full max-w-[1400px] px-2 sm:px-4 lg:px-6">
+          <footer className="shrink-0 px-1 pb-4 pt-0 sm:p-4 sm:pt-0">
+            <div className="mx-auto w-full max-w-[1400px] px-1 sm:px-4 lg:px-6">
+              {/* Mobile new chat button */}
+              <div className="mb-2 sm:hidden">
+                <NewChatButton onClick={handleMobileNewChat} disabled={isLoading} />
+              </div>
+
               <MessageInput
                 onSend={handleSendMessage}
                 disabled={isLoading}
                 autoFocus
                 placeholder={
-                  activeConversationId
-                    ? t('chat.input.placeholder')
-                    : t('chat.empty.getStarted')
+                  activeConversationId ? t('chat.input.placeholder') : t('chat.empty.getStarted')
                 }
               />
               <p className="mt-2 text-center text-[10px] text-muted-foreground/50">

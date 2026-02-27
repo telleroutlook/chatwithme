@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLanguageStore, type AppLocale } from '../stores/language';
-import { en } from './locales/en';
-import { zh } from './locales/zh';
+import { en, type EnTranslations } from './locales/en';
+import { zh, type ZhTranslations } from './locales/zh';
 
-// All translations loaded statically
-const translations: Record<AppLocale, any> = {
+// All translations loaded statically with proper typing
+const translations: Record<AppLocale, EnTranslations | ZhTranslations> = {
   en,
   zh,
 };
@@ -13,12 +13,12 @@ const translations: Record<AppLocale, any> = {
  * Deeply get a nested value from an object using dot notation
  * @example getNestedValue(obj, 'a.b.c') -> obj.a.b.c
  */
-function getNestedValue(obj: any, path: string): string {
+function getNestedValue(obj: EnTranslations | ZhTranslations, path: string): string {
   const keys = path.split('.');
-  let result = obj;
+  let result: unknown = obj;
   for (const key of keys) {
     if (result == null) return path; // Return key if not found
-    result = result[key];
+    result = (result as Record<string, unknown>)[key];
   }
   return typeof result === 'string' ? result : path; // Return key if not a string
 }
@@ -36,7 +36,7 @@ function interpolate(template: string, variables: Record<string, string | number
 /**
  * Get translations for a locale
  */
-function getTranslations(locale: AppLocale): any {
+function getTranslations(locale: AppLocale): EnTranslations | ZhTranslations {
   return translations[locale];
 }
 

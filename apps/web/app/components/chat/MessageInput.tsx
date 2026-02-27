@@ -231,7 +231,7 @@ export const MessageInput = memo(function MessageInput({
   return (
     <div
       className={cn(
-        'safe-area-bottom relative border-t border-border bg-card/95 px-3 pb-3 pt-2.5 transition-colors backdrop-blur-lg sm:px-4 sm:pb-4 sm:pt-3',
+        'safe-area-bottom relative border-t border-border bg-card/95 px-2 pb-3 pt-2.5 transition-colors backdrop-blur-lg sm:px-4 sm:pb-4 sm:pt-3',
         isDragging && 'bg-primary/10'
       )}
       onDrop={handleDrop}
@@ -260,11 +260,33 @@ export const MessageInput = memo(function MessageInput({
         </div>
       )}
 
+      {/* Mobile button row */}
+      <div className="flex items-center justify-between gap-2 sm:hidden mb-2 input-action-row">
+        <FileUploadButton
+          onFileSelect={processFiles}
+          disabled={disabled || isProcessing}
+          isDragging={isDragging}
+          className="h-10 w-10 rounded-lg"
+        />
+        <Button
+          type="button"
+          size="icon"
+          className="h-10 w-10 rounded-lg"
+          onClick={handleSubmit}
+          disabled={disabled || (!message.trim() && files.length === 0) || hasProcessingFiles}
+          aria-label={t('chat.input.send')}
+        >
+          <Send className="h-5 w-5" />
+        </Button>
+      </div>
+
+      {/* Desktop row: FileUpload + TextInput + Send button */}
       <div className="flex items-end gap-2">
         <FileUploadButton
           onFileSelect={processFiles}
           disabled={disabled || isProcessing}
           isDragging={isDragging}
+          className="hidden sm:block h-11 w-11 rounded-xl"
         />
 
         <TextInput
@@ -280,7 +302,7 @@ export const MessageInput = memo(function MessageInput({
         <Button
           type="button"
           size="icon"
-          className="h-11 w-11 rounded-xl"
+          className="hidden sm:block h-11 w-11 rounded-xl"
           onClick={handleSubmit}
           disabled={disabled || (!message.trim() && files.length === 0) || hasProcessingFiles}
           aria-label={t('chat.input.send')}

@@ -1,8 +1,5 @@
-import { common } from '../namespaces/common';
-import { auth } from '../namespaces/auth';
-import { chat } from '../namespaces/chat';
-import { settings } from '../namespaces/settings';
-
+// Note: This file uses inline translations instead of namespace imports
+// because the Chinese translations are defined here directly for better maintainability
 export const zh = {
   common: {
     // Actions

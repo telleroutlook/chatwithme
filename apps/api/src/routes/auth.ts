@@ -15,7 +15,7 @@ import { signAccessToken, signRefreshToken, verifyToken } from '../utils/jwt';
 import { authMiddleware, getAuthInfo } from '../middleware/auth';
 import { ERROR_CODES } from '../constants/error-codes';
 import { errorResponse, validationErrorHook } from '../utils/response';
-import type { AuthResponse, UserSafe, AppLocale } from '../types';
+import type { AuthResponse, UserSafe } from '../types';
 
 const auth = new Hono<AppBindings>();
 

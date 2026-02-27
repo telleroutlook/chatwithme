@@ -14,10 +14,11 @@ export const FULL_HTML_DOC_PATTERN = /^\s*(?:<!DOCTYPE\s+html[^>]*>\s*)?<html[\s
 const EMBEDDED_HTML_DOC_PATTERN = /(?:<!DOCTYPE\s+html[^>]*>\s*)?<html[\s\S]*?<\/html>/i;
 
 // HTML entity decoder - decodes common HTML entities like &lt;, &gt;, &amp;, &quot;, etc.
+// Security: Use DOMParser with text/html instead of innerHTML to prevent XSS
 function decodeHtmlEntities(text: string): string {
-  const textarea = document.createElement('textarea');
-  textarea.innerHTML = text;
-  return textarea.value;
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(`<decode>${text}</decode>`, 'text/html');
+  return doc.documentElement.textContent ?? text;
 }
 
 // LRU cache for normalized markdown content

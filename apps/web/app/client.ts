@@ -33,15 +33,15 @@ class ApiClient {
   ): Promise<ApiResponse<T>> {
     const { withAuth = true, ...fetchOptions } = options;
 
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...options.headers,
+      ...(options.headers as Record<string, string>),
     };
 
     if (withAuth) {
       const tokens = useAuthStore.getState().tokens;
       if (tokens) {
-        (headers as Record<string, string>)['Authorization'] = `Bearer ${tokens.accessToken}`;
+        headers.Authorization = `Bearer ${tokens.accessToken}`;
       }
     }
 

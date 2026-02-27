@@ -29,9 +29,7 @@ export function EmptyConversations({ onCreateNew, className = '' }: EmptyConvers
       <h3 className="mb-2 text-center text-lg font-semibold text-foreground">
         {t('chat.sidebar.noConversations')}
       </h3>
-      <p className="max-w-xs text-center text-sm leading-relaxed">
-        {t('chat.sidebar.startFirst')}
-      </p>
+      <p className="max-w-xs text-center text-sm leading-relaxed">{t('chat.sidebar.startFirst')}</p>
 
       {/* Action button */}
       {onCreateNew && (

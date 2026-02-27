@@ -114,6 +114,7 @@ npm run db:studio
 ### MCPAgent (src/agents/mcp-agent.ts)
 
 Durable Object that manages connections to external MCP servers (web search, web reader). Uses Cloudflare Agent SDK's `mcp` client. Key methods:
+
 - `getAITools()`: Returns AI SDK compatible tools
 - `callTool()`: Executes a tool call via MCP
 
@@ -126,6 +127,7 @@ Durable Object that manages connections to external MCP servers (web search, web
 ### Models (src/models/)
 
 Drizzle schema files using `sqliteTable`:
+
 - `users.ts`: User accounts with email/password
 - `conversations.ts`: Chat conversations per user
 - `messages.ts`: Messages with JSON columns for files, search results, image analyses
@@ -134,6 +136,7 @@ Drizzle schema files using `sqliteTable`:
 ### Environment Variables
 
 Set via `wrangler secret`:
+
 - `OPENROUTER_API_KEY` or `BIGMODEL_API_KEY`: Required for AI/MCP
 - `JWT_SECRET`: For token signing
 
@@ -154,6 +157,7 @@ Set via `wrangler secret`:
 ### API Client (app/client.ts)
 
 ApiClient class with:
+
 - Automatic Bearer token injection
 - Token refresh on 401
 - Retry with exponential backoff for 5xx errors
@@ -167,6 +171,7 @@ ApiClient class with:
 ### Code Splitting (vite.config.ts)
 
 Manual chunks for lazy loading:
+
 - `markdown`: react-markdown, rehype, remark, highlight.js
 - `katex`: Math rendering
 - `mermaid`: Diagram rendering (2.4MB, on-demand)
@@ -180,6 +185,7 @@ Manual chunks for lazy loading:
 ## Shared Types (packages/shared)
 
 TypeScript types shared between frontend and backend:
+
 - `User`, `Conversation`, `Message`: Core domain types
 - `MessageFile`, `SearchResult`, `ImageAnalysis`: Message content types
 - `AuthTokens`, `AuthResponse`: Authentication types
@@ -220,6 +226,7 @@ Use `useChatStore` for chat operations or `ApiClient` directly from `app/client.
 Production URL: https://chatwithme.lintao-mailbox.workers.dev
 
 The `npm run deploy` script:
+
 1. Builds the React app to `apps/web/build/client`
 2. Deploys the Cloudflare Worker with static assets via wrangler
 3. Worker serves API routes AND static assets (single app)

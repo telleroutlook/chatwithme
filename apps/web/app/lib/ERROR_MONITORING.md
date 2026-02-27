@@ -46,6 +46,7 @@ VITE_APP_VERSION=1.0.0
 ### Monitoring Services
 
 #### Console (Default)
+
 Errors are logged to the console with structured formatting. Best for development.
 
 ```bash
@@ -53,6 +54,7 @@ VITE_MONITORING_SERVICE=console
 ```
 
 #### Sentry
+
 Integration with Sentry.io for production error tracking.
 
 ```bash
@@ -61,6 +63,7 @@ VITE_ERROR_MONITORING_ENDPOINT=https://your-sentry-dsn@sentry.io/project-id
 ```
 
 #### Custom Endpoint
+
 Send errors to your own monitoring service.
 
 ```bash
@@ -69,6 +72,7 @@ VITE_ERROR_MONITORING_ENDPOINT=https://your-api.com/errors
 ```
 
 Expected payload format:
+
 ```json
 {
   "id": "err_1234567890_abc123",
@@ -100,7 +104,7 @@ try {
 } catch (error) {
   reportError(error, {
     tags: { operation: 'data-fetch' },
-    metadata: { url: '/api/data' }
+    metadata: { url: '/api/data' },
   });
 }
 ```
@@ -200,7 +204,7 @@ addBreadcrumb({
   message: 'User clicked submit',
   category: 'user-action',
   level: 'info',
-  data: { formId: 'contact-form' }
+  data: { formId: 'contact-form' },
 });
 
 // Via hook
@@ -225,6 +229,7 @@ VITE_ERROR_MAX_PER_HOUR=50
 ### Recommended Services
 
 #### 1. Sentry (Recommended)
+
 - Excellent JavaScript/TypeScript support
 - Works with Cloudflare Workers
 - Rich context and breadcrumbs
@@ -235,6 +240,7 @@ npm install @sentry/browser
 ```
 
 Add to `app/root.tsx`:
+
 ```typescript
 import * as Sentry from '@sentry/browser';
 
@@ -248,6 +254,7 @@ if (import.meta.env.PROD) {
 ```
 
 #### 2. Custom Cloudflare Workers Endpoint
+
 Create a Worker endpoint that receives errors and stores them (D1/R2).
 
 ```typescript
@@ -260,16 +267,18 @@ export default {
       // Store in D1
       await env.DB.prepare(
         'INSERT INTO errors (id, name, message, context, timestamp) VALUES (?, ?, ?, ?, ?)'
-      ).bind(error.id, error.name, error.message, JSON.stringify(error.context), error.timestamp)
-       .run();
+      )
+        .bind(error.id, error.name, error.message, JSON.stringify(error.context), error.timestamp)
+        .run();
 
       return Response.json({ success: true });
     }
-  }
-}
+  },
+};
 ```
 
 #### 3. LogPush Services
+
 - Cloudflare LogPush to external analysis tools
 - Datadog, New Relic, or other observability platforms
 

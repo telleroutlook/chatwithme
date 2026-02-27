@@ -48,56 +48,22 @@ export class MCPAgent extends Agent<Env, MCPAgentState> {
       return;
     }
 
-    const searchUrl =
-      this.env.MCP_WEB_SEARCH_URL || 'https://open.bigmodel.cn/api/mcp/web_search_prime/mcp';
-    const readerUrl =
-      this.env.MCP_WEB_READER_URL || 'https://open.bigmodel.cn/api/mcp/web_reader/mcp';
+    const services = [
+      {
+        key: 'web_search',
+        url: this.env.MCP_WEB_SEARCH_URL || 'https://open.bigmodel.cn/api/mcp/web_search_prime/mcp',
+      },
+      {
+        key: 'web_reader',
+        url: this.env.MCP_WEB_READER_URL || 'https://open.bigmodel.cn/api/mcp/web_reader/mcp',
+      },
+    ];
 
     try {
-      // Connect to search service if not already connected
-      if (!this.state.connections['web_search']) {
-        await this.mcp.connect(searchUrl, {
-          transport: {
-            type: 'streamable-http',
-            requestInit: {
-              headers: { Authorization: `Bearer ${apiKey}` },
-            },
-          },
-        });
-
-        this.setState({
-          connections: {
-            ...this.state.connections,
-            web_search: {
-              url: searchUrl,
-              connectedAt: Date.now(),
-              lastUsed: Date.now(),
-            },
-          },
-        });
-      }
-
-      // Connect to reader service if not already connected
-      if (!this.state.connections['web_reader']) {
-        await this.mcp.connect(readerUrl, {
-          transport: {
-            type: 'streamable-http',
-            requestInit: {
-              headers: { Authorization: `Bearer ${apiKey}` },
-            },
-          },
-        });
-
-        this.setState({
-          connections: {
-            ...this.state.connections,
-            web_reader: {
-              url: readerUrl,
-              connectedAt: Date.now(),
-              lastUsed: Date.now(),
-            },
-          },
-        });
+      for (const service of services) {
+        if (!this.state.connections[service.key]) {
+          await this.connectService(service.key, service.url, apiKey);
+        }
       }
 
       // eslint-disable-next-line no-console -- MCP connection logging for debugging
@@ -106,6 +72,34 @@ export class MCPAgent extends Agent<Env, MCPAgentState> {
       console.error('MCPAgent: Failed to establish connections', error);
       throw error;
     }
+  }
+
+  /**
+   * Connect to a single MCP service
+   * @param key - Service key for state management
+   * @param url - Service URL
+   * @param apiKey - API key for authentication
+   */
+  private async connectService(key: string, url: string, apiKey: string): Promise<void> {
+    await this.mcp.connect(url, {
+      transport: {
+        type: 'streamable-http',
+        requestInit: {
+          headers: { Authorization: `Bearer ${apiKey}` },
+        },
+      },
+    });
+
+    this.setState({
+      connections: {
+        ...this.state.connections,
+        [key]: {
+          url,
+          connectedAt: Date.now(),
+          lastUsed: Date.now(),
+        },
+      },
+    });
   }
 
   /**
@@ -118,6 +112,34 @@ export class MCPAgent extends Agent<Env, MCPAgentState> {
   }
 
   /**
+   * Find tool by name using multiple matching strategies
+   * @param tools - Available tools
+   * @param toolName - Name to search for
+   * @returns Found tool or undefined
+   */
+  private findTool(
+    tools: Array<{ name: string; serverId: string }>,
+    toolName: string
+  ): { name: string; serverId: string } | undefined {
+    // Strategy 1: Exact match
+    const exactMatch = tools.find((t) => t.name === toolName);
+    if (exactMatch) return exactMatch;
+
+    // Strategy 2: Case-insensitive match
+    const caseInsensitiveMatch = tools.find((t) => t.name.toLowerCase() === toolName.toLowerCase());
+    if (caseInsensitiveMatch) return caseInsensitiveMatch;
+
+    // Strategy 3: Partial match (for names like mcp__web_search_prime__webSearchPrime)
+    const partialMatch = tools.find((t) => {
+      const normalizedName = t.name.toLowerCase().replace(/_/g, '');
+      const normalizedSearch = toolName.toLowerCase();
+      return normalizedName.includes(normalizedSearch) || normalizedSearch.includes(normalizedName);
+    });
+
+    return partialMatch;
+  }
+
+  /**
    * Execute a tool call
    * @param toolName - Name of the tool to call
    * @param args - Arguments for the tool
@@ -126,7 +148,6 @@ export class MCPAgent extends Agent<Env, MCPAgentState> {
   async callTool(toolName: string, args: Record<string, unknown>): Promise<string> {
     await this.ensureConnections();
 
-    // Find which server has the tool
     const tools = this.mcp.listTools();
 
     // Log available tools for debugging
@@ -136,26 +157,11 @@ export class MCPAgent extends Agent<Env, MCPAgentState> {
       availableTools: tools.map((t) => ({ name: t.name, serverId: t.serverId })),
     });
 
-    // Try exact match first
-    let tool = tools.find((t) => t.name === toolName);
-
-    // If not found, try case-insensitive match
-    if (!tool) {
-      tool = tools.find((t) => t.name.toLowerCase() === toolName.toLowerCase());
-    }
-
-    // If still not found, try partial match (for names like mcp__web_search_prime__webSearchPrime)
-    if (!tool) {
-      tool = tools.find(
-        (t) =>
-          t.name.toLowerCase().includes(toolName.toLowerCase()) ||
-          toolName.toLowerCase().includes(t.name.toLowerCase().replace(/_/g, ''))
-      );
-    }
+    // Try to find tool with multiple matching strategies
+    const tool = this.findTool(tools, toolName);
 
     if (!tool) {
       const availableNames = tools.map((t) => t.name).join(', ');
-
       console.error('MCPAgent: Tool not found', {
         requestedName: toolName,
         availableNames,
@@ -163,22 +169,7 @@ export class MCPAgent extends Agent<Env, MCPAgentState> {
       throw new Error(`Tool not found: ${toolName}. Available tools: ${availableNames}`);
     }
 
-    // Update last used time for the connection
-    const serverId = tool.serverId;
-    for (const [key, conn] of Object.entries(this.state.connections)) {
-      if (conn.url.includes(serverId) || serverId.includes(key)) {
-        this.setState({
-          connections: {
-            ...this.state.connections,
-            [key]: {
-              ...conn,
-              lastUsed: Date.now(),
-            },
-          },
-        });
-        break;
-      }
-    }
+    this.updateConnectionLastUsed(tool.serverId);
 
     // Call the tool via MCP client manager
     const result = await this.mcp.callTool({
@@ -189,6 +180,29 @@ export class MCPAgent extends Agent<Env, MCPAgentState> {
 
     // Format the result
     return this.formatToolResult(result);
+  }
+
+  /**
+   * Update last used time for a connection
+   * @param serverId - Server ID to update
+   */
+  private updateConnectionLastUsed(serverId: string): void {
+    const connectionKey = Object.entries(this.state.connections).find(
+      ([key, conn]) => conn.url.includes(serverId) || serverId.includes(key)
+    )?.[0];
+
+    if (connectionKey) {
+      const conn = this.state.connections[connectionKey];
+      this.setState({
+        connections: {
+          ...this.state.connections,
+          [connectionKey]: {
+            ...conn,
+            lastUsed: Date.now(),
+          },
+        },
+      });
+    }
   }
 
   /**

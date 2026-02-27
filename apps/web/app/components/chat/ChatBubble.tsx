@@ -68,12 +68,19 @@ export const ChatBubble = memo<ChatBubbleProps>(
         ref={bubbleRef}
         data-message-id={messageId}
         className={cn(
-          'flex min-w-0 gap-2 p-3 sm:gap-3 sm:p-4',
-          isUser ? 'flex-row-reverse ml-8 sm:ml-16' : 'flex-row mr-8 sm:mr-16',
+          'relative p-3 sm:p-4',
+          isUser ? 'sm:ml-16' : 'sm:mr-16',
           animateEntry ? 'message-enter' : ''
         )}
       >
-        <Avatar className="h-8 w-8 shrink-0 sm:h-9 sm:w-9">
+        {/* Avatar: Mobile - absolute positioned top-right, Desktop - static side */}
+        <Avatar
+          className={cn(
+            'shrink-0 sm:static sm:h-9 sm:w-9',
+            'absolute top-3 right-3 z-10 h-7 w-7 bg-background/90 backdrop-blur-sm opacity-75',
+            'sm:opacity-100'
+          )}
+        >
           <AvatarFallback
             className={cn(isUser ? 'bg-primary text-primary-foreground' : 'bg-muted')}
           >
@@ -83,7 +90,8 @@ export const ChatBubble = memo<ChatBubbleProps>(
 
         <div
           className={cn(
-            'min-w-0 w-full max-w-[calc(100%-2.5rem)] rounded-xl px-3.5 py-3 text-[15px] leading-relaxed sm:max-w-[calc(100%-3rem)] sm:px-4',
+            'rounded-xl px-3.5 py-3 text-[15px] leading-relaxed sm:px-4',
+            'w-full pr-10 sm:max-w-[calc(100%-3rem)] sm:pr-4',
             isUser ? 'bg-primary text-primary-foreground' : 'bg-card border border-border'
           )}
         >

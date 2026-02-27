@@ -1,7 +1,9 @@
 /* eslint-disable no-undef */
 // Service Worker for offline support
-const CACHE_NAME = 'chatwithme-v2';
-const OFFLINE_CACHE = 'chatwithme-offline-v2';
+// Cache version uses timestamp - will be replaced during build
+const CACHE_VERSION = '__CACHE_VERSION__';
+const CACHE_NAME = `chatwithme-v3-${CACHE_VERSION}`;
+const OFFLINE_CACHE = `chatwithme-offline-v3-${CACHE_VERSION}`;
 
 // Assets to cache immediately on install
 const STATIC_ASSETS = ['/', '/favicon.svg'];

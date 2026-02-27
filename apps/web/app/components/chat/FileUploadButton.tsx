@@ -8,6 +8,7 @@ interface FileUploadButtonProps {
   disabled?: boolean;
   isDragging?: boolean;
   accept?: string;
+  className?: string;
 }
 
 export function FileUploadButton({
@@ -15,6 +16,7 @@ export function FileUploadButton({
   disabled = false,
   isDragging = false,
   accept = ACCEPTED_FILE_TYPES,
+  className = 'h-11 w-11 rounded-xl',
 }: FileUploadButtonProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -50,7 +52,7 @@ export function FileUploadButton({
         type="button"
         variant="ghost"
         size="icon"
-        className="h-11 w-11 rounded-xl"
+        className={className}
         onClick={() => fileInputRef.current?.click()}
         disabled={disabled}
         title="Attach files (images, PDFs, Office docs, spreadsheets, code, text)"

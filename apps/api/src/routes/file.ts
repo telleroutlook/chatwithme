@@ -22,9 +22,9 @@ const fileKeyParamSchema = z.object({
   key: z.string().min(1),
 });
 
-// Download route doesn't require auth for AI vision models to access
+// Public download route for AI vision models (must be before auth middleware)
 file.get(
-  '/download/:key{.+}',
+  '/public/:key{.+}',
   zValidator('param', fileKeyParamSchema, validationErrorHook),
   async (c) => {
     const { key } = c.req.valid('param');
@@ -40,6 +40,38 @@ file.get(
       headers.set('etag', object.httpEtag);
       // Add CORS headers to allow AI vision models to access
       headers.set('Access-Control-Allow-Origin', '*');
+
+      return new Response(object.body, { headers });
+    } catch (error) {
+      console.error('Public download error:', error);
+      return errorResponse(c, 500, ERROR_CODES.DOWNLOAD_FAILED, 'Download failed');
+    }
+  }
+);
+
+// Authenticated download route (with user validation)
+file.get(
+  '/download/:key{.+}',
+  authMiddleware,
+  zValidator('param', fileKeyParamSchema, validationErrorHook),
+  async (c) => {
+    const { userId } = getAuthInfo(c);
+    const { key } = c.req.valid('param');
+
+    // Only allow downloading user's own files
+    if (!key.startsWith(`uploads/${userId}/`)) {
+      return errorResponse(c, 403, ERROR_CODES.FORBIDDEN, 'Unauthorized');
+    }
+
+    try {
+      const object = await c.env.BUCKET.get(key);
+      if (!object) {
+        return errorResponse(c, 404, ERROR_CODES.FILE_NOT_FOUND, 'File not found');
+      }
+
+      const headers = new Headers();
+      object.writeHttpMetadata(headers);
+      headers.set('etag', object.httpEtag);
 
       return new Response(object.body, { headers });
     } catch (error) {
@@ -87,11 +119,11 @@ file.post('/upload', zValidator('form', fileUploadSchema, validationErrorHook), 
       },
     });
 
-    // Construct correct download URL
+    // Construct download URL (public for AI vision model access)
     const url = new URL(c.req.url);
-    const downloadUrl = `${url.origin}/file/download/${key}`;
+    const publicUrl = `${url.origin}/file/public/${key}`;
     const fileInfo: MessageFile = {
-      url: downloadUrl,
+      url: publicUrl, // Use public URL for AI vision model access
       fileName: sanitizedName,
       mimeType: uploadedFile.type,
       size: uploadedFile.size,
@@ -104,30 +136,6 @@ file.post('/upload', zValidator('form', fileUploadSchema, validationErrorHook), 
     return errorResponse(c, 500, ERROR_CODES.UPLOAD_FAILED, 'Upload failed');
   }
 });
-
-file.get(
-  '/download/:key{.+}',
-  zValidator('param', fileKeyParamSchema, validationErrorHook),
-  async (c) => {
-    const { key } = c.req.valid('param');
-
-    try {
-      const object = await c.env.BUCKET.get(key);
-      if (!object) {
-        return errorResponse(c, 404, ERROR_CODES.FILE_NOT_FOUND, 'File not found');
-      }
-
-      const headers = new Headers();
-      object.writeHttpMetadata(headers);
-      headers.set('etag', object.httpEtag);
-
-      return new Response(object.body, { headers });
-    } catch (error) {
-      console.error('Download error:', error);
-      return errorResponse(c, 500, ERROR_CODES.DOWNLOAD_FAILED, 'Download failed');
-    }
-  }
-);
 
 file.delete(
   '/delete/:key{.+}',

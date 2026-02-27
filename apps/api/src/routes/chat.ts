@@ -110,14 +110,202 @@ const CODE_EXTENSIONS = [
 // Office documents: Word, Excel, PowerPoint, OpenDocument formats
 const OFFICE_EXTENSIONS = ['pptx', 'xlsx', 'xls', 'xlsm', 'xlsb', 'docx', 'ods'];
 
+// R2 configuration constants
+const R2_DEV_PUBLIC_URL = 'https://pub-dc5339e22e694b328a07160c88c3cd64.r2.dev';
+const LEGACY_DOWNLOAD_PATTERN = /^https:\/\/chat\.3we\.org\/file\/download\/(.+)$/;
+
+// MIME type to file extension mapping
+const MIME_TO_EXT: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+};
+
+function getFileExtension(fileName: string): string {
+  return fileName.split('.').pop()?.toLowerCase() || '';
+}
+
 function isCodeFile(file: MessageFile): boolean {
-  const ext = file.fileName.split('.').pop()?.toLowerCase();
-  return CODE_EXTENSIONS.includes(ext || '');
+  return CODE_EXTENSIONS.includes(getFileExtension(file.fileName));
 }
 
 function isOfficeFile(file: MessageFile): boolean {
-  const ext = file.fileName.split('.').pop()?.toLowerCase();
-  return OFFICE_EXTENSIONS.includes(ext || '');
+  return OFFICE_EXTENSIONS.includes(getFileExtension(file.fileName));
+}
+
+/**
+ * Convert legacy download URLs to R2.dev public URLs
+ */
+function convertLegacyImageUrl(url: string): string {
+  const match = url.match(LEGACY_DOWNLOAD_PATTERN);
+  if (match) {
+    return `${R2_DEV_PUBLIC_URL}/${match[1]}`;
+  }
+  return url;
+}
+
+/**
+ * Get file extension from MIME type
+ */
+function getExtensionFromMimeType(mimeType: string): string {
+  return MIME_TO_EXT[mimeType] || 'bin';
+}
+
+/**
+ * Upload an image data URL to R2 and return the public URL
+ * @param dataUrl - The data URL to upload
+ * @param mimeType - The MIME type of the image
+ * @param userId - User ID for path generation
+ * @param bucket - R2 bucket instance
+ * @returns Public R2 URL
+ */
+async function uploadImageToR2(
+  dataUrl: string,
+  mimeType: string,
+  userId: string,
+  bucket: R2Bucket
+): Promise<string> {
+  const matches = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!matches) {
+    throw new Error('Invalid data URL format');
+  }
+
+  const base64Data = matches[2];
+  const buffer = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+  const ext = getExtensionFromMimeType(mimeType);
+  const key = `uploads/${userId}/${generateId()}.${ext}`;
+
+  await bucket.put(key, buffer, {
+    httpMetadata: { contentType: mimeType },
+  });
+
+  return `${R2_DEV_PUBLIC_URL}/${key}`;
+}
+
+/**
+ * Process a single file: upload images to R2, keep other files as-is
+ * @param file - The file to process
+ * @param userId - User ID for R2 path
+ * @param bucket - R2 bucket instance
+ * @returns Processed file with updated URL
+ */
+async function processFile(
+  file: MessageFile,
+  userId: string,
+  bucket: R2Bucket
+): Promise<MessageFile> {
+  if (!file.mimeType.startsWith('image/') || !file.url.startsWith('data:')) {
+    return file;
+  }
+
+  try {
+    const publicUrl = await uploadImageToR2(file.url, file.mimeType, userId, bucket);
+    return { ...file, url: publicUrl };
+  } catch (error) {
+    throw new Error(
+      `Image upload to R2 failed. GLM-4.6v requires HTTP URLs. Original error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      { cause: error }
+    );
+  }
+}
+
+/**
+ * Build OpenAI-compatible messages from database message history
+ * @param history - Message history from database
+ * @returns OpenAI-compatible messages array
+ */
+function buildOpenAIMessages(
+  history: Array<{
+    role: string;
+    message: string;
+    files?: MessageFile[] | null;
+  }>
+): Array<{ role: string; content: string | Array<unknown> }> {
+  const messages: Array<{ role: string; content: string | Array<unknown> }> = [];
+
+  for (const msg of history) {
+    if (msg.role === 'user') {
+      if (msg.files && msg.files.length > 0) {
+        const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
+          { type: 'text', text: msg.message },
+        ];
+
+        for (const file of msg.files) {
+          if (file.mimeType.startsWith('image/')) {
+            const imageUrl = convertLegacyImageUrl(file.url);
+            content.push({ type: 'image_url', image_url: { url: imageUrl } });
+          } else if (file.mimeType === 'application/pdf') {
+            if ('extractedText' in file && file.extractedText) {
+              content[0].text += `\n\n--- File: ${file.fileName} ---\n${file.extractedText}`;
+            } else {
+              content[0].text += `\n\n--- File: ${file.fileName} ---\n[PDF text extraction failed]`;
+            }
+          } else if (isOfficeFile(file)) {
+            if ('extractedText' in file && file.extractedText) {
+              content[0].text += `\n\n--- File: ${file.fileName} ---\n${file.extractedText}`;
+            }
+          } else if (isCodeFile(file)) {
+            const fileContent = readFileContentFromDataURL(file.url);
+            if (fileContent) {
+              content[0].text += `\n\n--- File: ${file.fileName} ---\n${fileContent}`;
+            }
+          }
+        }
+
+        messages.push({ role: 'user', content });
+      } else {
+        messages.push({ role: 'user', content: msg.message });
+      }
+    } else {
+      let assistantContent = msg.message;
+
+      if (
+        (msg as Record<string, unknown>).imageAnalyses &&
+        Array.isArray((msg as Record<string, unknown>).imageAnalyses)
+      ) {
+        const imageAnalyses = (msg as Record<string, unknown>).imageAnalyses as ImageAnalysis[];
+        if (imageAnalyses.length > 0) {
+          const analysisText = imageAnalyses
+            .map((a) => `\n--- Image Analysis: ${a.fileName} ---\n${a.analysis}`)
+            .join('\n');
+          assistantContent += `\n\n${analysisText}`;
+        }
+      }
+
+      messages.push({ role: 'assistant', content: assistantContent });
+    }
+  }
+
+  return messages;
+}
+
+/**
+ * Build model candidates list for chat completion
+ * @param env - Environment variables
+ * @param requestedModel - User-specified model (optional)
+ * @param isImageRequest - Whether image model is needed
+ * @returns Array of model configurations
+ */
+function buildModelCandidates(
+  env: Env,
+  requestedModel: string | undefined,
+  isImageRequest: boolean
+): ModelConfig[] {
+  if (requestedModel) {
+    return [
+      {
+        baseUrl: env.CHAT_PRIMARY_BASE_URL,
+        model: requestedModel,
+        apiKey: env.OPENROUTER_API_KEY,
+      },
+    ];
+  }
+
+  const primaryConfig = getModelConfig(env, isImageRequest ? 'image-primary' : 'chat-primary');
+  const fallbackConfig = getModelConfig(env, isImageRequest ? 'image-fallback' : 'chat-fallback');
+
+  return [primaryConfig, fallbackConfig].filter((config) => config.model && config.baseUrl);
 }
 
 async function readFileContentFromDataURL(url: string): Promise<string> {
@@ -874,88 +1062,24 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
   // Fetch history for model detection
   const historyForModelDetection = await getRecentMessages(db, conversationId, 20);
 
-  // 检测当前请求是否需要图片模型
+  // Detect if image model is needed
   const hasImages = files?.some((f) => f.mimeType.startsWith('image/')) ?? false;
   const hasHistoryImages = historyForModelDetection.some(
     (msg) => msg.role === 'user' && msg.files?.some((f) => f.mimeType.startsWith('image/'))
   );
   const isImageRequest = hasImages || hasHistoryImages;
 
-  // 构建模型候选列表
-  const modelCandidates: ModelConfig[] = requestedModel
-    ? [
-        // 用户指定了模型，使用默认配置创建自定义模型配置
-        {
-          baseUrl: c.env.CHAT_PRIMARY_BASE_URL,
-          model: requestedModel,
-          apiKey: c.env.OPENROUTER_API_KEY,
-        },
-      ]
-    : (() => {
-        // 自动检测模型：主模型 + 备用模型
-        const primaryConfig = isImageRequest
-          ? getModelConfig(c.env, 'image-primary')
-          : getModelConfig(c.env, 'chat-primary');
-        const fallbackConfig = isImageRequest
-          ? getModelConfig(c.env, 'image-fallback')
-          : getModelConfig(c.env, 'chat-fallback');
-
-        return [primaryConfig, fallbackConfig].filter((config) => config.model && config.baseUrl);
-      })();
+  // Build model candidates list
+  const modelCandidates = buildModelCandidates(c.env, requestedModel, isImageRequest);
 
   // 用于日志的模型名称
   const primaryModelName = modelCandidates[0]?.model || 'unknown';
 
   // Process files: upload images to R2 and get public URLs
-  // GLM-4.6v requires HTTP(S) URLs, not base64 dataURLs
-  // We use R2's public access URL (r2.dev) for this
-  let processedFiles = files;
-  if (files && files.length > 0) {
-    processedFiles = await Promise.all(
-      files.map(async (file) => {
-        // Images: upload to R2 and get public URL
-        if (file.mimeType.startsWith('image/') && file.url.startsWith('data:')) {
-          try {
-            // Parse dataURL
-            const matches = file.url.match(/^data:([^;]+);base64,(.+)$/);
-            if (matches) {
-              const mimeType = matches[1];
-              const base64Data = matches[2];
-              const buffer = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
-
-              // Generate file key and upload to R2
-              let ext = 'bin';
-              if (mimeType === 'image/jpeg') ext = 'jpg';
-              else if (mimeType === 'image/png') ext = 'png';
-              else if (mimeType === 'image/gif') ext = 'gif';
-              else if (mimeType === 'image/webp') ext = 'webp';
-
-              const key = `uploads/${userId}/${generateId()}.${ext}`;
-
-              await c.env.BUCKET.put(key, buffer, {
-                httpMetadata: { contentType: mimeType },
-              });
-
-              // Use R2 public URL (r2.dev) for GLM-4.6v access
-              const publicUrl = `https://pub-dc5339e22e694b328a07160c88c3cd64.r2.dev/${key}`;
-
-              return {
-                ...file,
-                url: publicUrl,
-              };
-            }
-          } catch (error) {
-            throw new Error(
-              `Image upload to R2 failed. GLM-4.6v requires HTTP URLs. Original error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-              { cause: error }
-            );
-          }
-        }
-        // PDFs, Office documents and other files keep original URL
-        return file;
-      })
-    );
-  }
+  const processedFiles =
+    files && files.length > 0
+      ? await Promise.all(files.map((file) => processFile(file, userId, c.env.BUCKET)))
+      : files;
 
   const now = new Date();
   await createMessage(db, {
@@ -972,86 +1096,7 @@ chat.post('/respond', zValidator('json', chatRequestSchema, validationErrorHook)
 
   // Re-fetch history after creating the new message
   const history = await getRecentMessages(db, conversationId, 20);
-
-  // Convert legacy image URLs to R2.dev public URLs for GLM-4.6v compatibility
-  // Legacy format: https://chat.3we.org/file/download/{key}
-  // New format: https://pub-dc5339e22e694b328a07160c88c3cd64.r2.dev/{key}
-  const R2_DEV_PUBLIC_URL = 'https://pub-dc5339e22e694b328a07160c88c3cd64.r2.dev';
-  const LEGACY_DOWNLOAD_PATTERN = /^https:\/\/chat\.3we\.org\/file\/download\/(.+)$/;
-
-  function convertImageUrl(url: string): string {
-    // Convert legacy download URLs to R2.dev public URLs
-    const match = url.match(LEGACY_DOWNLOAD_PATTERN);
-    if (match) {
-      const key = match[1];
-      return `${R2_DEV_PUBLIC_URL}/${key}`;
-    }
-    return url;
-  }
-
-  const openAiMessages: Array<{ role: string; content: string | Array<unknown> }> = [];
-  for (const msg of history) {
-    if (msg.role === 'user') {
-      if (msg.files && msg.files.length > 0) {
-        const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
-          { type: 'text', text: msg.message },
-        ];
-
-        // Process files
-        for (const file of msg.files) {
-          if (file.mimeType.startsWith('image/')) {
-            // Convert legacy URLs to R2.dev public URLs
-            const imageUrl = convertImageUrl(file.url);
-            content.push({ type: 'image_url', image_url: { url: imageUrl } });
-          } else if (file.mimeType === 'application/pdf') {
-            // PDF: always use extracted text (browser-side parsing)
-            // If no text was extracted, add a placeholder
-            if ('extractedText' in file && file.extractedText) {
-              content[0].text += `\n\n--- File: ${file.fileName} ---\n${file.extractedText}`;
-            } else {
-              // PDF text extraction failed - add warning instead of using vision model
-              content[0].text += `\n\n--- File: ${file.fileName} ---\n[PDF text extraction failed]`;
-            }
-          } else if (isOfficeFile(file)) {
-            // Office documents: check if we have extracted text
-            if ('extractedText' in file && file.extractedText) {
-              // Use extracted text content
-              content[0].text += `\n\n--- File: ${file.fileName} ---\n${file.extractedText}`;
-            }
-            // Do NOT fall back to reading as dataURL for binary Office files
-          } else if (isCodeFile(file)) {
-            const fileContent = await readFileContentFromDataURL(file.url);
-            if (fileContent) {
-              content[0].text += `\n\n--- File: ${file.fileName} ---\n${fileContent}`;
-            }
-          }
-        }
-
-        openAiMessages.push({ role: 'user', content });
-      } else {
-        openAiMessages.push({ role: 'user', content: msg.message });
-      }
-    } else {
-      // Assistant message
-      let assistantContent = msg.message;
-
-      // If the assistant message has imageAnalyses, inject them into the content for future context
-      if (
-        (msg as Record<string, unknown>).imageAnalyses &&
-        Array.isArray((msg as Record<string, unknown>).imageAnalyses)
-      ) {
-        const imageAnalyses = (msg as Record<string, unknown>).imageAnalyses as ImageAnalysis[];
-        if (imageAnalyses.length > 0) {
-          const analysisText = imageAnalyses
-            .map((a) => `\n--- Image Analysis: ${a.fileName} ---\n${a.analysis}`)
-            .join('\n');
-          assistantContent += `\n\n${analysisText}`;
-        }
-      }
-
-      openAiMessages.push({ role: 'assistant', content: assistantContent });
-    }
-  }
+  const openAiMessages = buildOpenAIMessages(history);
 
   // Initialize MCPAgent
   const agentId = c.env.MCPAgent.idFromName('global-mcp');

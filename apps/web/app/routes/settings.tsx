@@ -44,10 +44,9 @@ export default function SettingsPage() {
         // Update user in auth store
         const currentUser = useAuthStore.getState().user;
         if (currentUser) {
-          useAuthStore.getState().setAuth(
-            { ...currentUser, language: newLocale },
-            useAuthStore.getState().tokens!
-          );
+          useAuthStore
+            .getState()
+            .setAuth({ ...currentUser, language: newLocale }, useAuthStore.getState().tokens!);
         }
         setSaveStatus('success');
       } else {
@@ -87,7 +86,11 @@ export default function SettingsPage() {
               stroke="currentColor"
               className="h-5 w-5"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"
+              />
             </svg>
           </button>
           <h1 className="text-lg font-semibold sm:text-xl">{t('settings.title')}</h1>
@@ -101,9 +104,7 @@ export default function SettingsPage() {
         {/* Language Section */}
         <section className="mb-8">
           <h2 className="text-base font-medium mb-1">{t('settings.language.title')}</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            {t('settings.language.description')}
-          </p>
+          <p className="text-sm text-muted-foreground mb-4">{t('settings.language.description')}</p>
           <div className="flex gap-3">
             <button
               type="button"
@@ -186,14 +187,10 @@ export default function SettingsPage() {
         {/* Profile Section */}
         <section className="mb-8">
           <h2 className="text-base font-medium mb-1">{t('settings.profile.title')}</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            {t('settings.profile.description')}
-          </p>
+          <p className="text-sm text-muted-foreground mb-4">{t('settings.profile.description')}</p>
           <div className="rounded-lg border border-border bg-card p-4 space-y-3">
             <div>
-              <label className="text-sm text-muted-foreground">
-                {t('settings.profile.email')}
-              </label>
+              <label className="text-sm text-muted-foreground">{t('settings.profile.email')}</label>
               <p className="text-sm font-medium">{user.email}</p>
             </div>
             <div>

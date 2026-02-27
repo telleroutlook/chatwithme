@@ -9,6 +9,7 @@ interface TextInputProps {
   placeholder?: string;
   autoFocus?: boolean;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  className?: string;
 }
 
 export function TextInput({
@@ -19,6 +20,7 @@ export function TextInput({
   placeholder = 'Type a message...',
   autoFocus = false,
   textareaRef,
+  className = 'flex-1',
 }: TextInputProps) {
   // Auto-focus on mount
   useEffect(() => {
@@ -72,7 +74,7 @@ export function TextInput({
   };
 
   return (
-    <div className="relative flex-1">
+    <div className={cn('relative', className)}>
       <textarea
         ref={textareaRef}
         value={value}
